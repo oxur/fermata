@@ -9,6 +9,7 @@
 You are performing the final assembly and consistency check for Fermata's Music IR — the S-expression intermediate representation that maps to MusicXML.
 
 Previous phases have:
+
 1. Triaged MusicXML elements by priority
 2. Produced S-expr mappings for 10 chunks
 3. Reviewed each chunk individually
@@ -74,6 +75,7 @@ Verify coverage against the original triage:
 ### 5. Resolved vs. Outstanding Questions
 
 Compile:
+
 - All questions that were resolved during reviews
 - All questions that remain open
 - Recommendations for resolving open questions
@@ -131,6 +133,7 @@ Produce a clean, consolidated document showing:
 ### Module Organization
 
 ```
+
 fermata_ir/
 ├── mod.rs
 ├── pitch.rs      # Pitch, Step, Alter, Octave
@@ -143,6 +146,7 @@ fermata_ir/
 ├── layout.rs     # Beam, Stem, print attributes
 ├── voice.rs      # Voice, Staff, Backup, Forward
 └── lyric.rs      # Lyric, Syllabic, Text
+
 ```
 
 ### Complete Type Listing
@@ -208,11 +212,13 @@ fermata_ir/
 ```
 
 **Generated MusicXML:**
+
 ```xml
 [Corresponding XML]
 ```
 
 **Re-imported Fermata:**
+
 ```lisp
 [Should match original]
 ```
@@ -226,6 +232,7 @@ fermata_ir/
 ## Appendix B: Change Log from Reviews
 
 [Summary of all changes made during reviews]
+
 ```
 
 ---
@@ -234,15 +241,41 @@ fermata_ir/
 
 ### Reviewed Chunks
 
-[PASTE ALL REVIEWED CHUNK DOCUMENTS HERE]
+```
 
-### Review Documents  
+assets/analysis/outputs/chunk-01-core-note.md
+assets/analysis/outputs/chunk-02-time-rhythm.md
+assets/analysis/outputs/chunk-03-measure-structure.md
+assets/analysis/outputs/chunk-04-part-score.md
+assets/analysis/outputs/chunk-05-directions.md
+assets/analysis/outputs/chunk-06-notations.md
+assets/analysis/outputs/chunk-07-beaming-stems.md
+assets/analysis/outputs/chunk-08-multi-voice.md
+assets/analysis/outputs/chunk-09-lyrics.md
+assets/analysis/outputs/chunk-10-advanced.md
 
-[PASTE ALL REVIEW DOCUMENTS HERE]
+```
+
+### Review Documents
+
+```
+
+assets/analysis/reviews/chunk-01-core-note-review.md
+assets/analysis/reviews/chunk-02-time-rhythm-review.md
+assets/analysis/reviews/chunk-03-measure-structure-review.md
+assets/analysis/reviews/chunk-04-part-score-review.md
+assets/analysis/reviews/chunk-05-directions-review.md
+assets/analysis/reviews/chunk-06-notations-review.md
+assets/analysis/reviews/chunk-07-beaming-stems-review.md
+assets/analysis/reviews/chunk-08-multi-voice-review.md
+assets/analysis/reviews/chunk-09-lyrics-review.md
+assets/analysis/reviews/chunk-10-advanced-review.md
+
+```
 
 ### Original Triage
 
-[PASTE TRIAGE DOCUMENT HERE]
+`crates/design/dev/0001-claude-code-prompt-musicxml-triage.md`
 
 ---
 

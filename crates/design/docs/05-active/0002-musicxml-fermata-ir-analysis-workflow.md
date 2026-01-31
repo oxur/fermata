@@ -1,0 +1,228 @@
+---
+number: 2
+title: "MusicXML → Fermata IR Analysis Workflow"
+author: "Claude Code"
+component: All
+tags: [change-me]
+created: 2026-01-31
+updated: 2026-01-31
+state: Active
+supersedes: null
+superseded-by: null
+version: 1.0
+---
+
+# MusicXML → Fermata IR Analysis Workflow
+
+> **Purpose:** This document provides download instructions and prompts for systematically analyzing the MusicXML specification and producing a low-level S-expression mapping (the "Music IR") that will serve as Fermata's internal representation.
+
+---
+
+## Overview
+
+We're breaking this into a multi-phase workflow:
+
+1. **Download** the MusicXML specification (XSD schemas + documentation)
+2. **Triage** (Claude Code) — Categorize MusicXML elements by priority
+3. **Chunk Analysis** (Claude Code) — Produce S-expr mappings for each chunk
+4. **Chunk Review** (Claude Chat) — Evaluate each chunk, produce corrections
+5. **Assembly** (Claude Chat) — Consolidate and check cross-chunk consistency
+6. **Final Review** — Synthesize learnings, decide next steps
+
+---
+
+## Phase 0: Download the MusicXML Specification
+
+### Option A: Clone the Repository (Recommended)
+
+```bash
+# Clone the W3C MusicXML repository
+git clone https://github.com/w3c/musicxml.git
+cd musicxml
+
+# The important files are in the schema/ directory:
+# - musicxml.xsd      (main schema - this is the big one)
+# - container.xsd     (compressed file format)
+# - opus.xsd          (multi-movement works)
+# - sounds.xsd        (instrument sounds)
+# - sounds.xml        (sound identifier list)
+```
+
+### Option B: Download ZIP
+
+Go to https://github.com/w3c/musicxml and click "Code" → "Download ZIP"
+
+### What You'll Have
+
+```
+musicxml/
+├── schema/
+│   ├── musicxml.xsd        # ← PRIMARY: ~12,000 lines, all element definitions
+│   ├── container.xsd       # Compressed MXL format
+│   ├── opus.xsd            # Multi-movement collections
+│   ├── sounds.xsd          # Sound definitions
+│   └── sounds.xml          # Standard sound IDs
+├── docs/                   # HTML documentation (rendered at w3c.github.io/musicxml)
+└── ...
+```
+
+### Also Grab: LilyPond Test Suite (Optional but Useful)
+
+```bash
+# Clone just the MusicXML test files from LilyPond
+git clone --depth 1 --filter=blob:none --sparse https://github.com/lilypond/lilypond.git
+cd lilypond
+git sparse-checkout set input/regression/musicxml
+
+# Test files are now in:
+# lilypond/input/regression/musicxml/
+```
+
+These are real-world MusicXML files that test various features — useful for validating our mappings.
+
+---
+
+## Phase 1: Triage (Claude Code)
+
+**Goal:** Produce a prioritized categorization of MusicXML elements.
+
+### Prompt for Claude Code
+
+See: `0001-prompt-cc-triage.md`
+
+### Expected Output
+
+A markdown file (`musicxml-triage.md`) with:
+- Core elements (must have for MVP)
+- Important elements (needed for real scores)
+- Secondary elements (nice to have)
+- Deferred elements (specialized/rare)
+
+---
+
+## Phase 2: Chunk Analysis (Claude Code)
+
+**Goal:** For each chunk, produce a detailed S-expression mapping.
+
+### Prompts for Claude Code
+
+See: `0002-prompt-cc-chunk-analysis.md`
+
+This prompt instructs Claude Code to work through chunks sequentially, producing one output file per chunk.
+
+### Expected Output
+
+Ten files (`chunk-01-core-note.md` through `chunk-10-advanced.md`), each containing:
+- MusicXML elements covered
+- Proposed S-expr syntax with examples
+- XML ↔ S-expr mapping tables
+- Design decisions with rationale
+- Open questions
+
+---
+
+## Phase 3: Chunk Review (Claude Chat)
+
+**Goal:** Evaluate each chunk produced by Claude Code, producing corrections and refinements.
+
+### Prompt Template for Claude Chat
+
+See: `0003-prompt-chat-chunk-review.md`
+
+Use this prompt when starting a new chat session to review a specific chunk.
+
+### Expected Output
+
+For each chunk, a review document with:
+- Approved mappings
+- Required changes
+- Suggested improvements
+- Resolved open questions
+
+---
+
+## Phase 4: Assembly & Consistency Check (Claude Chat)
+
+**Goal:** Consolidate all chunks into a unified specification and verify cross-chunk consistency.
+
+### Prompt for Claude Chat
+
+See: `0004-prompt-chat-assembly.md`
+
+### Expected Output
+
+A comprehensive report containing:
+- Naming consistency audit
+- Cross-reference validation
+- Unified type definitions
+- Final IR specification draft
+
+---
+
+## Phase 5: Final Review
+
+Bring the assembly report back to the original conversation for:
+- Discussion of findings
+- Decision on next implementation steps
+- Identification of any remaining gaps
+
+---
+
+## File Manifest
+
+After running this workflow, you should have:
+
+```
+fermata-musicxml-analysis/
+├── 0000-musicxml-analysis-workflow.md    # This file
+├── 0001-prompt-cc-triage.md              # Claude Code triage prompt
+├── 0002-prompt-cc-chunk-analysis.md      # Claude Code chunk analysis prompt  
+├── 0003-prompt-chat-chunk-review.md      # Chat chunk review prompt template
+├── 0004-prompt-chat-assembly.md          # Chat assembly prompt
+│
+├── outputs/                              # Generated by Claude Code
+│   ├── musicxml-triage.md
+│   ├── chunk-01-core-note.md
+│   ├── chunk-02-time-rhythm.md
+│   ├── chunk-03-measure-structure.md
+│   ├── chunk-04-part-score.md
+│   ├── chunk-05-directions.md
+│   ├── chunk-06-notations.md
+│   ├── chunk-07-beaming-stems.md
+│   ├── chunk-08-multi-voice.md
+│   ├── chunk-09-lyrics.md
+│   └── chunk-10-advanced.md
+│
+└── reviews/                              # Generated by Chat reviews
+    ├── review-chunk-01.md
+    ├── review-chunk-02.md
+    ├── ...
+    └── assembly-report.md
+```
+
+---
+
+## Important Context for All Prompts
+
+The following decisions have already been made in the Fermata design process. All prompts should respect these:
+
+### Architectural Decisions
+- **Typed Music IR as the hub** — Not a generic S-expr AST
+- **Two-phase parsing** — Parse to S-expr, then lower to typed IR
+- **Parser: `nom`** — For flexibility and error handling
+
+### Syntax Decisions
+- **Pitch:** lowercase scientific notation (`c4`, `f#5`, `bb3`)
+- **Duration keywords:** both short (`:q`) and long (`:quarter`), plus British names (`:crotchet`)
+- **Dynamics:** separate positioned elements, not modifiers on notes
+- **Tuplets:** wrapper form with explicit note durations inside
+- **Internal duration:** rational representation
+
+### Design Goals
+- **Lossless round-tripping** — The IR must capture everything MusicXML can express
+- **Fermata syntax is sugar** — Higher-level syntax compiles to this IR
+- **MusicXML semantics preserved** — When MusicXML makes a distinction, we make the same distinction
+
+---
+
+*Document version: 2026-01-31*

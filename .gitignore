@@ -25,3 +25,5 @@ target
 /workbench
 /assets/ai/ai-rust
 /.claude
+/musicxml
+.DS_Store

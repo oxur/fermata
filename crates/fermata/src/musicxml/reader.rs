@@ -131,6 +131,28 @@ impl<'a> XmlReader<'a> {
         Ok(content)
     }
 
+    /// Read the optional text content of the current element.
+    ///
+    /// This should be called after reading a Start event. It reads text
+    /// until the matching End event is encountered. Returns None if the
+    /// element is empty or only contains whitespace.
+    ///
+    /// # Arguments
+    ///
+    /// * `element_name` - The name of the element (for error messages)
+    ///
+    /// # Returns
+    ///
+    /// Some(text) if non-empty content exists, None if empty, or an error.
+    pub fn read_optional_text(&mut self, element_name: &str) -> Result<Option<String>, ParseError> {
+        let text = self.read_text(element_name)?;
+        if text.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(text))
+        }
+    }
+
     /// Read the text content of the current element and parse it as type T.
     ///
     /// # Arguments

@@ -25,13 +25,15 @@ use super::ParseError;
 use super::reader::{XmlReader, element_name};
 use super::values;
 use crate::ir::attributes::{
-    Attributes, Cancel, Clef, ClefSign, Key, KeyContent, Mode, Time, TimeContent, TimeSignature,
-    TraditionalKey,
+    Attributes, Barline, Cancel, Clef, ClefSign, Ending, Key, KeyContent, Mode, Repeat, Time,
+    TimeContent, TimeSignature, TraditionalKey,
 };
 use crate::ir::beam::{Beam, Notehead, Stem};
-use crate::ir::common::{Editorial, Font, Position, YesNo};
+use crate::ir::common::{Editorial, Font, Position, WavyLine, YesNo};
+use crate::ir::direction::{Coda, Segno};
 use crate::ir::duration::{Dot, NoteType, TimeModification};
 use crate::ir::measure::Measure;
+use crate::ir::notation::{Fermata, FermataShape};
 use crate::ir::note::{
     Accidental, FullNote, Grace, Note, NoteContent, PitchRestUnpitched, Rest, Tie,
 };
@@ -1801,27 +1803,410 @@ fn parse_direction(
     })
 }
 
-/// Parse a barline element (stub - will be fully implemented in Milestone 3).
+/// Parse a barline element.
+///
+/// Barline elements describe bar lines at the end or within measures.
+/// They contain optional bar-style, repeat, ending, segno, coda, fermata,
+/// and wavy-line elements.
 fn parse_barline(
     reader: &mut XmlReader<'_>,
-    _start: &quick_xml::events::BytesStart<'_>,
-) -> Result<crate::ir::attributes::Barline, ParseError> {
-    reader.skip_element("barline")?;
+    start: &quick_xml::events::BytesStart<'_>,
+) -> Result<Barline, ParseError> {
+    // Parse location attribute
+    let location = reader
+        .get_optional_attr(start.attributes(), "location")?
+        .map(|s| values::parse_right_left_middle(&s, reader.position()))
+        .transpose()?;
 
-    Ok(crate::ir::attributes::Barline {
-        location: None,
-        bar_style: None,
+    let mut bar_style = None;
+    let mut wavy_line = None;
+    let mut segno = None;
+    let mut coda = None;
+    let mut fermatas = Vec::new();
+    let mut ending = None;
+    let mut repeat = None;
+
+    loop {
+        let event = reader.next_event()?;
+        match event {
+            Event::Start(e) => {
+                let name = element_name(&e);
+                match name.as_str() {
+                    "bar-style" => {
+                        bar_style = Some(parse_bar_style_element(reader)?);
+                    }
+                    "wavy-line" => {
+                        wavy_line = Some(parse_wavy_line(reader, &e)?);
+                    }
+                    "segno" => {
+                        segno = Some(parse_segno(reader, &e)?);
+                    }
+                    "coda" => {
+                        coda = Some(parse_coda(reader, &e)?);
+                    }
+                    "fermata" => {
+                        fermatas.push(parse_fermata_from_barline(reader, &e)?);
+                    }
+                    "ending" => {
+                        ending = Some(parse_ending(reader, &e)?);
+                    }
+                    "repeat" => {
+                        repeat = Some(parse_repeat(reader, &e)?);
+                    }
+                    "footnote" | "level" => {
+                        // Skip editorial elements for now
+                        reader.skip_element(&name)?;
+                    }
+                    _ => {
+                        reader.skip_element(&name)?;
+                    }
+                }
+            }
+            Event::Empty(e) => {
+                let name = element_name(&e);
+                match name.as_str() {
+                    "segno" => {
+                        segno = Some(parse_segno_from_empty(&e, reader)?);
+                    }
+                    "coda" => {
+                        coda = Some(parse_coda_from_empty(&e, reader)?);
+                    }
+                    "fermata" => {
+                        fermatas.push(parse_fermata_from_empty(&e, reader)?);
+                    }
+                    "repeat" => {
+                        repeat = Some(parse_repeat_from_empty(&e, reader)?);
+                    }
+                    "wavy-line" => {
+                        wavy_line = Some(parse_wavy_line_from_empty(&e, reader)?);
+                    }
+                    "ending" => {
+                        ending = Some(parse_ending_from_empty(&e, reader)?);
+                    }
+                    _ => {}
+                }
+            }
+            Event::End(_) => break,
+            Event::Eof => {
+                return Err(ParseError::xml(
+                    "unexpected EOF in barline",
+                    reader.position(),
+                ));
+            }
+            _ => {}
+        }
+    }
+
+    Ok(Barline {
+        location,
+        bar_style,
         editorial: Editorial::default(),
-        wavy_line: None,
-        segno: None,
-        coda: None,
-        fermatas: vec![],
-        ending: None,
-        repeat: None,
+        wavy_line,
+        segno,
+        coda,
+        fermatas,
+        ending,
+        repeat,
     })
 }
 
-/// Parse a backup element (stub - will be fully implemented in Milestone 2).
+/// Parse a bar-style element.
+///
+/// Returns the BarStyle enum value parsed from the element text.
+fn parse_bar_style_element(
+    reader: &mut XmlReader<'_>,
+) -> Result<crate::ir::attributes::BarStyle, ParseError> {
+    let text = reader.read_text("bar-style")?;
+    values::parse_bar_style(&text, reader.position())
+}
+
+/// Parse a repeat element.
+fn parse_repeat(
+    reader: &mut XmlReader<'_>,
+    start: &quick_xml::events::BytesStart<'_>,
+) -> Result<Repeat, ParseError> {
+    let direction_str = reader.get_attr(start.attributes(), "direction", "repeat")?;
+    let direction = values::parse_backward_forward(&direction_str, reader.position())?;
+
+    let times = reader.get_optional_attr_as::<u32>(start.attributes(), "times")?;
+
+    let winged = reader
+        .get_optional_attr(start.attributes(), "winged")?
+        .map(|s| values::parse_winged(&s, reader.position()))
+        .transpose()?;
+
+    // Skip to end of element
+    reader.skip_element("repeat")?;
+
+    Ok(Repeat {
+        direction,
+        times,
+        winged,
+    })
+}
+
+/// Parse a repeat element from an empty tag.
+fn parse_repeat_from_empty(
+    start: &quick_xml::events::BytesStart<'_>,
+    reader: &XmlReader<'_>,
+) -> Result<Repeat, ParseError> {
+    let direction_str = reader.get_attr(start.attributes(), "direction", "repeat")?;
+    let direction = values::parse_backward_forward(&direction_str, reader.position())?;
+
+    let times = reader.get_optional_attr_as::<u32>(start.attributes(), "times")?;
+
+    let winged = reader
+        .get_optional_attr(start.attributes(), "winged")?
+        .map(|s| values::parse_winged(&s, reader.position()))
+        .transpose()?;
+
+    Ok(Repeat {
+        direction,
+        times,
+        winged,
+    })
+}
+
+/// Parse an ending element (volta bracket).
+fn parse_ending(
+    reader: &mut XmlReader<'_>,
+    start: &quick_xml::events::BytesStart<'_>,
+) -> Result<Ending, ParseError> {
+    let type_str = reader.get_attr(start.attributes(), "type", "ending")?;
+    let r#type = values::parse_start_stop_discontinue(&type_str, reader.position())?;
+
+    let number = reader.get_attr(start.attributes(), "number", "ending")?;
+
+    let print_object = reader
+        .get_optional_attr(start.attributes(), "print-object")?
+        .map(|s| values::parse_yes_no(&s, reader.position()))
+        .transpose()?;
+
+    let end_length = reader.get_optional_attr_as::<f64>(start.attributes(), "end-length")?;
+    let text_x = reader.get_optional_attr_as::<f64>(start.attributes(), "text-x")?;
+    let text_y = reader.get_optional_attr_as::<f64>(start.attributes(), "text-y")?;
+
+    // Read optional text content
+    let text = reader.read_optional_text("ending")?;
+
+    Ok(Ending {
+        r#type,
+        number,
+        text,
+        print_object,
+        end_length,
+        text_x,
+        text_y,
+    })
+}
+
+/// Parse an ending element from an empty element.
+fn parse_ending_from_empty(
+    start: &quick_xml::events::BytesStart<'_>,
+    reader: &XmlReader<'_>,
+) -> Result<Ending, ParseError> {
+    let type_str = reader.get_attr(start.attributes(), "type", "ending")?;
+    let r#type = values::parse_start_stop_discontinue(&type_str, reader.position())?;
+
+    let number = reader.get_attr(start.attributes(), "number", "ending")?;
+
+    let print_object = reader
+        .get_optional_attr(start.attributes(), "print-object")?
+        .map(|s| values::parse_yes_no(&s, reader.position()))
+        .transpose()?;
+
+    let end_length = reader.get_optional_attr_as::<f64>(start.attributes(), "end-length")?;
+    let text_x = reader.get_optional_attr_as::<f64>(start.attributes(), "text-x")?;
+    let text_y = reader.get_optional_attr_as::<f64>(start.attributes(), "text-y")?;
+
+    Ok(Ending {
+        r#type,
+        number,
+        text: None, // Empty element has no text content
+        print_object,
+        end_length,
+        text_x,
+        text_y,
+    })
+}
+
+/// Parse a segno element.
+fn parse_segno(
+    reader: &mut XmlReader<'_>,
+    start: &quick_xml::events::BytesStart<'_>,
+) -> Result<Segno, ParseError> {
+    let print_style = parse_print_style_attrs(start, reader)?;
+    let smufl = reader.get_optional_attr(start.attributes(), "smufl")?;
+
+    // Skip to end of element
+    reader.skip_element("segno")?;
+
+    Ok(Segno { print_style, smufl })
+}
+
+/// Parse a segno element from an empty tag.
+fn parse_segno_from_empty(
+    start: &quick_xml::events::BytesStart<'_>,
+    reader: &XmlReader<'_>,
+) -> Result<Segno, ParseError> {
+    let print_style = parse_print_style_attrs(start, reader)?;
+    let smufl = reader.get_optional_attr(start.attributes(), "smufl")?;
+
+    Ok(Segno { print_style, smufl })
+}
+
+/// Parse a coda element.
+fn parse_coda(
+    reader: &mut XmlReader<'_>,
+    start: &quick_xml::events::BytesStart<'_>,
+) -> Result<Coda, ParseError> {
+    let print_style = parse_print_style_attrs(start, reader)?;
+    let smufl = reader.get_optional_attr(start.attributes(), "smufl")?;
+
+    // Skip to end of element
+    reader.skip_element("coda")?;
+
+    Ok(Coda { print_style, smufl })
+}
+
+/// Parse a coda element from an empty tag.
+fn parse_coda_from_empty(
+    start: &quick_xml::events::BytesStart<'_>,
+    reader: &XmlReader<'_>,
+) -> Result<Coda, ParseError> {
+    let print_style = parse_print_style_attrs(start, reader)?;
+    let smufl = reader.get_optional_attr(start.attributes(), "smufl")?;
+
+    Ok(Coda { print_style, smufl })
+}
+
+/// Parse a fermata element in barline context.
+fn parse_fermata_from_barline(
+    reader: &mut XmlReader<'_>,
+    start: &quick_xml::events::BytesStart<'_>,
+) -> Result<Fermata, ParseError> {
+    let r#type = reader
+        .get_optional_attr(start.attributes(), "type")?
+        .map(|s| values::parse_upright_inverted(&s, reader.position()))
+        .transpose()?;
+
+    let print_style = parse_print_style_attrs(start, reader)?;
+
+    // Read optional shape content
+    let shape = reader.read_optional_text("fermata")?.and_then(|s| {
+        if s.is_empty() {
+            Some(FermataShape::Normal)
+        } else {
+            values::parse_fermata_shape(&s, 0).ok()
+        }
+    });
+
+    Ok(Fermata {
+        shape,
+        r#type,
+        print_style,
+    })
+}
+
+/// Parse a fermata element from an empty tag.
+fn parse_fermata_from_empty(
+    start: &quick_xml::events::BytesStart<'_>,
+    reader: &XmlReader<'_>,
+) -> Result<Fermata, ParseError> {
+    let r#type = reader
+        .get_optional_attr(start.attributes(), "type")?
+        .map(|s| values::parse_upright_inverted(&s, reader.position()))
+        .transpose()?;
+
+    let print_style = parse_print_style_attrs(start, reader)?;
+
+    Ok(Fermata {
+        shape: Some(FermataShape::Normal),
+        r#type,
+        print_style,
+    })
+}
+
+/// Parse a wavy-line element.
+fn parse_wavy_line(
+    reader: &mut XmlReader<'_>,
+    start: &quick_xml::events::BytesStart<'_>,
+) -> Result<WavyLine, ParseError> {
+    let type_str = reader.get_attr(start.attributes(), "type", "wavy-line")?;
+    let r#type = values::parse_start_stop_continue(&type_str, reader.position())?;
+
+    let number = reader.get_optional_attr_as::<u8>(start.attributes(), "number")?;
+    let position = parse_position_attrs(start, reader)?;
+
+    // Skip to end of element
+    reader.skip_element("wavy-line")?;
+
+    Ok(WavyLine {
+        r#type,
+        number,
+        position,
+    })
+}
+
+/// Parse a wavy-line element from an empty tag.
+fn parse_wavy_line_from_empty(
+    start: &quick_xml::events::BytesStart<'_>,
+    reader: &XmlReader<'_>,
+) -> Result<WavyLine, ParseError> {
+    let type_str = reader.get_attr(start.attributes(), "type", "wavy-line")?;
+    let r#type = values::parse_start_stop_continue(&type_str, reader.position())?;
+
+    let number = reader.get_optional_attr_as::<u8>(start.attributes(), "number")?;
+    let position = parse_position_attrs(start, reader)?;
+
+    Ok(WavyLine {
+        r#type,
+        number,
+        position,
+    })
+}
+
+/// Parse print-style attributes from an element.
+fn parse_print_style_attrs(
+    start: &quick_xml::events::BytesStart<'_>,
+    reader: &XmlReader<'_>,
+) -> Result<PrintStyle, ParseError> {
+    let position = parse_position_attrs(start, reader)?;
+
+    let color = reader.get_optional_attr(start.attributes(), "color")?;
+
+    // Font attributes are typically not present on these elements, use defaults
+    let font = Font::default();
+
+    Ok(PrintStyle {
+        position,
+        font,
+        color,
+    })
+}
+
+/// Parse position attributes from an element.
+fn parse_position_attrs(
+    start: &quick_xml::events::BytesStart<'_>,
+    reader: &XmlReader<'_>,
+) -> Result<Position, ParseError> {
+    let default_x = reader.get_optional_attr_as::<f64>(start.attributes(), "default-x")?;
+    let default_y = reader.get_optional_attr_as::<f64>(start.attributes(), "default-y")?;
+    let relative_x = reader.get_optional_attr_as::<f64>(start.attributes(), "relative-x")?;
+    let relative_y = reader.get_optional_attr_as::<f64>(start.attributes(), "relative-y")?;
+
+    Ok(Position {
+        default_x,
+        default_y,
+        relative_x,
+        relative_y,
+    })
+}
+
+/// Parse a backup element.
+///
+/// Backup elements move the cursor backward in time within a measure.
+/// This is essential for multi-voice music where voices share the same staff.
 fn parse_backup(reader: &mut XmlReader<'_>) -> Result<crate::ir::voice::Backup, ParseError> {
     let mut duration = 0u64;
 
@@ -1859,7 +2244,10 @@ fn parse_backup(reader: &mut XmlReader<'_>) -> Result<crate::ir::voice::Backup, 
     })
 }
 
-/// Parse a forward element (stub - will be fully implemented in Milestone 2).
+/// Parse a forward element.
+///
+/// Forward elements move the cursor forward in time within a measure.
+/// This is used to create space between notes in a voice.
 fn parse_forward(
     reader: &mut XmlReader<'_>,
     _start: &quick_xml::events::BytesStart<'_>,
@@ -3949,6 +4337,680 @@ mod tests {
             assert_eq!(note.dots.len(), 2);
         } else {
             panic!("Expected Note");
+        }
+    }
+
+    // =======================================================================
+    // Multi-Voice Tests (Task 3.3)
+    // =======================================================================
+
+    #[test]
+    fn test_parse_two_voice_measure_with_backup() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <attributes>
+                            <divisions>4</divisions>
+                        </attributes>
+                        <note>
+                            <pitch>
+                                <step>E</step>
+                                <octave>4</octave>
+                            </pitch>
+                            <duration>16</duration>
+                            <voice>1</voice>
+                            <type>whole</type>
+                        </note>
+                        <backup>
+                            <duration>16</duration>
+                        </backup>
+                        <note>
+                            <pitch>
+                                <step>C</step>
+                                <octave>3</octave>
+                            </pitch>
+                            <duration>16</duration>
+                            <voice>2</voice>
+                            <type>whole</type>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        let content = &score.parts[0].measures[0].content;
+        assert_eq!(content.len(), 4); // attributes, note, backup, note
+
+        // Check first note is voice 1
+        if let crate::ir::measure::MusicDataElement::Note(note) = &content[1] {
+            assert_eq!(note.voice, Some("1".to_string()));
+        } else {
+            panic!("Expected Note at index 1");
+        }
+
+        // Check backup element
+        if let crate::ir::measure::MusicDataElement::Backup(backup) = &content[2] {
+            assert_eq!(backup.duration, 16);
+        } else {
+            panic!("Expected Backup at index 2");
+        }
+
+        // Check second note is voice 2
+        if let crate::ir::measure::MusicDataElement::Note(note) = &content[3] {
+            assert_eq!(note.voice, Some("2".to_string()));
+        } else {
+            panic!("Expected Note at index 3");
+        }
+    }
+
+    #[test]
+    fn test_parse_forward_element_with_voice_and_staff() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <forward>
+                            <duration>8</duration>
+                            <voice>2</voice>
+                            <staff>1</staff>
+                        </forward>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        if let crate::ir::measure::MusicDataElement::Forward(forward) =
+            &score.parts[0].measures[0].content[0]
+        {
+            assert_eq!(forward.duration, 8);
+            assert_eq!(forward.voice, Some("2".to_string()));
+            assert_eq!(forward.staff, Some(1));
+        } else {
+            panic!("Expected Forward");
+        }
+    }
+
+    #[test]
+    fn test_parse_voice_assignment_preserved() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch>
+                                <step>C</step>
+                                <octave>4</octave>
+                            </pitch>
+                            <duration>4</duration>
+                            <voice>1</voice>
+                            <type>quarter</type>
+                        </note>
+                        <note>
+                            <pitch>
+                                <step>D</step>
+                                <octave>4</octave>
+                            </pitch>
+                            <duration>4</duration>
+                            <voice>1</voice>
+                            <type>quarter</type>
+                        </note>
+                        <backup>
+                            <duration>8</duration>
+                        </backup>
+                        <note>
+                            <pitch>
+                                <step>G</step>
+                                <octave>3</octave>
+                            </pitch>
+                            <duration>8</duration>
+                            <voice>2</voice>
+                            <type>half</type>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        let content = &score.parts[0].measures[0].content;
+
+        // Verify voice assignments are preserved
+        let mut voice_1_count = 0;
+        let mut voice_2_count = 0;
+
+        for element in content {
+            if let crate::ir::measure::MusicDataElement::Note(note) = element {
+                match note.voice.as_deref() {
+                    Some("1") => voice_1_count += 1,
+                    Some("2") => voice_2_count += 1,
+                    _ => {}
+                }
+            }
+        }
+
+        assert_eq!(voice_1_count, 2, "Expected 2 notes in voice 1");
+        assert_eq!(voice_2_count, 1, "Expected 1 note in voice 2");
+    }
+
+    // =======================================================================
+    // Barline Tests (Task 3.4)
+    // =======================================================================
+
+    #[test]
+    fn test_parse_barline_simple_forward_repeat() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <barline location="left">
+                            <bar-style>heavy-light</bar-style>
+                            <repeat direction="forward"/>
+                        </barline>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        if let crate::ir::measure::MusicDataElement::Barline(barline) =
+            &score.parts[0].measures[0].content[0]
+        {
+            assert_eq!(
+                barline.location,
+                Some(crate::ir::common::RightLeftMiddle::Left)
+            );
+            assert_eq!(
+                barline.bar_style,
+                Some(crate::ir::attributes::BarStyle::HeavyLight)
+            );
+            assert!(barline.repeat.is_some());
+            let repeat = barline.repeat.as_ref().unwrap();
+            assert_eq!(
+                repeat.direction,
+                crate::ir::common::BackwardForward::Forward
+            );
+        } else {
+            panic!("Expected Barline");
+        }
+    }
+
+    #[test]
+    fn test_parse_barline_backward_repeat() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <barline location="right">
+                            <bar-style>light-heavy</bar-style>
+                            <repeat direction="backward" times="2"/>
+                        </barline>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        if let crate::ir::measure::MusicDataElement::Barline(barline) =
+            &score.parts[0].measures[0].content[0]
+        {
+            assert_eq!(
+                barline.location,
+                Some(crate::ir::common::RightLeftMiddle::Right)
+            );
+            assert_eq!(
+                barline.bar_style,
+                Some(crate::ir::attributes::BarStyle::LightHeavy)
+            );
+            let repeat = barline.repeat.as_ref().unwrap();
+            assert_eq!(
+                repeat.direction,
+                crate::ir::common::BackwardForward::Backward
+            );
+            assert_eq!(repeat.times, Some(2));
+        } else {
+            panic!("Expected Barline");
+        }
+    }
+
+    #[test]
+    fn test_parse_barline_volta_first_ending() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <barline location="left">
+                            <ending number="1" type="start">1.</ending>
+                        </barline>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        if let crate::ir::measure::MusicDataElement::Barline(barline) =
+            &score.parts[0].measures[0].content[0]
+        {
+            assert!(barline.ending.is_some());
+            let ending = barline.ending.as_ref().unwrap();
+            assert_eq!(
+                ending.r#type,
+                crate::ir::common::StartStopDiscontinue::Start
+            );
+            assert_eq!(ending.number, "1");
+            assert_eq!(ending.text, Some("1.".to_string()));
+        } else {
+            panic!("Expected Barline");
+        }
+    }
+
+    #[test]
+    fn test_parse_barline_volta_second_ending() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <barline location="left">
+                            <ending number="2" type="start">2.</ending>
+                        </barline>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        if let crate::ir::measure::MusicDataElement::Barline(barline) =
+            &score.parts[0].measures[0].content[0]
+        {
+            let ending = barline.ending.as_ref().unwrap();
+            assert_eq!(ending.number, "2");
+            assert_eq!(ending.text, Some("2.".to_string()));
+        } else {
+            panic!("Expected Barline");
+        }
+    }
+
+    #[test]
+    fn test_parse_barline_ending_stop() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <barline location="right">
+                            <ending number="1" type="stop"/>
+                        </barline>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        if let crate::ir::measure::MusicDataElement::Barline(barline) =
+            &score.parts[0].measures[0].content[0]
+        {
+            let ending = barline.ending.as_ref().unwrap();
+            assert_eq!(ending.r#type, crate::ir::common::StartStopDiscontinue::Stop);
+        } else {
+            panic!("Expected Barline");
+        }
+    }
+
+    #[test]
+    fn test_parse_barline_ending_discontinue() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <barline location="right">
+                            <ending number="1" type="discontinue"/>
+                        </barline>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        if let crate::ir::measure::MusicDataElement::Barline(barline) =
+            &score.parts[0].measures[0].content[0]
+        {
+            let ending = barline.ending.as_ref().unwrap();
+            assert_eq!(
+                ending.r#type,
+                crate::ir::common::StartStopDiscontinue::Discontinue
+            );
+        } else {
+            panic!("Expected Barline");
+        }
+    }
+
+    #[test]
+    fn test_parse_barline_with_segno() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <barline location="left">
+                            <segno/>
+                        </barline>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        if let crate::ir::measure::MusicDataElement::Barline(barline) =
+            &score.parts[0].measures[0].content[0]
+        {
+            assert!(barline.segno.is_some());
+        } else {
+            panic!("Expected Barline");
+        }
+    }
+
+    #[test]
+    fn test_parse_barline_with_coda() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <barline location="left">
+                            <coda/>
+                        </barline>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        if let crate::ir::measure::MusicDataElement::Barline(barline) =
+            &score.parts[0].measures[0].content[0]
+        {
+            assert!(barline.coda.is_some());
+        } else {
+            panic!("Expected Barline");
+        }
+    }
+
+    #[test]
+    fn test_parse_barline_with_fermata() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <barline location="right">
+                            <fermata type="upright"/>
+                        </barline>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        if let crate::ir::measure::MusicDataElement::Barline(barline) =
+            &score.parts[0].measures[0].content[0]
+        {
+            assert_eq!(barline.fermatas.len(), 1);
+            assert_eq!(
+                barline.fermatas[0].r#type,
+                Some(crate::ir::common::UprightInverted::Upright)
+            );
+        } else {
+            panic!("Expected Barline");
+        }
+    }
+
+    #[test]
+    fn test_parse_barline_all_bar_styles() {
+        let styles = [
+            ("regular", crate::ir::attributes::BarStyle::Regular),
+            ("dotted", crate::ir::attributes::BarStyle::Dotted),
+            ("dashed", crate::ir::attributes::BarStyle::Dashed),
+            ("heavy", crate::ir::attributes::BarStyle::Heavy),
+            ("light-light", crate::ir::attributes::BarStyle::LightLight),
+            ("light-heavy", crate::ir::attributes::BarStyle::LightHeavy),
+            ("heavy-light", crate::ir::attributes::BarStyle::HeavyLight),
+            ("heavy-heavy", crate::ir::attributes::BarStyle::HeavyHeavy),
+            ("tick", crate::ir::attributes::BarStyle::Tick),
+            ("short", crate::ir::attributes::BarStyle::Short),
+            ("none", crate::ir::attributes::BarStyle::None),
+        ];
+
+        for (style_str, expected_style) in styles {
+            let xml = format!(
+                r#"<?xml version="1.0"?>
+                <score-partwise>
+                    <part-list>
+                        <score-part id="P1">
+                            <part-name>Test</part-name>
+                        </score-part>
+                    </part-list>
+                    <part id="P1">
+                        <measure number="1">
+                            <barline>
+                                <bar-style>{}</bar-style>
+                            </barline>
+                        </measure>
+                    </part>
+                </score-partwise>"#,
+                style_str
+            );
+
+            let score = parse_score(&xml).unwrap();
+            if let crate::ir::measure::MusicDataElement::Barline(barline) =
+                &score.parts[0].measures[0].content[0]
+            {
+                assert_eq!(
+                    barline.bar_style,
+                    Some(expected_style),
+                    "Failed for style: {}",
+                    style_str
+                );
+            } else {
+                panic!("Expected Barline for style: {}", style_str);
+            }
+        }
+    }
+
+    #[test]
+    fn test_parse_barline_repeat_with_winged() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <barline location="right">
+                            <repeat direction="backward" winged="curved"/>
+                        </barline>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        if let crate::ir::measure::MusicDataElement::Barline(barline) =
+            &score.parts[0].measures[0].content[0]
+        {
+            let repeat = barline.repeat.as_ref().unwrap();
+            assert_eq!(repeat.winged, Some(crate::ir::attributes::Winged::Curved));
+        } else {
+            panic!("Expected Barline");
+        }
+    }
+
+    #[test]
+    fn test_parse_barline_location_middle() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <barline location="middle">
+                            <bar-style>dashed</bar-style>
+                        </barline>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        if let crate::ir::measure::MusicDataElement::Barline(barline) =
+            &score.parts[0].measures[0].content[0]
+        {
+            assert_eq!(
+                barline.location,
+                Some(crate::ir::common::RightLeftMiddle::Middle)
+            );
+        } else {
+            panic!("Expected Barline");
+        }
+    }
+
+    #[test]
+    fn test_parse_barline_with_wavy_line() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <barline>
+                            <wavy-line type="start" number="1"/>
+                        </barline>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        if let crate::ir::measure::MusicDataElement::Barline(barline) =
+            &score.parts[0].measures[0].content[0]
+        {
+            assert!(barline.wavy_line.is_some());
+            let wavy = barline.wavy_line.as_ref().unwrap();
+            assert_eq!(wavy.r#type, crate::ir::common::StartStopContinue::Start);
+            assert_eq!(wavy.number, Some(1));
+        } else {
+            panic!("Expected Barline");
+        }
+    }
+
+    #[test]
+    fn test_parse_barline_empty_repeat() {
+        // Test parsing repeat as an empty element
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <barline>
+                            <repeat direction="forward"/>
+                        </barline>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        if let crate::ir::measure::MusicDataElement::Barline(barline) =
+            &score.parts[0].measures[0].content[0]
+        {
+            assert!(barline.repeat.is_some());
+        } else {
+            panic!("Expected Barline");
+        }
+    }
+
+    #[test]
+    fn test_parse_barline_ending_with_attributes() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <barline>
+                            <ending number="1, 2" type="start" end-length="30" text-x="5" text-y="-10">1, 2.</ending>
+                        </barline>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        if let crate::ir::measure::MusicDataElement::Barline(barline) =
+            &score.parts[0].measures[0].content[0]
+        {
+            let ending = barline.ending.as_ref().unwrap();
+            assert_eq!(ending.number, "1, 2");
+            assert_eq!(ending.text, Some("1, 2.".to_string()));
+            assert_eq!(ending.end_length, Some(30.0));
+            assert_eq!(ending.text_x, Some(5.0));
+            assert_eq!(ending.text_y, Some(-10.0));
+        } else {
+            panic!("Expected Barline");
         }
     }
 }

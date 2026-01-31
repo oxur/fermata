@@ -2501,4 +2501,596 @@ mod tests {
         assert!(xml.contains("<fret>5</fret>"));
         assert!(xml.contains("</technical>"));
     }
+
+    // =======================================================================
+    // Additional tests for uncovered paths
+    // =======================================================================
+
+    #[test]
+    fn test_emit_empty_work() {
+        use crate::ir::score::Work;
+
+        let mut score = create_minimal_score();
+        // Empty work should not produce any output
+        score.work = Some(Work {
+            work_number: None,
+            work_title: None,
+            opus: None,
+        });
+
+        let xml = emit_score(&score).unwrap();
+        // Empty work should not produce <work> element
+        assert!(!xml.contains("<work>"));
+    }
+
+    #[test]
+    fn test_emit_work_with_opus() {
+        use crate::ir::score::{Opus, Work};
+
+        let mut score = create_minimal_score();
+        score.work = Some(Work {
+            work_number: None,
+            work_title: Some("Sonata".to_string()),
+            opus: Some(Opus {
+                href: "opus1.xml".to_string(),
+            }),
+        });
+
+        let xml = emit_score(&score).unwrap();
+
+        assert!(xml.contains("<work>"));
+        assert!(xml.contains("<work-title>Sonata</work-title>"));
+        assert!(xml.contains("<opus xlink:href=\"opus1.xml\"/>"));
+        assert!(xml.contains("</work>"));
+    }
+
+    #[test]
+    fn test_emit_identification_with_relations() {
+        use crate::ir::common::{Identification, TypedText};
+
+        let mut score = create_minimal_score();
+        score.identification = Some(Identification {
+            creators: vec![],
+            rights: vec![],
+            encoding: None,
+            source: None,
+            relations: vec![
+                TypedText {
+                    value: "http://example.com/related".to_string(),
+                    r#type: Some("related-to".to_string()),
+                },
+                TypedText {
+                    value: "Another relation".to_string(),
+                    r#type: None,
+                },
+            ],
+            miscellaneous: None,
+        });
+
+        let xml = emit_score(&score).unwrap();
+
+        assert!(xml.contains("<identification>"));
+        assert!(
+            xml.contains("<relation type=\"related-to\">http://example.com/related</relation>")
+        );
+        assert!(xml.contains("<relation>Another relation</relation>"));
+        assert!(xml.contains("</identification>"));
+    }
+
+    #[test]
+    fn test_emit_encoding_with_all_content_types() {
+        use crate::ir::common::{
+            Encoding, EncodingContent, Identification, Supports, TypedText, YesNo,
+        };
+
+        let mut score = create_minimal_score();
+        score.identification = Some(Identification {
+            creators: vec![],
+            rights: vec![],
+            encoding: Some(Encoding {
+                content: vec![
+                    EncodingContent::EncodingDate("2024-06-15".to_string()),
+                    EncodingContent::Encoder(TypedText {
+                        value: "John Doe".to_string(),
+                        r#type: Some("transcriber".to_string()),
+                    }),
+                    EncodingContent::Software("Test Software".to_string()),
+                    EncodingContent::EncodingDescription("Test description".to_string()),
+                    EncodingContent::Supports(Supports {
+                        r#type: YesNo::Yes,
+                        element: "print".to_string(),
+                        attribute: Some("new-page".to_string()),
+                        value: Some("yes".to_string()),
+                    }),
+                ],
+            }),
+            source: None,
+            relations: vec![],
+            miscellaneous: None,
+        });
+
+        let xml = emit_score(&score).unwrap();
+
+        assert!(xml.contains("<encoding>"));
+        assert!(xml.contains("<encoding-date>2024-06-15</encoding-date>"));
+        assert!(xml.contains("<encoder type=\"transcriber\">John Doe</encoder>"));
+        assert!(xml.contains("<software>Test Software</software>"));
+        assert!(xml.contains("<encoding-description>Test description</encoding-description>"));
+        assert!(xml.contains(
+            "<supports type=\"yes\" element=\"print\" attribute=\"new-page\" value=\"yes\"/>"
+        ));
+        assert!(xml.contains("</encoding>"));
+    }
+
+    #[test]
+    fn test_emit_credit_with_image() {
+        use crate::ir::common::Position;
+        use crate::ir::score::{Credit, CreditContent, CreditImage};
+
+        let mut score = create_minimal_score();
+        score.credits = vec![Credit {
+            page: Some(1),
+            content: vec![CreditContent::CreditImage(CreditImage {
+                source: "logo.png".to_string(),
+                r#type: "image/png".to_string(),
+                position: Position {
+                    default_x: Some(100.0),
+                    default_y: Some(200.0),
+                    relative_x: None,
+                    relative_y: None,
+                },
+            })],
+        }];
+
+        let xml = emit_score(&score).unwrap();
+
+        assert!(xml.contains("<credit-image source=\"logo.png\" type=\"image/png\" default-x=\"100\" default-y=\"200\"/>"));
+    }
+
+    #[test]
+    fn test_emit_credit_with_symbol() {
+        use crate::ir::common::{LeftCenterRight, Position, TopMiddleBottom};
+        use crate::ir::score::{Credit, CreditContent, CreditSymbol};
+
+        let mut score = create_minimal_score();
+        score.credits = vec![Credit {
+            page: None,
+            content: vec![CreditContent::CreditSymbol(CreditSymbol {
+                value: "coda".to_string(),
+                print_style: PrintStyle {
+                    position: Position {
+                        default_x: Some(50.0),
+                        default_y: Some(100.0),
+                        relative_x: None,
+                        relative_y: None,
+                    },
+                    font: crate::ir::common::Font::default(),
+                    color: None,
+                },
+                justify: Some(LeftCenterRight::Left),
+                halign: Some(LeftCenterRight::Right),
+                valign: Some(TopMiddleBottom::Bottom),
+            })],
+        }];
+
+        let xml = emit_score(&score).unwrap();
+
+        assert!(xml.contains("<credit>"));
+        assert!(xml.contains("<credit-symbol"));
+        assert!(xml.contains("default-x=\"50\""));
+        assert!(xml.contains("default-y=\"100\""));
+        assert!(xml.contains("justify=\"left\""));
+        assert!(xml.contains("halign=\"right\""));
+        assert!(xml.contains("valign=\"bottom\""));
+        assert!(xml.contains(">coda</credit-symbol>"));
+    }
+
+    #[test]
+    fn test_emit_defaults_with_system_dividers() {
+        use crate::ir::common::{PrintStyle, YesNo};
+        use crate::ir::score::{Defaults, Divider, SystemDividers, SystemLayout};
+
+        let mut score = create_minimal_score();
+        score.defaults = Some(Defaults {
+            scaling: None,
+            page_layout: None,
+            system_layout: Some(SystemLayout {
+                system_margins: None,
+                system_distance: None,
+                top_system_distance: None,
+                system_dividers: Some(SystemDividers {
+                    left_divider: Some(Divider {
+                        print_object: Some(YesNo::Yes),
+                        print_style: PrintStyle::default(),
+                    }),
+                    right_divider: Some(Divider {
+                        print_object: Some(YesNo::No),
+                        print_style: PrintStyle::default(),
+                    }),
+                }),
+            }),
+            staff_layout: vec![],
+            appearance: None,
+            music_font: None,
+            word_font: None,
+            lyric_fonts: vec![],
+            lyric_languages: vec![],
+        });
+
+        let xml = emit_score(&score).unwrap();
+
+        assert!(xml.contains("<system-layout>"));
+        assert!(xml.contains("<system-dividers>"));
+        assert!(xml.contains("<left-divider print-object=\"yes\"/>"));
+        assert!(xml.contains("<right-divider print-object=\"no\"/>"));
+        assert!(xml.contains("</system-dividers>"));
+        assert!(xml.contains("</system-layout>"));
+    }
+
+    #[test]
+    fn test_emit_defaults_with_lyric_fonts_and_languages() {
+        use crate::ir::common::Font;
+        use crate::ir::score::{Defaults, LyricFont, LyricLanguage};
+
+        let mut score = create_minimal_score();
+        score.defaults = Some(Defaults {
+            scaling: None,
+            page_layout: None,
+            system_layout: None,
+            staff_layout: vec![],
+            appearance: None,
+            music_font: None,
+            word_font: None,
+            lyric_fonts: vec![
+                LyricFont {
+                    number: Some("1".to_string()),
+                    name: Some("verse".to_string()),
+                    font: Font {
+                        font_family: Some("Arial".to_string()),
+                        font_style: None,
+                        font_size: Some(FontSize::Points(12.0)),
+                        font_weight: None,
+                    },
+                },
+                LyricFont {
+                    number: None,
+                    name: None,
+                    font: Font {
+                        font_family: Some("Times".to_string()),
+                        font_style: None,
+                        font_size: None,
+                        font_weight: None,
+                    },
+                },
+            ],
+            lyric_languages: vec![
+                LyricLanguage {
+                    number: Some("1".to_string()),
+                    name: Some("verse".to_string()),
+                    lang: "en".to_string(),
+                },
+                LyricLanguage {
+                    number: None,
+                    name: None,
+                    lang: "de".to_string(),
+                },
+            ],
+        });
+
+        let xml = emit_score(&score).unwrap();
+
+        assert!(xml.contains(
+            "<lyric-font number=\"1\" name=\"verse\" font-family=\"Arial\" font-size=\"12\"/>"
+        ));
+        assert!(xml.contains("<lyric-font font-family=\"Times\"/>"));
+        assert!(xml.contains("<lyric-language number=\"1\" name=\"verse\" xml:lang=\"en\"/>"));
+        assert!(xml.contains("<lyric-language xml:lang=\"de\"/>"));
+    }
+
+    #[test]
+    fn test_emit_font_with_style_and_weight() {
+        use crate::ir::common::{Font, FontStyle, FontWeight};
+        use crate::ir::score::Defaults;
+
+        let mut score = create_minimal_score();
+        score.defaults = Some(Defaults {
+            scaling: None,
+            page_layout: None,
+            system_layout: None,
+            staff_layout: vec![],
+            appearance: None,
+            music_font: Some(Font {
+                font_family: Some("Bravura".to_string()),
+                font_style: Some(FontStyle::Italic),
+                font_size: Some(FontSize::Points(14.0)),
+                font_weight: Some(FontWeight::Bold),
+            }),
+            word_font: Some(Font {
+                font_family: None,
+                font_style: Some(FontStyle::Normal),
+                font_size: None,
+                font_weight: Some(FontWeight::Normal),
+            }),
+            lyric_fonts: vec![],
+            lyric_languages: vec![],
+        });
+
+        let xml = emit_score(&score).unwrap();
+
+        assert!(xml.contains("font-style=\"italic\""));
+        assert!(xml.contains("font-weight=\"bold\""));
+        assert!(xml.contains("font-style=\"normal\""));
+        assert!(xml.contains("font-weight=\"normal\""));
+    }
+
+    #[test]
+    fn test_emit_staff_layout_empty() {
+        use crate::ir::score::{Defaults, StaffLayout};
+
+        let mut score = create_minimal_score();
+        score.defaults = Some(Defaults {
+            scaling: None,
+            page_layout: None,
+            system_layout: None,
+            staff_layout: vec![
+                StaffLayout {
+                    number: Some(1),
+                    staff_distance: None,
+                },
+                StaffLayout {
+                    number: None,
+                    staff_distance: None,
+                },
+            ],
+            appearance: None,
+            music_font: None,
+            word_font: None,
+            lyric_fonts: vec![],
+            lyric_languages: vec![],
+        });
+
+        let xml = emit_score(&score).unwrap();
+
+        assert!(xml.contains("<staff-layout number=\"1\"/>"));
+        assert!(xml.contains("<staff-layout/>"));
+    }
+
+    #[test]
+    fn test_emit_appearance_with_distances() {
+        use crate::ir::score::{Appearance, Defaults, Distance};
+
+        let mut score = create_minimal_score();
+        score.defaults = Some(Defaults {
+            scaling: None,
+            page_layout: None,
+            system_layout: None,
+            staff_layout: vec![],
+            appearance: Some(Appearance {
+                line_widths: vec![],
+                note_sizes: vec![],
+                distances: vec![
+                    Distance {
+                        r#type: "hyphen".to_string(),
+                        value: 60.0,
+                    },
+                    Distance {
+                        r#type: "beam".to_string(),
+                        value: 7.5,
+                    },
+                ],
+                other_appearances: vec![],
+            }),
+            music_font: None,
+            word_font: None,
+            lyric_fonts: vec![],
+            lyric_languages: vec![],
+        });
+
+        let xml = emit_score(&score).unwrap();
+
+        assert!(xml.contains("<appearance>"));
+        assert!(xml.contains("<distance type=\"hyphen\">60</distance>"));
+        assert!(xml.contains("<distance type=\"beam\">7.5</distance>"));
+        assert!(xml.contains("</appearance>"));
+    }
+
+    #[test]
+    fn test_emit_page_layout_without_dimensions() {
+        use crate::ir::score::{Defaults, PageLayout, PageMargins};
+
+        let mut score = create_minimal_score();
+        score.defaults = Some(Defaults {
+            scaling: None,
+            page_layout: Some(PageLayout {
+                page_height: None,
+                page_width: None,
+                page_margins: vec![PageMargins {
+                    r#type: None,
+                    left: 50.0,
+                    right: 50.0,
+                    top: 50.0,
+                    bottom: 50.0,
+                }],
+            }),
+            system_layout: None,
+            staff_layout: vec![],
+            appearance: None,
+            music_font: None,
+            word_font: None,
+            lyric_fonts: vec![],
+            lyric_languages: vec![],
+        });
+
+        let xml = emit_score(&score).unwrap();
+
+        assert!(xml.contains("<page-layout>"));
+        assert!(!xml.contains("<page-height>"));
+        assert!(!xml.contains("<page-width>"));
+        assert!(xml.contains("<page-margins>"));
+        assert!(xml.contains("<left-margin>50</left-margin>"));
+        assert!(xml.contains("</page-layout>"));
+    }
+
+    #[test]
+    fn test_emit_credit_words_with_all_attributes() {
+        use crate::ir::common::{LeftCenterRight, Position, TopMiddleBottom};
+        use crate::ir::score::{Credit, CreditContent, CreditWords};
+
+        let mut score = create_minimal_score();
+        score.credits = vec![Credit {
+            page: None,
+            content: vec![CreditContent::CreditWords(CreditWords {
+                value: "Test".to_string(),
+                print_style: PrintStyle {
+                    position: Position::default(),
+                    font: crate::ir::common::Font::default(),
+                    color: None,
+                },
+                justify: Some(LeftCenterRight::Left),
+                halign: None,
+                valign: Some(TopMiddleBottom::Middle),
+                lang: Some("en".to_string()),
+            })],
+        }];
+
+        let xml = emit_score(&score).unwrap();
+
+        assert!(xml.contains("justify=\"left\""));
+        assert!(xml.contains("valign=\"middle\""));
+        assert!(xml.contains("xml:lang=\"en\""));
+    }
+
+    #[test]
+    fn test_emit_typed_text_without_type() {
+        use crate::ir::common::{Identification, TypedText};
+
+        let mut score = create_minimal_score();
+        score.identification = Some(Identification {
+            creators: vec![TypedText {
+                value: "Unknown Creator".to_string(),
+                r#type: None,
+            }],
+            rights: vec![TypedText {
+                value: "All rights reserved".to_string(),
+                r#type: None,
+            }],
+            encoding: None,
+            source: None,
+            relations: vec![],
+            miscellaneous: None,
+        });
+
+        let xml = emit_score(&score).unwrap();
+
+        // Without type attribute, element should just have the value
+        assert!(xml.contains("<creator>Unknown Creator</creator>"));
+        assert!(xml.contains("<rights>All rights reserved</rights>"));
+    }
+
+    #[test]
+    fn test_emit_credit_without_page() {
+        use crate::ir::score::{Credit, CreditContent};
+
+        let mut score = create_minimal_score();
+        score.credits = vec![Credit {
+            page: None,
+            content: vec![CreditContent::CreditType("footer".to_string())],
+        }];
+
+        let xml = emit_score(&score).unwrap();
+
+        // Credit without page shouldn't have page attribute
+        assert!(xml.contains("<credit>"));
+        assert!(!xml.contains("page="));
+        assert!(xml.contains("<credit-type>footer</credit-type>"));
+    }
+
+    #[test]
+    fn test_emit_note_size_types() {
+        use crate::ir::score::{Appearance, Defaults, NoteSize, NoteSizeType};
+
+        let mut score = create_minimal_score();
+        score.defaults = Some(Defaults {
+            scaling: None,
+            page_layout: None,
+            system_layout: None,
+            staff_layout: vec![],
+            appearance: Some(Appearance {
+                line_widths: vec![],
+                note_sizes: vec![
+                    NoteSize {
+                        r#type: NoteSizeType::Cue,
+                        value: 60.0,
+                    },
+                    NoteSize {
+                        r#type: NoteSizeType::Grace,
+                        value: 70.0,
+                    },
+                    NoteSize {
+                        r#type: NoteSizeType::GraceCue,
+                        value: 50.0,
+                    },
+                    NoteSize {
+                        r#type: NoteSizeType::Large,
+                        value: 100.0,
+                    },
+                ],
+                distances: vec![],
+                other_appearances: vec![],
+            }),
+            music_font: None,
+            word_font: None,
+            lyric_fonts: vec![],
+            lyric_languages: vec![],
+        });
+
+        let xml = emit_score(&score).unwrap();
+
+        assert!(xml.contains("<note-size type=\"cue\">60</note-size>"));
+        assert!(xml.contains("<note-size type=\"grace\">70</note-size>"));
+        assert!(xml.contains("<note-size type=\"grace-cue\">50</note-size>"));
+        assert!(xml.contains("<note-size type=\"large\">100</note-size>"));
+    }
+
+    #[test]
+    fn test_emit_margin_types() {
+        use crate::ir::score::{Defaults, MarginType, PageLayout, PageMargins};
+
+        let mut score = create_minimal_score();
+        score.defaults = Some(Defaults {
+            scaling: None,
+            page_layout: Some(PageLayout {
+                page_height: None,
+                page_width: None,
+                page_margins: vec![
+                    PageMargins {
+                        r#type: Some(MarginType::Odd),
+                        left: 60.0,
+                        right: 40.0,
+                        top: 50.0,
+                        bottom: 50.0,
+                    },
+                    PageMargins {
+                        r#type: Some(MarginType::Even),
+                        left: 40.0,
+                        right: 60.0,
+                        top: 50.0,
+                        bottom: 50.0,
+                    },
+                ],
+            }),
+            system_layout: None,
+            staff_layout: vec![],
+            appearance: None,
+            music_font: None,
+            word_font: None,
+            lyric_fonts: vec![],
+            lyric_languages: vec![],
+        });
+
+        let xml = emit_score(&score).unwrap();
+
+        assert!(xml.contains("<page-margins type=\"odd\">"));
+        assert!(xml.contains("<page-margins type=\"even\">"));
+    }
 }

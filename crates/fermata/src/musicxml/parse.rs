@@ -865,6 +865,9 @@ fn parse_note(
                     "rest" => {
                         rest = Some(parse_rest_from_empty(&e, reader)?);
                     }
+                    "unpitched" => {
+                        unpitched = Some(Unpitched::default());
+                    }
                     "tie" => {
                         ties.push(parse_tie_from_empty(&e, reader)?);
                     }
@@ -2921,6 +2924,1029 @@ mod tests {
         {
             assert_eq!(note.voice, Some("1".to_string()));
             assert_eq!(note.staff, Some(1));
+        } else {
+            panic!("Expected Note");
+        }
+    }
+
+    // =======================================================================
+    // Additional tests for uncovered paths
+    // =======================================================================
+
+    #[test]
+    fn test_parse_score_unexpected_element() {
+        let xml = r#"<?xml version="1.0"?>
+            <unknown-root>
+            </unknown-root>"#;
+
+        let result = parse_score(xml);
+        assert!(result.is_err());
+        if let Err(ParseError::UnexpectedElement { element, .. }) = result {
+            assert_eq!(element, "unknown-root");
+        } else {
+            panic!("Expected UnexpectedElement error");
+        }
+    }
+
+    #[test]
+    fn test_parse_score_with_comments() {
+        let xml = r#"<?xml version="1.0"?>
+            <!-- This is a comment before the root -->
+            <score-partwise>
+                <!-- Another comment -->
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1"/>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        assert_eq!(score.parts.len(), 1);
+    }
+
+    #[test]
+    fn test_parse_score_with_movement_number() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <movement-number>1</movement-number>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1"/>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        assert_eq!(score.movement_number, Some("1".to_string()));
+    }
+
+    #[test]
+    fn test_parse_score_without_version() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1"/>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        // Default version should be "4.0" when not specified
+        assert_eq!(score.version, Some("4.0".to_string()));
+    }
+
+    #[test]
+    fn test_parse_score_with_work_element() {
+        // Work element is skipped but should not cause errors
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <work>
+                    <work-number>Op. 1</work-number>
+                    <work-title>Sonata</work-title>
+                </work>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1"/>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        assert!(score.work.is_none()); // Currently skipped
+    }
+
+    #[test]
+    fn test_parse_score_with_identification_element() {
+        // Identification element is skipped but should not cause errors
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <identification>
+                    <creator type="composer">Bach</creator>
+                </identification>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1"/>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        assert!(score.identification.is_none()); // Currently skipped
+    }
+
+    #[test]
+    fn test_parse_score_with_defaults_element() {
+        // Defaults element is skipped but should not cause errors
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <defaults>
+                    <scaling>
+                        <millimeters>7</millimeters>
+                        <tenths>40</tenths>
+                    </scaling>
+                </defaults>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1"/>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        assert!(score.defaults.is_none()); // Currently skipped
+    }
+
+    #[test]
+    fn test_parse_score_with_credit_elements() {
+        // Credit elements are skipped but should not cause errors
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <credit page="1">
+                    <credit-words>Title</credit-words>
+                </credit>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1"/>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        assert!(score.credits.is_empty()); // Currently skipped
+    }
+
+    #[test]
+    fn test_parse_score_with_empty_defaults() {
+        // Empty defaults element should be handled
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <defaults/>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1"/>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        assert!(score.defaults.is_none());
+    }
+
+    #[test]
+    fn test_parse_score_with_unknown_element() {
+        // Unknown elements should be skipped for forward compatibility
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <future-element>Some content</future-element>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1"/>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        assert_eq!(score.parts.len(), 1);
+    }
+
+    #[test]
+    fn test_parse_empty_measure() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1"/>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        assert_eq!(score.parts[0].measures[0].number, "1");
+        assert!(score.parts[0].measures[0].content.is_empty());
+    }
+
+    #[test]
+    fn test_parse_measure_with_non_controlling() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1" non-controlling="yes">
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        assert_eq!(score.parts[0].measures[0].non_controlling, Some(YesNo::Yes));
+    }
+
+    #[test]
+    fn test_parse_part_group_with_barline() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <part-group type="start" number="1">
+                        <group-name>Strings</group-name>
+                        <group-barline>yes</group-barline>
+                    </part-group>
+                    <score-part id="P1">
+                        <part-name>Violin</part-name>
+                    </score-part>
+                    <part-group type="stop" number="1"/>
+                </part-list>
+                <part id="P1"><measure number="1"/></part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        if let PartListElement::PartGroup(pg) = &score.part_list.content[0] {
+            assert!(pg.group_barline.is_some());
+        } else {
+            panic!("Expected PartGroup");
+        }
+    }
+
+    #[test]
+    fn test_parse_part_group_mensurstrich() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <part-group type="start" number="1">
+                        <group-barline>Mensurstrich</group-barline>
+                    </part-group>
+                    <score-part id="P1">
+                        <part-name>Violin</part-name>
+                    </score-part>
+                    <part-group type="stop" number="1"/>
+                </part-list>
+                <part id="P1"><measure number="1"/></part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        if let PartListElement::PartGroup(pg) = &score.part_list.content[0] {
+            use crate::ir::part::GroupBarlineValue;
+            assert_eq!(
+                pg.group_barline.as_ref().unwrap().value,
+                GroupBarlineValue::Mensurstrich
+            );
+        } else {
+            panic!("Expected PartGroup");
+        }
+    }
+
+    #[test]
+    fn test_parse_part_group_symbol_values() {
+        let symbols = ["none", "brace", "line", "bracket", "square"];
+        for symbol in symbols {
+            let xml = format!(
+                r#"<?xml version="1.0"?>
+                <score-partwise>
+                    <part-list>
+                        <part-group type="start" number="1">
+                            <group-symbol>{}</group-symbol>
+                        </part-group>
+                        <score-part id="P1">
+                            <part-name>Test</part-name>
+                        </score-part>
+                        <part-group type="stop" number="1"/>
+                    </part-list>
+                    <part id="P1"><measure number="1"/></part>
+                </score-partwise>"#,
+                symbol
+            );
+
+            let score = parse_score(&xml).unwrap();
+            if let PartListElement::PartGroup(pg) = &score.part_list.content[0] {
+                assert!(pg.group_symbol.is_some(), "Failed for symbol: {}", symbol);
+            } else {
+                panic!("Expected PartGroup");
+            }
+        }
+    }
+
+    #[test]
+    fn test_parse_part_group_invalid_symbol() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <part-group type="start" number="1">
+                        <group-symbol>invalid</group-symbol>
+                    </part-group>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1"><measure number="1"/></part>
+            </score-partwise>"#;
+
+        let result = parse_score(xml);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_part_group_invalid_barline() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <part-group type="start" number="1">
+                        <group-barline>invalid</group-barline>
+                    </part-group>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1"><measure number="1"/></part>
+            </score-partwise>"#;
+
+        let result = parse_score(xml);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_part_group_empty_symbol() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <part-group type="start" number="1">
+                        <group-symbol/>
+                    </part-group>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                    <part-group type="stop" number="1"/>
+                </part-list>
+                <part id="P1"><measure number="1"/></part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        if let PartListElement::PartGroup(pg) = &score.part_list.content[0] {
+            use crate::ir::attributes::GroupSymbolValue;
+            assert_eq!(
+                pg.group_symbol.as_ref().unwrap().value,
+                GroupSymbolValue::None
+            );
+        } else {
+            panic!("Expected PartGroup");
+        }
+    }
+
+    #[test]
+    fn test_parse_part_group_with_group_time() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <part-group type="start" number="1">
+                        <group-time/>
+                    </part-group>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                    <part-group type="stop" number="1"/>
+                </part-list>
+                <part id="P1"><measure number="1"/></part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        if let PartListElement::PartGroup(pg) = &score.part_list.content[0] {
+            assert!(pg.group_time.is_some());
+        } else {
+            panic!("Expected PartGroup");
+        }
+    }
+
+    #[test]
+    fn test_parse_score_part_with_empty_part_name() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name/>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1"/>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        if let PartListElement::ScorePart(sp) = &score.part_list.content[0] {
+            assert_eq!(sp.part_name.value, "");
+        } else {
+            panic!("Expected ScorePart");
+        }
+    }
+
+    #[test]
+    fn test_parse_score_part_with_group() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Violin</part-name>
+                        <group>Strings</group>
+                        <group>Orchestra</group>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1"/>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        if let PartListElement::ScorePart(sp) = &score.part_list.content[0] {
+            assert_eq!(sp.group.len(), 2);
+            assert_eq!(sp.group[0], "Strings");
+            assert_eq!(sp.group[1], "Orchestra");
+        } else {
+            panic!("Expected ScorePart");
+        }
+    }
+
+    #[test]
+    fn test_parse_unpitched_note() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Drums</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <unpitched>
+                                <display-step>E</display-step>
+                                <display-octave>4</display-octave>
+                            </unpitched>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        if let crate::ir::measure::MusicDataElement::Note(note) =
+            &score.parts[0].measures[0].content[0]
+        {
+            if let NoteContent::Regular { full_note, .. } = &note.content {
+                if let PitchRestUnpitched::Unpitched(u) = &full_note.content {
+                    assert_eq!(u.display_step, Some(crate::ir::pitch::Step::E));
+                    assert_eq!(u.display_octave, Some(4));
+                } else {
+                    panic!("Expected Unpitched");
+                }
+            } else {
+                panic!("Expected Regular note");
+            }
+        } else {
+            panic!("Expected Note");
+        }
+    }
+
+    #[test]
+    fn test_parse_empty_unpitched_note() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Drums</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <unpitched/>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        if let crate::ir::measure::MusicDataElement::Note(note) =
+            &score.parts[0].measures[0].content[0]
+        {
+            if let NoteContent::Regular { full_note, .. } = &note.content {
+                if let PitchRestUnpitched::Unpitched(u) = &full_note.content {
+                    assert!(u.display_step.is_none());
+                    assert!(u.display_octave.is_none());
+                } else {
+                    panic!("Expected Unpitched");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_parse_rest_with_display_position() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <rest>
+                                <display-step>B</display-step>
+                                <display-octave>4</display-octave>
+                            </rest>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        if let crate::ir::measure::MusicDataElement::Note(note) =
+            &score.parts[0].measures[0].content[0]
+        {
+            if let NoteContent::Regular { full_note, .. } = &note.content {
+                if let PitchRestUnpitched::Rest(r) = &full_note.content {
+                    assert_eq!(r.display_step, Some(crate::ir::pitch::Step::B));
+                    assert_eq!(r.display_octave, Some(4));
+                } else {
+                    panic!("Expected Rest");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_parse_note_with_notehead() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch>
+                                <step>C</step>
+                                <octave>4</octave>
+                            </pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <notehead>diamond</notehead>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        if let crate::ir::measure::MusicDataElement::Note(note) =
+            &score.parts[0].measures[0].content[0]
+        {
+            assert!(note.notehead.is_some());
+            use crate::ir::beam::NoteheadValue;
+            assert_eq!(
+                note.notehead.as_ref().unwrap().value,
+                NoteheadValue::Diamond
+            );
+        } else {
+            panic!("Expected Note");
+        }
+    }
+
+    #[test]
+    fn test_parse_cue_note() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <cue/>
+                            <pitch>
+                                <step>C</step>
+                                <octave>4</octave>
+                            </pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        if let crate::ir::measure::MusicDataElement::Note(note) =
+            &score.parts[0].measures[0].content[0]
+        {
+            if let NoteContent::Cue {
+                full_note,
+                duration,
+            } = &note.content
+            {
+                assert_eq!(*duration, 4);
+                if let PitchRestUnpitched::Pitch(p) = &full_note.content {
+                    assert_eq!(p.step, crate::ir::pitch::Step::C);
+                } else {
+                    panic!("Expected Pitch");
+                }
+            } else {
+                panic!("Expected Cue note");
+            }
+        } else {
+            panic!("Expected Note");
+        }
+    }
+
+    #[test]
+    fn test_parse_key_with_cancel() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <attributes>
+                            <key>
+                                <cancel>-2</cancel>
+                                <fifths>1</fifths>
+                                <mode>major</mode>
+                            </key>
+                        </attributes>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        if let crate::ir::measure::MusicDataElement::Attributes(attrs) =
+            &score.parts[0].measures[0].content[0]
+        {
+            if let KeyContent::Traditional(tk) = &attrs.keys[0].content {
+                assert!(tk.cancel.is_some());
+                assert_eq!(tk.cancel.as_ref().unwrap().fifths, -2);
+            } else {
+                panic!("Expected Traditional key");
+            }
+        } else {
+            panic!("Expected Attributes");
+        }
+    }
+
+    #[test]
+    fn test_parse_time_senza_misura() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <attributes>
+                            <time>
+                                <senza-misura/>
+                            </time>
+                        </attributes>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        if let crate::ir::measure::MusicDataElement::Attributes(attrs) =
+            &score.parts[0].measures[0].content[0]
+        {
+            if let TimeContent::SenzaMisura(_) = &attrs.times[0].content {
+                // Success
+            } else {
+                panic!("Expected SenzaMisura time");
+            }
+        } else {
+            panic!("Expected Attributes");
+        }
+    }
+
+    #[test]
+    fn test_parse_clef_octave_change() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <attributes>
+                            <clef>
+                                <sign>G</sign>
+                                <line>2</line>
+                                <clef-octave-change>-1</clef-octave-change>
+                            </clef>
+                        </attributes>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        if let crate::ir::measure::MusicDataElement::Attributes(attrs) =
+            &score.parts[0].measures[0].content[0]
+        {
+            assert_eq!(attrs.clefs[0].octave_change, Some(-1));
+        } else {
+            panic!("Expected Attributes");
+        }
+    }
+
+    #[test]
+    fn test_parse_attributes_staves() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Piano</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <attributes>
+                            <divisions>4</divisions>
+                            <staves>2</staves>
+                        </attributes>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        if let crate::ir::measure::MusicDataElement::Attributes(attrs) =
+            &score.parts[0].measures[0].content[0]
+        {
+            assert_eq!(attrs.staves, Some(2));
+        } else {
+            panic!("Expected Attributes");
+        }
+    }
+
+    #[test]
+    fn test_parse_forward_without_optional_elements() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <forward>
+                            <duration>4</duration>
+                        </forward>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        if let crate::ir::measure::MusicDataElement::Forward(forward) =
+            &score.parts[0].measures[0].content[0]
+        {
+            assert_eq!(forward.duration, 4);
+            assert!(forward.voice.is_none());
+            assert!(forward.staff.is_none());
+        } else {
+            panic!("Expected Forward");
+        }
+    }
+
+    #[test]
+    fn test_parse_all_clef_signs() {
+        let signs = ["G", "F", "C", "percussion", "TAB", "jianpu", "none"];
+        for sign in signs {
+            let xml = format!(
+                r#"<?xml version="1.0"?>
+                <score-partwise>
+                    <part-list>
+                        <score-part id="P1">
+                            <part-name>Test</part-name>
+                        </score-part>
+                    </part-list>
+                    <part id="P1">
+                        <measure number="1">
+                            <attributes>
+                                <clef>
+                                    <sign>{}</sign>
+                                </clef>
+                            </attributes>
+                        </measure>
+                    </part>
+                </score-partwise>"#,
+                sign
+            );
+
+            let score = parse_score(&xml).unwrap();
+            if let crate::ir::measure::MusicDataElement::Attributes(attrs) =
+                &score.parts[0].measures[0].content[0]
+            {
+                assert!(!attrs.clefs.is_empty(), "Failed for sign: {}", sign);
+            } else {
+                panic!("Expected Attributes for sign: {}", sign);
+            }
+        }
+    }
+
+    #[test]
+    fn test_parse_all_mode_values() {
+        let modes = [
+            "major",
+            "minor",
+            "dorian",
+            "phrygian",
+            "lydian",
+            "mixolydian",
+            "aeolian",
+            "ionian",
+            "locrian",
+        ];
+        for mode in modes {
+            let xml = format!(
+                r#"<?xml version="1.0"?>
+                <score-partwise>
+                    <part-list>
+                        <score-part id="P1">
+                            <part-name>Test</part-name>
+                        </score-part>
+                    </part-list>
+                    <part id="P1">
+                        <measure number="1">
+                            <attributes>
+                                <key>
+                                    <fifths>0</fifths>
+                                    <mode>{}</mode>
+                                </key>
+                            </attributes>
+                        </measure>
+                    </part>
+                </score-partwise>"#,
+                mode
+            );
+
+            let score = parse_score(&xml).unwrap();
+            if let crate::ir::measure::MusicDataElement::Attributes(attrs) =
+                &score.parts[0].measures[0].content[0]
+            {
+                if let KeyContent::Traditional(tk) = &attrs.keys[0].content {
+                    assert!(tk.mode.is_some(), "Failed for mode: {}", mode);
+                } else {
+                    panic!("Expected Traditional key for mode: {}", mode);
+                }
+            } else {
+                panic!("Expected Attributes for mode: {}", mode);
+            }
+        }
+    }
+
+    #[test]
+    fn test_parse_note_without_type() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch>
+                                <step>C</step>
+                                <octave>4</octave>
+                            </pitch>
+                            <duration>4</duration>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        if let crate::ir::measure::MusicDataElement::Note(note) =
+            &score.parts[0].measures[0].content[0]
+        {
+            assert!(note.r#type.is_none());
+        } else {
+            panic!("Expected Note");
+        }
+    }
+
+    #[test]
+    fn test_parse_grace_note_with_steal_time() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <grace steal-time-previous="50" steal-time-following="25"/>
+                            <pitch>
+                                <step>D</step>
+                                <octave>4</octave>
+                            </pitch>
+                            <type>eighth</type>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        if let crate::ir::measure::MusicDataElement::Note(note) =
+            &score.parts[0].measures[0].content[0]
+        {
+            if let NoteContent::Grace { grace, .. } = &note.content {
+                assert_eq!(grace.steal_time_previous, Some(50.0));
+                assert_eq!(grace.steal_time_following, Some(25.0));
+            } else {
+                panic!("Expected Grace note");
+            }
+        } else {
+            panic!("Expected Note");
+        }
+    }
+
+    #[test]
+    fn test_parse_double_dotted_note() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch>
+                                <step>C</step>
+                                <octave>4</octave>
+                            </pitch>
+                            <duration>7</duration>
+                            <type>quarter</type>
+                            <dot/>
+                            <dot/>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        if let crate::ir::measure::MusicDataElement::Note(note) =
+            &score.parts[0].measures[0].content[0]
+        {
+            assert_eq!(note.dots.len(), 2);
         } else {
             panic!("Expected Note");
         }

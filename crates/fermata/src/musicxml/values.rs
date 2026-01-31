@@ -1700,4 +1700,712 @@ mod tests {
         assert_eq!(parse_tap_hand("left", 0).unwrap(), TapHand::Left);
         assert_eq!(parse_tap_hand("right", 0).unwrap(), TapHand::Right);
     }
+
+    // =======================================================================
+    // Additional tests for uncovered paths and error cases
+    // =======================================================================
+
+    // === Error case tests for all parsers ===
+
+    #[test]
+    fn test_parse_clef_sign_invalid() {
+        let result = parse_clef_sign("invalid", 42);
+        assert!(result.is_err());
+        if let Err(ParseError::InvalidValue {
+            expected,
+            found,
+            position,
+        }) = result
+        {
+            assert_eq!(expected, "clef-sign");
+            assert_eq!(found, "invalid");
+            assert_eq!(position, 42);
+        }
+    }
+
+    #[test]
+    fn test_parse_time_symbol_invalid() {
+        let result = parse_time_symbol("invalid", 100);
+        assert!(result.is_err());
+        if let Err(ParseError::InvalidValue {
+            expected,
+            found,
+            position,
+        }) = result
+        {
+            assert_eq!(expected, "time-symbol");
+            assert_eq!(found, "invalid");
+            assert_eq!(position, 100);
+        }
+    }
+
+    #[test]
+    fn test_parse_start_stop_continue_invalid() {
+        let result = parse_start_stop_continue("pause", 0);
+        assert!(result.is_err());
+        if let Err(ParseError::InvalidValue { expected, .. }) = result {
+            assert_eq!(expected, "start-stop-continue");
+        }
+    }
+
+    #[test]
+    fn test_parse_start_stop_single_invalid() {
+        let result = parse_start_stop_single("double", 0);
+        assert!(result.is_err());
+        if let Err(ParseError::InvalidValue { expected, .. }) = result {
+            assert_eq!(expected, "start-stop-single");
+        }
+    }
+
+    #[test]
+    fn test_parse_start_stop_discontinue_invalid() {
+        let result = parse_start_stop_discontinue("pause", 0);
+        assert!(result.is_err());
+        if let Err(ParseError::InvalidValue { expected, .. }) = result {
+            assert_eq!(expected, "start-stop-discontinue");
+        }
+    }
+
+    #[test]
+    fn test_parse_above_below_invalid() {
+        let result = parse_above_below("middle", 0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_up_down_invalid() {
+        let result = parse_up_down("left", 0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_over_under_invalid() {
+        let result = parse_over_under("above", 0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_backward_forward_invalid() {
+        let result = parse_backward_forward("up", 0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_right_left_middle_invalid() {
+        let result = parse_right_left_middle("center", 0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_upright_inverted_invalid() {
+        let result = parse_upright_inverted("tilted", 0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_left_center_right_invalid() {
+        let result = parse_left_center_right("middle", 0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_top_middle_bottom_invalid() {
+        let result = parse_top_middle_bottom("center", 0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_top_bottom_invalid() {
+        let result = parse_top_bottom("middle", 0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_beam_value_invalid() {
+        let result = parse_beam_value("start", 0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_stem_value_invalid() {
+        let result = parse_stem_value("left", 0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_fan_invalid() {
+        let result = parse_fan("fast", 0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_bar_style_invalid() {
+        let result = parse_bar_style("solid", 0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_winged_invalid() {
+        let result = parse_winged("single", 0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_cancel_location_invalid() {
+        let result = parse_cancel_location("center", 0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_fermata_shape_invalid() {
+        let result = parse_fermata_shape("triangle", 0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_breath_mark_value_invalid() {
+        let result = parse_breath_mark_value("downbow", 0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_caesura_value_invalid() {
+        let result = parse_caesura_value("long", 0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_line_length_invalid() {
+        let result = parse_line_length("extra-long", 0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_line_shape_invalid() {
+        let result = parse_line_shape("wavy", 0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_line_type_invalid() {
+        let result = parse_line_type("thick", 0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_show_tuplet_invalid() {
+        let result = parse_show_tuplet("hidden", 0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_start_note_invalid() {
+        let result = parse_start_note("auxiliary", 0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_trill_step_invalid() {
+        let result = parse_trill_step("quarter", 0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_two_note_turn_invalid() {
+        let result = parse_two_note_turn("third", 0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_tremolo_type_invalid() {
+        let result = parse_tremolo_type("double", 0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_wedge_type_invalid() {
+        let result = parse_wedge_type("accent", 0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_pedal_type_invalid() {
+        let result = parse_pedal_type("hold", 0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_up_down_stop_continue_invalid() {
+        let result = parse_up_down_stop_continue("left", 0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_syllabic_invalid() {
+        let result = parse_syllabic("start", 0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_margin_type_invalid() {
+        let result = parse_margin_type("left", 0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_note_size_type_invalid() {
+        let result = parse_note_size_type("small", 0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_css_font_size_invalid() {
+        let result = parse_css_font_size("normal", 0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_handbell_value_invalid() {
+        let result = parse_handbell_value("ring", 0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_arrow_direction_invalid() {
+        let result = parse_arrow_direction("diagonal", 0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_arrow_style_invalid() {
+        let result = parse_arrow_style("triple", 0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_hole_closed_value_invalid() {
+        let result = parse_hole_closed_value("open", 0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_hole_closed_location_invalid() {
+        let result = parse_hole_closed_location("center", 0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_tap_hand_invalid() {
+        let result = parse_tap_hand("both", 0);
+        assert!(result.is_err());
+    }
+
+    // === Comprehensive coverage for all enum variants ===
+
+    #[test]
+    fn test_parse_notehead_value_all_variants() {
+        // Test all remaining notehead variants not already covered
+        assert_eq!(
+            parse_notehead_value("triangle", 0).unwrap(),
+            NoteheadValue::Triangle
+        );
+        assert_eq!(
+            parse_notehead_value("square", 0).unwrap(),
+            NoteheadValue::Square
+        );
+        assert_eq!(
+            parse_notehead_value("cross", 0).unwrap(),
+            NoteheadValue::Cross
+        );
+        assert_eq!(
+            parse_notehead_value("circle-x", 0).unwrap(),
+            NoteheadValue::CircleX
+        );
+        assert_eq!(
+            parse_notehead_value("inverted triangle", 0).unwrap(),
+            NoteheadValue::InvertedTriangle
+        );
+        assert_eq!(
+            parse_notehead_value("arrow down", 0).unwrap(),
+            NoteheadValue::ArrowDown
+        );
+        assert_eq!(
+            parse_notehead_value("arrow up", 0).unwrap(),
+            NoteheadValue::ArrowUp
+        );
+        assert_eq!(
+            parse_notehead_value("circled", 0).unwrap(),
+            NoteheadValue::Circled
+        );
+        assert_eq!(
+            parse_notehead_value("slashed", 0).unwrap(),
+            NoteheadValue::Slashed
+        );
+        assert_eq!(
+            parse_notehead_value("back slashed", 0).unwrap(),
+            NoteheadValue::BackSlashed
+        );
+        assert_eq!(
+            parse_notehead_value("cluster", 0).unwrap(),
+            NoteheadValue::Cluster
+        );
+        assert_eq!(
+            parse_notehead_value("circle dot", 0).unwrap(),
+            NoteheadValue::CircleDot
+        );
+        assert_eq!(
+            parse_notehead_value("left triangle", 0).unwrap(),
+            NoteheadValue::LeftTriangle
+        );
+        assert_eq!(
+            parse_notehead_value("rectangle", 0).unwrap(),
+            NoteheadValue::Rectangle
+        );
+        assert_eq!(
+            parse_notehead_value("none", 0).unwrap(),
+            NoteheadValue::None
+        );
+        assert_eq!(
+            parse_notehead_value("fa up", 0).unwrap(),
+            NoteheadValue::FaUp
+        );
+        assert_eq!(
+            parse_notehead_value("other", 0).unwrap(),
+            NoteheadValue::Other
+        );
+    }
+
+    #[test]
+    fn test_parse_notehead_value_invalid() {
+        let result = parse_notehead_value("star", 0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_accidental_value_all_variants() {
+        // Test remaining accidental variants
+        assert_eq!(
+            parse_accidental_value("sharp-sharp", 0).unwrap(),
+            AccidentalValue::SharpSharp
+        );
+        assert_eq!(
+            parse_accidental_value("flat-flat", 0).unwrap(),
+            AccidentalValue::FlatFlat
+        );
+        assert_eq!(
+            parse_accidental_value("natural-sharp", 0).unwrap(),
+            AccidentalValue::NaturalSharp
+        );
+        assert_eq!(
+            parse_accidental_value("natural-flat", 0).unwrap(),
+            AccidentalValue::NaturalFlat
+        );
+        assert_eq!(
+            parse_accidental_value("sharp-down", 0).unwrap(),
+            AccidentalValue::SharpDown
+        );
+        assert_eq!(
+            parse_accidental_value("sharp-up", 0).unwrap(),
+            AccidentalValue::SharpUp
+        );
+        assert_eq!(
+            parse_accidental_value("natural-down", 0).unwrap(),
+            AccidentalValue::NaturalDown
+        );
+        assert_eq!(
+            parse_accidental_value("natural-up", 0).unwrap(),
+            AccidentalValue::NaturalUp
+        );
+        assert_eq!(
+            parse_accidental_value("flat-down", 0).unwrap(),
+            AccidentalValue::FlatDown
+        );
+        assert_eq!(
+            parse_accidental_value("flat-up", 0).unwrap(),
+            AccidentalValue::FlatUp
+        );
+        assert_eq!(
+            parse_accidental_value("triple-sharp", 0).unwrap(),
+            AccidentalValue::TripleSharp
+        );
+        assert_eq!(
+            parse_accidental_value("triple-flat", 0).unwrap(),
+            AccidentalValue::TripleFlat
+        );
+        assert_eq!(
+            parse_accidental_value("slash-quarter-sharp", 0).unwrap(),
+            AccidentalValue::SlashQuarterSharp
+        );
+        assert_eq!(
+            parse_accidental_value("slash-sharp", 0).unwrap(),
+            AccidentalValue::SlashSharp
+        );
+        assert_eq!(
+            parse_accidental_value("slash-flat", 0).unwrap(),
+            AccidentalValue::SlashFlat
+        );
+        assert_eq!(
+            parse_accidental_value("double-slash-flat", 0).unwrap(),
+            AccidentalValue::DoubleSlashFlat
+        );
+        assert_eq!(
+            parse_accidental_value("sharp-1", 0).unwrap(),
+            AccidentalValue::Sharp1
+        );
+        assert_eq!(
+            parse_accidental_value("sharp-2", 0).unwrap(),
+            AccidentalValue::Sharp2
+        );
+        assert_eq!(
+            parse_accidental_value("sharp-3", 0).unwrap(),
+            AccidentalValue::Sharp3
+        );
+        assert_eq!(
+            parse_accidental_value("sharp-5", 0).unwrap(),
+            AccidentalValue::Sharp5
+        );
+        assert_eq!(
+            parse_accidental_value("flat-1", 0).unwrap(),
+            AccidentalValue::Flat1
+        );
+        assert_eq!(
+            parse_accidental_value("flat-2", 0).unwrap(),
+            AccidentalValue::Flat2
+        );
+        assert_eq!(
+            parse_accidental_value("flat-3", 0).unwrap(),
+            AccidentalValue::Flat3
+        );
+        assert_eq!(
+            parse_accidental_value("flat-4", 0).unwrap(),
+            AccidentalValue::Flat4
+        );
+        assert_eq!(
+            parse_accidental_value("sori", 0).unwrap(),
+            AccidentalValue::Sori
+        );
+        assert_eq!(
+            parse_accidental_value("koron", 0).unwrap(),
+            AccidentalValue::Koron
+        );
+        assert_eq!(
+            parse_accidental_value("other", 0).unwrap(),
+            AccidentalValue::Other
+        );
+    }
+
+    #[test]
+    fn test_parse_accidental_value_invalid() {
+        let result = parse_accidental_value("neutral", 0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_bar_style_all_variants() {
+        assert_eq!(parse_bar_style("dotted", 0).unwrap(), BarStyle::Dotted);
+        assert_eq!(parse_bar_style("dashed", 0).unwrap(), BarStyle::Dashed);
+        assert_eq!(parse_bar_style("heavy", 0).unwrap(), BarStyle::Heavy);
+        assert_eq!(
+            parse_bar_style("light-light", 0).unwrap(),
+            BarStyle::LightLight
+        );
+        assert_eq!(
+            parse_bar_style("heavy-heavy", 0).unwrap(),
+            BarStyle::HeavyHeavy
+        );
+        assert_eq!(parse_bar_style("tick", 0).unwrap(), BarStyle::Tick);
+        assert_eq!(parse_bar_style("short", 0).unwrap(), BarStyle::Short);
+    }
+
+    #[test]
+    fn test_parse_winged_all_variants() {
+        assert_eq!(
+            parse_winged("double-straight", 0).unwrap(),
+            Winged::DoubleStraight
+        );
+        assert_eq!(
+            parse_winged("double-curved", 0).unwrap(),
+            Winged::DoubleCurved
+        );
+    }
+
+    #[test]
+    fn test_parse_fermata_shape_all_variants() {
+        assert_eq!(
+            parse_fermata_shape("double-angled", 0).unwrap(),
+            FermataShape::DoubleAngled
+        );
+        assert_eq!(
+            parse_fermata_shape("double-square", 0).unwrap(),
+            FermataShape::DoubleSquare
+        );
+        assert_eq!(
+            parse_fermata_shape("double-dot", 0).unwrap(),
+            FermataShape::DoubleDot
+        );
+        assert_eq!(
+            parse_fermata_shape("half-curve", 0).unwrap(),
+            FermataShape::HalfCurve
+        );
+        assert_eq!(
+            parse_fermata_shape("curlew", 0).unwrap(),
+            FermataShape::Curlew
+        );
+    }
+
+    #[test]
+    fn test_parse_breath_mark_value_all_variants() {
+        assert_eq!(
+            parse_breath_mark_value("upbow", 0).unwrap(),
+            BreathMarkValue::Upbow
+        );
+        assert_eq!(
+            parse_breath_mark_value("salzedo", 0).unwrap(),
+            BreathMarkValue::Salzedo
+        );
+    }
+
+    #[test]
+    fn test_parse_caesura_value_all_variants() {
+        assert_eq!(
+            parse_caesura_value("curved", 0).unwrap(),
+            CaesuraValue::Curved
+        );
+        assert_eq!(
+            parse_caesura_value("single", 0).unwrap(),
+            CaesuraValue::Single
+        );
+    }
+
+    #[test]
+    fn test_parse_handbell_value_all_variants() {
+        assert_eq!(
+            parse_handbell_value("echo", 0).unwrap(),
+            HandbellValue::Echo
+        );
+        assert_eq!(
+            parse_handbell_value("gyro", 0).unwrap(),
+            HandbellValue::Gyro
+        );
+        assert_eq!(
+            parse_handbell_value("hand martellato", 0).unwrap(),
+            HandbellValue::HandMartellato
+        );
+        assert_eq!(
+            parse_handbell_value("mallet lift", 0).unwrap(),
+            HandbellValue::MalletLift
+        );
+        assert_eq!(
+            parse_handbell_value("mallet table", 0).unwrap(),
+            HandbellValue::MalletTable
+        );
+        assert_eq!(
+            parse_handbell_value("martellato lift", 0).unwrap(),
+            HandbellValue::MartellatoLift
+        );
+        assert_eq!(
+            parse_handbell_value("muted martellato", 0).unwrap(),
+            HandbellValue::MutedMartellato
+        );
+        assert_eq!(
+            parse_handbell_value("pluck lift", 0).unwrap(),
+            HandbellValue::PluckLift
+        );
+        assert_eq!(
+            parse_handbell_value("swing", 0).unwrap(),
+            HandbellValue::Swing
+        );
+    }
+
+    #[test]
+    fn test_parse_arrow_direction_all_variants() {
+        assert_eq!(
+            parse_arrow_direction("right", 0).unwrap(),
+            ArrowDirection::Right
+        );
+        assert_eq!(
+            parse_arrow_direction("down", 0).unwrap(),
+            ArrowDirection::Down
+        );
+        assert_eq!(
+            parse_arrow_direction("northeast", 0).unwrap(),
+            ArrowDirection::Northeast
+        );
+        assert_eq!(
+            parse_arrow_direction("southeast", 0).unwrap(),
+            ArrowDirection::Southeast
+        );
+        assert_eq!(
+            parse_arrow_direction("southwest", 0).unwrap(),
+            ArrowDirection::Southwest
+        );
+        assert_eq!(
+            parse_arrow_direction("left right", 0).unwrap(),
+            ArrowDirection::LeftRight
+        );
+        assert_eq!(
+            parse_arrow_direction("up down", 0).unwrap(),
+            ArrowDirection::UpDown
+        );
+        assert_eq!(
+            parse_arrow_direction("northwest southeast", 0).unwrap(),
+            ArrowDirection::NorthwestSoutheast
+        );
+        assert_eq!(
+            parse_arrow_direction("northeast southwest", 0).unwrap(),
+            ArrowDirection::NortheastSouthwest
+        );
+        assert_eq!(
+            parse_arrow_direction("other", 0).unwrap(),
+            ArrowDirection::Other
+        );
+    }
+
+    #[test]
+    fn test_parse_arrow_style_all_variants() {
+        assert_eq!(parse_arrow_style("hollow", 0).unwrap(), ArrowStyle::Hollow);
+        assert_eq!(parse_arrow_style("paired", 0).unwrap(), ArrowStyle::Paired);
+        assert_eq!(
+            parse_arrow_style("combined", 0).unwrap(),
+            ArrowStyle::Combined
+        );
+        assert_eq!(parse_arrow_style("other", 0).unwrap(), ArrowStyle::Other);
+    }
+
+    #[test]
+    fn test_parse_pedal_type_all_variants() {
+        assert_eq!(
+            parse_pedal_type("continue", 0).unwrap(),
+            PedalType::Continue
+        );
+        assert_eq!(
+            parse_pedal_type("discontinue", 0).unwrap(),
+            PedalType::Discontinue
+        );
+        assert_eq!(parse_pedal_type("resume", 0).unwrap(), PedalType::Resume);
+    }
+
+    // === Edge case tests ===
+
+    #[test]
+    fn test_parse_font_size_with_negative() {
+        // Negative numbers should parse as points (valid in XML, but semantically odd)
+        assert_eq!(parse_font_size("-12", 0).unwrap(), FontSize::Points(-12.0));
+    }
+
+    #[test]
+    fn test_parse_font_size_with_zero() {
+        assert_eq!(parse_font_size("0", 0).unwrap(), FontSize::Points(0.0));
+    }
+
+    #[test]
+    fn test_error_positions_preserved() {
+        // Verify that error positions are correctly preserved
+        let result = parse_step("X", 12345);
+        if let Err(ParseError::InvalidValue { position, .. }) = result {
+            assert_eq!(position, 12345);
+        } else {
+            panic!("Expected InvalidValue error");
+        }
+    }
 }

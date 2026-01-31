@@ -107,4 +107,107 @@ mod tests {
         assert!(xml.contains("<voice>2</voice>"));
         assert!(xml.contains("<staff>1</staff>"));
     }
+
+    // =======================================================================
+    // Additional tests for edge cases
+    // =======================================================================
+
+    #[test]
+    fn test_emit_backup_large_duration() {
+        let mut w = XmlWriter::new();
+        let backup = Backup {
+            duration: 65536,
+            editorial: Editorial::default(),
+        };
+
+        emit_backup(&mut w, &backup).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<duration>65536</duration>"));
+    }
+
+    #[test]
+    fn test_emit_backup_minimal_duration() {
+        let mut w = XmlWriter::new();
+        let backup = Backup {
+            duration: 1,
+            editorial: Editorial::default(),
+        };
+
+        emit_backup(&mut w, &backup).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<backup>"));
+        assert!(xml.contains("<duration>1</duration>"));
+        assert!(xml.contains("</backup>"));
+    }
+
+    #[test]
+    fn test_emit_forward_with_voice_only() {
+        let mut w = XmlWriter::new();
+        let forward = Forward {
+            duration: 8,
+            voice: Some("3".to_string()),
+            staff: None,
+            editorial: Editorial::default(),
+        };
+
+        emit_forward(&mut w, &forward).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<duration>8</duration>"));
+        assert!(xml.contains("<voice>3</voice>"));
+        assert!(!xml.contains("<staff>"));
+    }
+
+    #[test]
+    fn test_emit_forward_with_staff_only() {
+        let mut w = XmlWriter::new();
+        let forward = Forward {
+            duration: 4,
+            voice: None,
+            staff: Some(2),
+            editorial: Editorial::default(),
+        };
+
+        emit_forward(&mut w, &forward).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<duration>4</duration>"));
+        assert!(!xml.contains("<voice>"));
+        assert!(xml.contains("<staff>2</staff>"));
+    }
+
+    #[test]
+    fn test_emit_forward_large_duration() {
+        let mut w = XmlWriter::new();
+        let forward = Forward {
+            duration: 32768,
+            voice: Some("1".to_string()),
+            staff: Some(1),
+            editorial: Editorial::default(),
+        };
+
+        emit_forward(&mut w, &forward).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<duration>32768</duration>"));
+    }
+
+    #[test]
+    fn test_emit_forward_multiple_digit_voice() {
+        let mut w = XmlWriter::new();
+        let forward = Forward {
+            duration: 4,
+            voice: Some("12".to_string()),
+            staff: Some(10),
+            editorial: Editorial::default(),
+        };
+
+        emit_forward(&mut w, &forward).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<voice>12</voice>"));
+        assert!(xml.contains("<staff>10</staff>"));
+    }
 }

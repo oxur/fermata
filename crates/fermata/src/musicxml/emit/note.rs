@@ -1353,4 +1353,919 @@ mod tests {
         assert!(xml.contains("<syllabic>end</syllabic>"));
         assert!(xml.contains("<text>la</text>"));
     }
+
+    // =======================================================================
+    // Additional tests for uncovered paths
+    // =======================================================================
+
+    #[test]
+    fn test_emit_cue_note() {
+        let mut w = XmlWriter::new();
+        let note = Note {
+            position: Position::default(),
+            dynamics: None,
+            end_dynamics: None,
+            attack: None,
+            release: None,
+            pizzicato: None,
+            print_object: None,
+            content: NoteContent::Cue {
+                full_note: FullNote {
+                    chord: false,
+                    content: PitchRestUnpitched::Pitch(Pitch {
+                        step: Step::E,
+                        alter: None,
+                        octave: 5,
+                    }),
+                },
+                duration: 4,
+            },
+            instrument: vec![],
+            voice: Some("1".to_string()),
+            r#type: Some(NoteType {
+                value: NoteTypeValue::Quarter,
+                size: None,
+            }),
+            dots: vec![],
+            accidental: None,
+            time_modification: None,
+            stem: None,
+            notehead: None,
+            staff: None,
+            beams: vec![],
+            notations: vec![],
+            lyrics: vec![],
+        };
+
+        emit_note(&mut w, &note).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<cue/>"));
+        assert!(xml.contains("<pitch>"));
+        assert!(xml.contains("<step>E</step>"));
+        assert!(xml.contains("<duration>4</duration>"));
+    }
+
+    #[test]
+    fn test_emit_grace_note_with_all_attributes() {
+        let mut w = XmlWriter::new();
+        let note = Note {
+            position: Position::default(),
+            dynamics: None,
+            end_dynamics: None,
+            attack: None,
+            release: None,
+            pizzicato: None,
+            print_object: None,
+            content: NoteContent::Grace {
+                grace: Grace {
+                    steal_time_previous: Some(50.0),
+                    steal_time_following: Some(25.0),
+                    make_time: Some(10),
+                    slash: Some(YesNo::No),
+                },
+                full_note: FullNote {
+                    chord: false,
+                    content: PitchRestUnpitched::Pitch(Pitch {
+                        step: Step::A,
+                        alter: None,
+                        octave: 4,
+                    }),
+                },
+                ties: vec![Tie {
+                    r#type: StartStop::Start,
+                    time_only: Some("1".to_string()),
+                }],
+            },
+            instrument: vec![],
+            voice: None,
+            r#type: Some(NoteType {
+                value: NoteTypeValue::N16th,
+                size: None,
+            }),
+            dots: vec![],
+            accidental: None,
+            time_modification: None,
+            stem: None,
+            notehead: None,
+            staff: None,
+            beams: vec![],
+            notations: vec![],
+            lyrics: vec![],
+        };
+
+        emit_note(&mut w, &note).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("slash=\"no\""));
+        assert!(xml.contains("steal-time-previous=\"50\""));
+        assert!(xml.contains("steal-time-following=\"25\""));
+        assert!(xml.contains("make-time=\"10\""));
+        assert!(xml.contains("<tie type=\"start\" time-only=\"1\"/>"));
+    }
+
+    #[test]
+    fn test_emit_chord_note() {
+        let mut w = XmlWriter::new();
+        let note = Note {
+            position: Position::default(),
+            dynamics: None,
+            end_dynamics: None,
+            attack: None,
+            release: None,
+            pizzicato: None,
+            print_object: None,
+            content: NoteContent::Regular {
+                full_note: FullNote {
+                    chord: true,
+                    content: PitchRestUnpitched::Pitch(Pitch {
+                        step: Step::E,
+                        alter: None,
+                        octave: 4,
+                    }),
+                },
+                duration: 4,
+                ties: vec![],
+            },
+            instrument: vec![],
+            voice: Some("1".to_string()),
+            r#type: Some(NoteType {
+                value: NoteTypeValue::Quarter,
+                size: None,
+            }),
+            dots: vec![],
+            accidental: None,
+            time_modification: None,
+            stem: None,
+            notehead: None,
+            staff: None,
+            beams: vec![],
+            notations: vec![],
+            lyrics: vec![],
+        };
+
+        emit_note(&mut w, &note).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<chord/>"));
+        assert!(xml.contains("<step>E</step>"));
+    }
+
+    #[test]
+    fn test_emit_unpitched_note() {
+        let mut w = XmlWriter::new();
+        let note = Note {
+            position: Position::default(),
+            dynamics: None,
+            end_dynamics: None,
+            attack: None,
+            release: None,
+            pizzicato: None,
+            print_object: None,
+            content: NoteContent::Regular {
+                full_note: FullNote {
+                    chord: false,
+                    content: PitchRestUnpitched::Unpitched(Unpitched {
+                        display_step: Some(Step::E),
+                        display_octave: Some(4),
+                    }),
+                },
+                duration: 4,
+                ties: vec![],
+            },
+            instrument: vec![],
+            voice: Some("1".to_string()),
+            r#type: Some(NoteType {
+                value: NoteTypeValue::Quarter,
+                size: None,
+            }),
+            dots: vec![],
+            accidental: None,
+            time_modification: None,
+            stem: None,
+            notehead: None,
+            staff: None,
+            beams: vec![],
+            notations: vec![],
+            lyrics: vec![],
+        };
+
+        emit_note(&mut w, &note).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<unpitched>"));
+        assert!(xml.contains("<display-step>E</display-step>"));
+        assert!(xml.contains("<display-octave>4</display-octave>"));
+        assert!(xml.contains("</unpitched>"));
+    }
+
+    #[test]
+    fn test_emit_unpitched_note_empty() {
+        let mut w = XmlWriter::new();
+        let note = Note {
+            position: Position::default(),
+            dynamics: None,
+            end_dynamics: None,
+            attack: None,
+            release: None,
+            pizzicato: None,
+            print_object: None,
+            content: NoteContent::Regular {
+                full_note: FullNote {
+                    chord: false,
+                    content: PitchRestUnpitched::Unpitched(Unpitched {
+                        display_step: None,
+                        display_octave: None,
+                    }),
+                },
+                duration: 4,
+                ties: vec![],
+            },
+            instrument: vec![],
+            voice: Some("1".to_string()),
+            r#type: Some(NoteType {
+                value: NoteTypeValue::Quarter,
+                size: None,
+            }),
+            dots: vec![],
+            accidental: None,
+            time_modification: None,
+            stem: None,
+            notehead: None,
+            staff: None,
+            beams: vec![],
+            notations: vec![],
+            lyrics: vec![],
+        };
+
+        emit_note(&mut w, &note).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<unpitched/>"));
+    }
+
+    #[test]
+    fn test_emit_whole_measure_rest() {
+        let mut w = XmlWriter::new();
+        let note = Note {
+            position: Position::default(),
+            dynamics: None,
+            end_dynamics: None,
+            attack: None,
+            release: None,
+            pizzicato: None,
+            print_object: None,
+            content: NoteContent::Regular {
+                full_note: FullNote {
+                    chord: false,
+                    content: PitchRestUnpitched::Rest(Rest {
+                        measure: Some(YesNo::Yes),
+                        display_step: None,
+                        display_octave: None,
+                    }),
+                },
+                duration: 16,
+                ties: vec![],
+            },
+            instrument: vec![],
+            voice: Some("1".to_string()),
+            r#type: None,
+            dots: vec![],
+            accidental: None,
+            time_modification: None,
+            stem: None,
+            notehead: None,
+            staff: None,
+            beams: vec![],
+            notations: vec![],
+            lyrics: vec![],
+        };
+
+        emit_note(&mut w, &note).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<rest measure=\"yes\"/>"));
+    }
+
+    #[test]
+    fn test_emit_rest_with_display_step_only() {
+        let mut w = XmlWriter::new();
+        let rest = Rest {
+            measure: None,
+            display_step: Some(Step::C),
+            display_octave: None,
+        };
+
+        emit_rest(&mut w, &rest).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<rest>"));
+        assert!(xml.contains("<display-step>C</display-step>"));
+        assert!(!xml.contains("<display-octave>"));
+        assert!(xml.contains("</rest>"));
+    }
+
+    #[test]
+    fn test_emit_accidental_with_all_attributes() {
+        let mut w = XmlWriter::new();
+        let acc = Accidental {
+            value: AccidentalValue::DoubleSharp,
+            cautionary: Some(YesNo::Yes),
+            editorial: Some(YesNo::Yes),
+            parentheses: Some(YesNo::Yes),
+            bracket: Some(YesNo::No),
+            size: None,
+        };
+
+        emit_accidental(&mut w, &acc).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("cautionary=\"yes\""));
+        assert!(xml.contains("editorial=\"yes\""));
+        assert!(xml.contains("parentheses=\"yes\""));
+        assert!(xml.contains("bracket=\"no\""));
+        assert!(xml.contains(">double-sharp</accidental>"));
+    }
+
+    #[test]
+    fn test_emit_note_with_instrument() {
+        use crate::ir::note::Instrument;
+
+        let mut w = XmlWriter::new();
+        let note = Note {
+            position: Position::default(),
+            dynamics: None,
+            end_dynamics: None,
+            attack: None,
+            release: None,
+            pizzicato: None,
+            print_object: None,
+            content: NoteContent::Regular {
+                full_note: FullNote {
+                    chord: false,
+                    content: PitchRestUnpitched::Pitch(Pitch {
+                        step: Step::C,
+                        alter: None,
+                        octave: 4,
+                    }),
+                },
+                duration: 4,
+                ties: vec![],
+            },
+            instrument: vec![Instrument {
+                id: "P1-I1".to_string(),
+            }],
+            voice: Some("1".to_string()),
+            r#type: Some(NoteType {
+                value: NoteTypeValue::Quarter,
+                size: None,
+            }),
+            dots: vec![],
+            accidental: None,
+            time_modification: None,
+            stem: None,
+            notehead: None,
+            staff: Some(1),
+            beams: vec![],
+            notations: vec![],
+            lyrics: vec![],
+        };
+
+        emit_note(&mut w, &note).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<instrument id=\"P1-I1\"/>"));
+        assert!(xml.contains("<staff>1</staff>"));
+    }
+
+    #[test]
+    fn test_emit_beam_with_fan_and_color() {
+        use crate::ir::beam::Fan;
+
+        let mut w = XmlWriter::new();
+        let beam = Beam {
+            value: BeamValue::End,
+            number: 2,
+            fan: Some(Fan::Accel),
+            color: Some("#FF0000".to_string()),
+        };
+
+        emit_beam(&mut w, &beam).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("number=\"2\""));
+        assert!(xml.contains("fan=\"accel\""));
+        assert!(xml.contains("color=\"#FF0000\""));
+        assert!(xml.contains(">end</beam>"));
+    }
+
+    #[test]
+    fn test_emit_stem_with_default_y_and_color() {
+        let mut w = XmlWriter::new();
+        let stem = Stem {
+            value: StemValue::Down,
+            default_y: Some(-50.0),
+            color: Some("#0000FF".to_string()),
+        };
+
+        emit_stem(&mut w, &stem).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("default-y=\"-50\""));
+        assert!(xml.contains("color=\"#0000FF\""));
+        assert!(xml.contains(">down</stem>"));
+    }
+
+    #[test]
+    fn test_emit_notehead_with_all_attributes() {
+        let mut w = XmlWriter::new();
+        let notehead = Notehead {
+            value: NoteheadValue::X,
+            filled: Some(YesNo::No),
+            parentheses: Some(YesNo::Yes),
+            font: crate::ir::common::Font::default(),
+            color: Some("#00FF00".to_string()),
+        };
+
+        emit_notehead(&mut w, &notehead).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("filled=\"no\""));
+        assert!(xml.contains("parentheses=\"yes\""));
+        assert!(xml.contains("color=\"#00FF00\""));
+        assert!(xml.contains(">x</notehead>"));
+    }
+
+    #[test]
+    fn test_emit_time_modification_with_normal_dots() {
+        let mut w = XmlWriter::new();
+        let tm = TimeModification {
+            actual_notes: 3,
+            normal_notes: 2,
+            normal_type: Some(NoteTypeValue::Quarter),
+            normal_dots: 2,
+        };
+
+        emit_time_modification(&mut w, &tm).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<actual-notes>3</actual-notes>"));
+        assert!(xml.contains("<normal-notes>2</normal-notes>"));
+        assert!(xml.contains("<normal-type>quarter</normal-type>"));
+        // Should have 2 normal-dot elements
+        assert_eq!(xml.matches("<normal-dot/>").count(), 2);
+    }
+
+    #[test]
+    fn test_emit_lyric_with_name_and_justify() {
+        use crate::ir::common::LeftCenterRight;
+        use crate::ir::lyric::{Lyric, LyricContent, Syllabic, TextElementData};
+
+        let mut w = XmlWriter::new();
+        let lyric = Lyric {
+            number: Some("1".to_string()),
+            name: Some("verse".to_string()),
+            justify: Some(LeftCenterRight::Center),
+            placement: None,
+            print_object: Some(YesNo::Yes),
+            content: LyricContent::Syllable {
+                syllabic: Some(Syllabic::Single),
+                text: TextElementData {
+                    value: "word".to_string(),
+                    font: crate::ir::common::Font::default(),
+                    color: None,
+                    lang: None,
+                },
+                extensions: vec![],
+                extend: None,
+            },
+            end_line: false,
+            end_paragraph: false,
+        };
+
+        emit_lyric(&mut w, &lyric).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("name=\"verse\""));
+        assert!(xml.contains("justify=\"center\""));
+        assert!(xml.contains("print-object=\"yes\""));
+    }
+
+    #[test]
+    fn test_emit_lyric_with_end_paragraph() {
+        use crate::ir::lyric::{Lyric, LyricContent, Syllabic, TextElementData};
+
+        let mut w = XmlWriter::new();
+        let lyric = Lyric {
+            number: Some("1".to_string()),
+            name: None,
+            justify: None,
+            placement: None,
+            print_object: None,
+            content: LyricContent::Syllable {
+                syllabic: Some(Syllabic::Single),
+                text: TextElementData {
+                    value: "end".to_string(),
+                    font: crate::ir::common::Font::default(),
+                    color: None,
+                    lang: None,
+                },
+                extensions: vec![],
+                extend: None,
+            },
+            end_line: false,
+            end_paragraph: true,
+        };
+
+        emit_lyric(&mut w, &lyric).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<end-paragraph/>"));
+    }
+
+    #[test]
+    fn test_emit_text_element_with_lang_and_color() {
+        use crate::ir::lyric::TextElementData;
+
+        let mut w = XmlWriter::new();
+        let text = TextElementData {
+            value: "Test".to_string(),
+            font: crate::ir::common::Font::default(),
+            color: Some("#123456".to_string()),
+            lang: Some("en".to_string()),
+        };
+
+        emit_text_element_data(&mut w, &text).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("xml:lang=\"en\""));
+        assert!(xml.contains("color=\"#123456\""));
+        assert!(xml.contains(">Test</text>"));
+    }
+
+    #[test]
+    fn test_emit_elision_empty() {
+        use crate::ir::lyric::Elision;
+
+        let mut w = XmlWriter::new();
+        let elision = Elision {
+            value: String::new(),
+            font: crate::ir::common::Font::default(),
+            color: None,
+        };
+
+        emit_elision(&mut w, &elision).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<elision/>"));
+    }
+
+    #[test]
+    fn test_emit_elision_with_color() {
+        use crate::ir::lyric::Elision;
+
+        let mut w = XmlWriter::new();
+        let elision = Elision {
+            value: "-".to_string(),
+            font: crate::ir::common::Font::default(),
+            color: Some("#AABBCC".to_string()),
+        };
+
+        emit_elision(&mut w, &elision).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("color=\"#AABBCC\""));
+        assert!(xml.contains(">-</elision>"));
+    }
+
+    #[test]
+    fn test_emit_extend_with_color() {
+        use crate::ir::common::StartStopContinue;
+        use crate::ir::lyric::Extend;
+
+        let mut w = XmlWriter::new();
+        let extend = Extend {
+            r#type: Some(StartStopContinue::Stop),
+            position: Position::default(),
+            color: Some("#DDEEFF".to_string()),
+        };
+
+        emit_extend(&mut w, &extend).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("type=\"stop\""));
+        assert!(xml.contains("color=\"#DDEEFF\""));
+    }
+
+    #[test]
+    fn test_emit_extend_without_type() {
+        use crate::ir::lyric::Extend;
+
+        let mut w = XmlWriter::new();
+        let extend = Extend {
+            r#type: None,
+            position: Position::default(),
+            color: None,
+        };
+
+        emit_extend(&mut w, &extend).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<extend/>"));
+        assert!(!xml.contains("type="));
+    }
+
+    #[test]
+    fn test_emit_lyric_extension_without_syllabic() {
+        use crate::ir::lyric::{Elision, LyricExtension, TextElementData};
+
+        let mut w = XmlWriter::new();
+        let ext = LyricExtension {
+            elision: Elision {
+                value: " ".to_string(),
+                font: crate::ir::common::Font::default(),
+                color: None,
+            },
+            syllabic: None,
+            text: TextElementData {
+                value: "da".to_string(),
+                font: crate::ir::common::Font::default(),
+                color: None,
+                lang: None,
+            },
+        };
+
+        emit_lyric_extension(&mut w, &ext).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<elision> </elision>"));
+        assert!(!xml.contains("<syllabic>"));
+        assert!(xml.contains("<text>da</text>"));
+    }
+
+    #[test]
+    fn test_emit_lyric_syllable_without_syllabic() {
+        use crate::ir::lyric::{Lyric, LyricContent, TextElementData};
+
+        let mut w = XmlWriter::new();
+        let lyric = Lyric {
+            number: None,
+            name: None,
+            justify: None,
+            placement: None,
+            print_object: None,
+            content: LyricContent::Syllable {
+                syllabic: None,
+                text: TextElementData {
+                    value: "oh".to_string(),
+                    font: crate::ir::common::Font::default(),
+                    color: None,
+                    lang: None,
+                },
+                extensions: vec![],
+                extend: None,
+            },
+            end_line: false,
+            end_paragraph: false,
+        };
+
+        emit_lyric(&mut w, &lyric).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<lyric>"));
+        assert!(!xml.contains("<syllabic>"));
+        assert!(xml.contains("<text>oh</text>"));
+    }
+
+    #[test]
+    fn test_emit_note_with_double_dotted() {
+        let mut w = XmlWriter::new();
+        let note = Note {
+            position: Position::default(),
+            dynamics: None,
+            end_dynamics: None,
+            attack: None,
+            release: None,
+            pizzicato: None,
+            print_object: None,
+            content: NoteContent::Regular {
+                full_note: FullNote {
+                    chord: false,
+                    content: PitchRestUnpitched::Pitch(Pitch {
+                        step: Step::G,
+                        alter: None,
+                        octave: 4,
+                    }),
+                },
+                duration: 7,
+                ties: vec![],
+            },
+            instrument: vec![],
+            voice: Some("1".to_string()),
+            r#type: Some(NoteType {
+                value: NoteTypeValue::Quarter,
+                size: Some(crate::ir::common::SymbolSize::Large),
+            }),
+            dots: vec![Dot::default(), Dot::default()],
+            accidental: None,
+            time_modification: None,
+            stem: None,
+            notehead: None,
+            staff: None,
+            beams: vec![],
+            notations: vec![],
+            lyrics: vec![],
+        };
+
+        emit_note(&mut w, &note).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert_eq!(xml.matches("<dot/>").count(), 2);
+    }
+
+    #[test]
+    fn test_emit_grace_note_chord_with_tie() {
+        let mut w = XmlWriter::new();
+        let note = Note {
+            position: Position::default(),
+            dynamics: None,
+            end_dynamics: None,
+            attack: None,
+            release: None,
+            pizzicato: None,
+            print_object: None,
+            content: NoteContent::Grace {
+                grace: Grace {
+                    steal_time_previous: None,
+                    steal_time_following: None,
+                    make_time: None,
+                    slash: None,
+                },
+                full_note: FullNote {
+                    chord: true,
+                    content: PitchRestUnpitched::Pitch(Pitch {
+                        step: Step::B,
+                        alter: Some(-1.0),
+                        octave: 3,
+                    }),
+                },
+                ties: vec![
+                    Tie {
+                        r#type: StartStop::Start,
+                        time_only: None,
+                    },
+                    Tie {
+                        r#type: StartStop::Stop,
+                        time_only: None,
+                    },
+                ],
+            },
+            instrument: vec![],
+            voice: None,
+            r#type: None,
+            dots: vec![],
+            accidental: None,
+            time_modification: None,
+            stem: None,
+            notehead: None,
+            staff: None,
+            beams: vec![],
+            notations: vec![],
+            lyrics: vec![],
+        };
+
+        emit_note(&mut w, &note).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<grace/>"));
+        assert!(xml.contains("<chord/>"));
+        assert!(xml.contains("<alter>-1</alter>"));
+        assert!(xml.contains("<tie type=\"start\"/>"));
+        assert!(xml.contains("<tie type=\"stop\"/>"));
+    }
+
+    #[test]
+    fn test_emit_all_note_type_values() {
+        // Test emission of various note type values
+        let test_cases = [
+            (NoteTypeValue::Maxima, "maxima"),
+            (NoteTypeValue::Long, "long"),
+            (NoteTypeValue::Breve, "breve"),
+            (NoteTypeValue::Whole, "whole"),
+            (NoteTypeValue::Half, "half"),
+            (NoteTypeValue::Quarter, "quarter"),
+            (NoteTypeValue::Eighth, "eighth"),
+            (NoteTypeValue::N16th, "16th"),
+            (NoteTypeValue::N32nd, "32nd"),
+            (NoteTypeValue::N64th, "64th"),
+            (NoteTypeValue::N128th, "128th"),
+            (NoteTypeValue::N256th, "256th"),
+            (NoteTypeValue::N512th, "512th"),
+            (NoteTypeValue::N1024th, "1024th"),
+        ];
+
+        for (value, expected) in test_cases {
+            let mut w = XmlWriter::new();
+            let note = Note {
+                position: Position::default(),
+                dynamics: None,
+                end_dynamics: None,
+                attack: None,
+                release: None,
+                pizzicato: None,
+                print_object: None,
+                content: NoteContent::Regular {
+                    full_note: FullNote {
+                        chord: false,
+                        content: PitchRestUnpitched::Pitch(Pitch {
+                            step: Step::C,
+                            alter: None,
+                            octave: 4,
+                        }),
+                    },
+                    duration: 1,
+                    ties: vec![],
+                },
+                instrument: vec![],
+                voice: None,
+                r#type: Some(NoteType { value, size: None }),
+                dots: vec![],
+                accidental: None,
+                time_modification: None,
+                stem: None,
+                notehead: None,
+                staff: None,
+                beams: vec![],
+                notations: vec![],
+                lyrics: vec![],
+            };
+
+            emit_note(&mut w, &note).unwrap();
+            let xml = w.into_string().unwrap();
+
+            assert!(
+                xml.contains(&format!("<type>{}</type>", expected)),
+                "Failed for {:?}",
+                value
+            );
+        }
+    }
+
+    #[test]
+    fn test_emit_all_beam_values() {
+        let test_cases = [
+            (BeamValue::Begin, "begin"),
+            (BeamValue::Continue, "continue"),
+            (BeamValue::End, "end"),
+            (BeamValue::ForwardHook, "forward hook"),
+            (BeamValue::BackwardHook, "backward hook"),
+        ];
+
+        for (value, expected) in test_cases {
+            let mut w = XmlWriter::new();
+            let beam = Beam {
+                value,
+                number: 1,
+                fan: None,
+                color: None,
+            };
+
+            emit_beam(&mut w, &beam).unwrap();
+            let xml = w.into_string().unwrap();
+
+            assert!(
+                xml.contains(&format!(">{}</beam>", expected)),
+                "Failed for {:?}",
+                value
+            );
+        }
+    }
+
+    #[test]
+    fn test_emit_all_stem_values() {
+        let test_cases = [
+            (StemValue::Up, "up"),
+            (StemValue::Down, "down"),
+            (StemValue::None, "none"),
+            (StemValue::Double, "double"),
+        ];
+
+        for (value, expected) in test_cases {
+            let mut w = XmlWriter::new();
+            let stem = Stem {
+                value,
+                default_y: None,
+                color: None,
+            };
+
+            emit_stem(&mut w, &stem).unwrap();
+            let xml = w.into_string().unwrap();
+
+            assert!(
+                xml.contains(&format!(">{}</stem>", expected)),
+                "Failed for {:?}",
+                value
+            );
+        }
+    }
 }

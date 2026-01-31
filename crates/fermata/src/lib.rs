@@ -32,6 +32,7 @@
 #![warn(rustdoc::missing_crate_level_docs)]
 
 pub mod ir;
+pub mod musicxml;
 
 pub mod ast {
     //! Abstract Syntax Tree for Fermata expressions.

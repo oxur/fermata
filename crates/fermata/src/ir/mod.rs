@@ -54,7 +54,7 @@ pub use lyric::{Lyric, Syllabic};
 pub use measure::{Measure, MusicDataElement};
 pub use notation::{Articulations, Fermata, Notations, Ornaments, Slur, Technical, Tied, Tuplet};
 pub use note::{Accidental, FullNote, Grace, Note, NoteContent, Rest};
-pub use part::{Part, PartList, ScorePart};
+pub use part::{Part, PartGroup, PartList, PartListElement, PartName, ScorePart};
 pub use pitch::{Pitch, Step, Unpitched};
 pub use score::ScorePartwise;
 pub use voice::{Backup, Forward};

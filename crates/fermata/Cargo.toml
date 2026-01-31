@@ -14,10 +14,10 @@ authors = ["oxur contributors"]
 rust-version = "1.85"
 
 [dependencies]
+quick-xml = "0.37"
 # Coming soon:
 # - Parser (nom or pest)
 # - AST types
-# - MusicXML generation
 # - LilyPond generation
 # - REPL (rustyline)
 

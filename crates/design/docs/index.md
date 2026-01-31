@@ -6,10 +6,15 @@ This index is automatically generated. Do not edit manually.
 
 | Number | Title | State | Updated |
 |--------|-------|-------|----------|
+| 0003 | MusicXML Schema Triage for Fermata | Final | 2026-01-31 |
 | 0002 | MusicXML → Fermata IR Analysis Workflow | Active | 2026-01-31 |
 | 0001 | Fermata Lisp — Project Inception | Under Review | 2026-01-30 |
 
 ## Documents by State
+
+### Final
+
+- [0003 - MusicXML Schema Triage for Fermata](06-final/0003-musicxml-schema-triage-for-fermata.md)
 
 ### Under Review
 

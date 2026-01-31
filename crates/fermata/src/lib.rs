@@ -32,7 +32,6 @@
 #![warn(missing_docs)]
 #![warn(rustdoc::missing_crate_level_docs)]
 
-/// Fermata language AST types
 pub mod ast {
     //! Abstract Syntax Tree for Fermata expressions.
     //!
@@ -359,7 +358,6 @@ pub mod ast {
     }
 }
 
-/// Error types for Fermata operations
 pub mod error {
     //! Error handling for Fermata parsing and compilation.
 

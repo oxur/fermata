@@ -90,7 +90,7 @@ fermata render score.fm -o score.svg
 
 ### As a Library
 
-```rust
+```rust,ignore
 use fermata::{parse, compile_to_musicxml};
 
 fn main() -> fermata::Result<()> {

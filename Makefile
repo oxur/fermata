@@ -200,18 +200,18 @@ format:
 .PHONY: coverage
 coverage:
 	@echo "$(BLUE)Generating test coverage report...$(RESET)"
-	@echo "$(CYAN)• Running tests with coverage (ecl crate only)...$(RESET)"
-	@cd crates/ecl && cargo llvm-cov --lib --no-default-features
+	@echo "$(CYAN)• Running tests with coverage ($(CODE_NAME) crate only)...$(RESET)"
+	@cd crates/$(CODE_NAME) && cargo llvm-cov --lib --no-default-features
 	@echo "$(GREEN)✓ Coverage report generated$(RESET)"
-	@echo "$(YELLOW)→ For detailed HTML report, run: cd crates/ecl && cargo llvm-cov --html --lib --no-default-features$(RESET)"
+	@echo "$(YELLOW)→ For detailed HTML report, run: cd crates/$(CODE_NAME) && cargo llvm-cov --html --lib --no-default-features$(RESET)"
 
 .PHONY: coverage-html
 coverage-html:
 	@echo "$(BLUE)Generating HTML coverage report...$(RESET)"
-	@echo "$(CYAN)• Running tests with coverage (ecl crate only)...$(RESET)"
-	@cd crates/ecl && cargo llvm-cov --html --lib --no-default-features
+	@echo "$(CYAN)• Running tests with coverage ($(CODE_NAME) crate only)...$(RESET)"
+	@cd crates/$(CODE_NAME) && cargo llvm-cov --html --lib --no-default-features
 	@echo "$(GREEN)✓ HTML coverage report generated$(RESET)"
-	@echo "$(CYAN)→ Report: crates/ecl/target/llvm-cov/html/index.html$(RESET)"
+	@echo "$(CYAN)→ Report: crates/$(CODE_NAME)/target/llvm-cov/html/index.html$(RESET)"
 
 # Combined check targets
 .PHONY: check
@@ -245,8 +245,6 @@ push:
 	@echo "$(GREEN)✓ Pushed$(RESET)"
 
 # Crates in dependency order (leaf crates first, dependent crates later)
-# ECL crates: design -> core -> steps -> workflows -> cli -> ecl
-# Fabryk crates: core -> (client, acl, storage) -> query -> api -> (mcp, cli) -> fabryk
 PUBLISH_ORDER := fermata
 # crates.io rate limit delay (seconds)
 PUBLISH_DELAY := 372
@@ -341,7 +339,7 @@ publish-dry-run:
 publish-one:
 	@if [ -z "$(CRATE)" ]; then \
 		echo "$(RED)Error: CRATE variable not set$(RESET)"; \
-		echo "Usage: make publish-one CRATE=ecl-core"; \
+		echo "Usage: make publish-one CRATE=$(CODE_NAME)"; \
 		exit 1; \
 	fi
 	@echo ""

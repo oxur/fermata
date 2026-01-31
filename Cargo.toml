@@ -1,0 +1,32 @@
+[package]
+name = "fermata"
+version = "0.0.1"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+description = "An S-expression DSL for working with MusicXML"
+repository = "https://github.com/oxur/fermata"
+homepage = "https://github.com/oxur/fermata"
+documentation = "https://docs.rs/fermata"
+readme = "README.md"
+keywords = ["music", "notation", "musicxml", "lisp", "dsl"]
+categories = ["compilers", "parser-implementations", "multimedia::audio"]
+authors = ["oxur contributors"]
+rust-version = "1.85"
+
+[dependencies]
+# Coming soon:
+# - Parser (nom or pest)
+# - AST types
+# - MusicXML generation
+# - LilyPond generation
+# - REPL (rustyline)
+
+[dev-dependencies]
+
+[[bin]]
+name = "fermata"
+path = "src/main.rs"
+
+[lib]
+name = "fermata"
+path = "src/lib.rs"

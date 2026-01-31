@@ -2,6 +2,10 @@
 
 > **Instructions:** Use this template when starting a new chat session to review a specific chunk. Replace `[N]` with the chunk number and paste the chunk content where indicated.
 
+The final form of your review needs to be an .md artefact that can be easily downloaded, used in further analysis, and ultimately get integrated into the final plan :-D .
+
+See "Output Format" section below for more details.
+
 ---
 
 ## System Context
@@ -20,6 +24,7 @@ You are reviewing S-expression mappings for Fermata, a Lisp DSL that compiles to
 6. **Parser:** `nom` (Rust)
 
 **IR Design Goals:**
+
 - Lossless round-tripping with MusicXML
 - Clean mapping to typed Rust structures
 - Preserve MusicXML's semantic distinctions
@@ -29,31 +34,36 @@ You are reviewing S-expression mappings for Fermata, a Lisp DSL that compiles to
 Review Chunk [N]: **[Chunk Name]** for:
 
 ### 1. Correctness
+
 - Do the S-expr mappings accurately represent MusicXML semantics?
 - Are required vs. optional elements correctly identified?
 - Are enumerations complete?
 
 ### 2. Consistency
+
 - Do naming conventions match our established patterns?
 - Are similar concepts handled the same way?
 - Do cross-references to other chunks make sense?
 
 ### 3. Completeness
+
 - Are any important elements missing?
 - Are the examples sufficient?
 - Are edge cases addressed?
 
 ### 4. Rust IR Viability
+
 - Can these S-exprs map cleanly to Rust structs/enums?
 - Are there any representations that would be awkward in Rust?
 
 ### 5. Open Questions
+
 - Review each open question and provide your recommendation
 - Identify any new questions the analysis missed
 
 ## Output Format
 
-Produce a review document with this structure:
+Produce the required .md review document with this structure, and make avaialble for easy download by the user:
 
 ```markdown
 # Review: Chunk [N] — [Name]
@@ -80,6 +90,7 @@ These mappings are correct and ready for implementation:
 ```
 
 **Should be:**
+
 ```lisp
 (corrected-form ...)
 ```
@@ -116,6 +127,7 @@ These mappings are correct and ready for implementation:
 ## Cross-Chunk Concerns
 
 [Any issues that affect other chunks]
+
 ```
 
 ---

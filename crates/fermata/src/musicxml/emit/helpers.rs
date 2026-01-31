@@ -440,6 +440,204 @@ pub(crate) fn over_under_to_string(ou: &OverUnder) -> &'static str {
     }
 }
 
+/// Convert a LeftCenterRight to its MusicXML string representation.
+pub(crate) fn left_center_right_to_string(
+    lcr: &crate::ir::common::LeftCenterRight,
+) -> &'static str {
+    match lcr {
+        crate::ir::common::LeftCenterRight::Left => "left",
+        crate::ir::common::LeftCenterRight::Center => "center",
+        crate::ir::common::LeftCenterRight::Right => "right",
+    }
+}
+
+/// Convert a Syllabic to its MusicXML string representation.
+pub(crate) fn syllabic_to_string(syllabic: &crate::ir::lyric::Syllabic) -> &'static str {
+    match syllabic {
+        crate::ir::lyric::Syllabic::Single => "single",
+        crate::ir::lyric::Syllabic::Begin => "begin",
+        crate::ir::lyric::Syllabic::End => "end",
+        crate::ir::lyric::Syllabic::Middle => "middle",
+    }
+}
+
+/// Convert a StartNote to its MusicXML string representation.
+pub(crate) fn start_note_to_string(start_note: &crate::ir::notation::StartNote) -> &'static str {
+    match start_note {
+        crate::ir::notation::StartNote::Upper => "upper",
+        crate::ir::notation::StartNote::Main => "main",
+        crate::ir::notation::StartNote::Below => "below",
+    }
+}
+
+/// Convert a TrillStep to its MusicXML string representation.
+pub(crate) fn trill_step_to_string(trill_step: &crate::ir::notation::TrillStep) -> &'static str {
+    match trill_step {
+        crate::ir::notation::TrillStep::Whole => "whole",
+        crate::ir::notation::TrillStep::Half => "half",
+        crate::ir::notation::TrillStep::Unison => "unison",
+    }
+}
+
+/// Convert a TwoNoteTurn to its MusicXML string representation.
+pub(crate) fn two_note_turn_to_string(
+    two_note_turn: &crate::ir::notation::TwoNoteTurn,
+) -> &'static str {
+    match two_note_turn {
+        crate::ir::notation::TwoNoteTurn::Whole => "whole",
+        crate::ir::notation::TwoNoteTurn::Half => "half",
+        crate::ir::notation::TwoNoteTurn::None => "none",
+    }
+}
+
+/// Convert a TremoloType to its MusicXML string representation.
+pub(crate) fn tremolo_type_to_string(
+    tremolo_type: &crate::ir::notation::TremoloType,
+) -> &'static str {
+    match tremolo_type {
+        crate::ir::notation::TremoloType::Start => "start",
+        crate::ir::notation::TremoloType::Stop => "stop",
+        crate::ir::notation::TremoloType::Single => "single",
+        crate::ir::notation::TremoloType::Unmeasured => "unmeasured",
+    }
+}
+
+/// Convert a HandbellValue to its MusicXML string representation.
+pub(crate) fn handbell_value_to_string(value: &crate::ir::notation::HandbellValue) -> &'static str {
+    match value {
+        crate::ir::notation::HandbellValue::Belltree => "belltree",
+        crate::ir::notation::HandbellValue::Damp => "damp",
+        crate::ir::notation::HandbellValue::Echo => "echo",
+        crate::ir::notation::HandbellValue::Gyro => "gyro",
+        crate::ir::notation::HandbellValue::HandMartellato => "hand martellato",
+        crate::ir::notation::HandbellValue::MalletLift => "mallet lift",
+        crate::ir::notation::HandbellValue::MalletTable => "mallet table",
+        crate::ir::notation::HandbellValue::Martellato => "martellato",
+        crate::ir::notation::HandbellValue::MartellatoLift => "martellato lift",
+        crate::ir::notation::HandbellValue::MutedMartellato => "muted martellato",
+        crate::ir::notation::HandbellValue::PluckLift => "pluck lift",
+        crate::ir::notation::HandbellValue::Swing => "swing",
+    }
+}
+
+/// Convert an ArrowDirection to its MusicXML string representation.
+pub(crate) fn arrow_direction_to_string(
+    direction: &crate::ir::notation::ArrowDirection,
+) -> &'static str {
+    match direction {
+        crate::ir::notation::ArrowDirection::Left => "left",
+        crate::ir::notation::ArrowDirection::Up => "up",
+        crate::ir::notation::ArrowDirection::Right => "right",
+        crate::ir::notation::ArrowDirection::Down => "down",
+        crate::ir::notation::ArrowDirection::Northwest => "northwest",
+        crate::ir::notation::ArrowDirection::Northeast => "northeast",
+        crate::ir::notation::ArrowDirection::Southeast => "southeast",
+        crate::ir::notation::ArrowDirection::Southwest => "southwest",
+        crate::ir::notation::ArrowDirection::LeftRight => "left right",
+        crate::ir::notation::ArrowDirection::UpDown => "up down",
+        crate::ir::notation::ArrowDirection::NorthwestSoutheast => "northwest southeast",
+        crate::ir::notation::ArrowDirection::NortheastSouthwest => "northeast southwest",
+        crate::ir::notation::ArrowDirection::Other => "other",
+    }
+}
+
+/// Convert an ArrowStyle to its MusicXML string representation.
+pub(crate) fn arrow_style_to_string(style: &crate::ir::notation::ArrowStyle) -> &'static str {
+    match style {
+        crate::ir::notation::ArrowStyle::Single => "single",
+        crate::ir::notation::ArrowStyle::Double => "double",
+        crate::ir::notation::ArrowStyle::Filled => "filled",
+        crate::ir::notation::ArrowStyle::Hollow => "hollow",
+        crate::ir::notation::ArrowStyle::Paired => "paired",
+        crate::ir::notation::ArrowStyle::Combined => "combined",
+        crate::ir::notation::ArrowStyle::Other => "other",
+    }
+}
+
+/// Convert a HoleClosedValue to its MusicXML string representation.
+pub(crate) fn hole_closed_value_to_string(
+    value: &crate::ir::notation::HoleClosedValue,
+) -> &'static str {
+    match value {
+        crate::ir::notation::HoleClosedValue::Yes => "yes",
+        crate::ir::notation::HoleClosedValue::No => "no",
+        crate::ir::notation::HoleClosedValue::Half => "half",
+    }
+}
+
+/// Convert a HoleClosedLocation to its MusicXML string representation.
+pub(crate) fn hole_closed_location_to_string(
+    location: &crate::ir::notation::HoleClosedLocation,
+) -> &'static str {
+    match location {
+        crate::ir::notation::HoleClosedLocation::Right => "right",
+        crate::ir::notation::HoleClosedLocation::Bottom => "bottom",
+        crate::ir::notation::HoleClosedLocation::Left => "left",
+        crate::ir::notation::HoleClosedLocation::Top => "top",
+    }
+}
+
+/// Convert a TapHand to its MusicXML string representation.
+pub(crate) fn tap_hand_to_string(hand: &crate::ir::notation::TapHand) -> &'static str {
+    match hand {
+        crate::ir::notation::TapHand::Left => "left",
+        crate::ir::notation::TapHand::Right => "right",
+    }
+}
+
+/// Convert a TopMiddleBottom to its MusicXML string representation.
+pub(crate) fn top_middle_bottom_to_string(
+    tmb: &crate::ir::common::TopMiddleBottom,
+) -> &'static str {
+    match tmb {
+        crate::ir::common::TopMiddleBottom::Top => "top",
+        crate::ir::common::TopMiddleBottom::Middle => "middle",
+        crate::ir::common::TopMiddleBottom::Bottom => "bottom",
+    }
+}
+
+/// Convert a MarginType to its MusicXML string representation.
+pub(crate) fn margin_type_to_string(margin_type: &crate::ir::score::MarginType) -> &'static str {
+    match margin_type {
+        crate::ir::score::MarginType::Odd => "odd",
+        crate::ir::score::MarginType::Even => "even",
+        crate::ir::score::MarginType::Both => "both",
+    }
+}
+
+/// Convert a NoteSizeType to its MusicXML string representation.
+pub(crate) fn note_size_type_to_string(
+    note_size_type: &crate::ir::score::NoteSizeType,
+) -> &'static str {
+    match note_size_type {
+        crate::ir::score::NoteSizeType::Cue => "cue",
+        crate::ir::score::NoteSizeType::Grace => "grace",
+        crate::ir::score::NoteSizeType::GraceCue => "grace-cue",
+        crate::ir::score::NoteSizeType::Large => "large",
+    }
+}
+
+/// Convert a FontSize to its MusicXML string representation.
+pub(crate) fn font_size_to_string(font_size: &crate::ir::common::FontSize) -> String {
+    match font_size {
+        crate::ir::common::FontSize::Css(css) => css_font_size_to_string(css).to_string(),
+        crate::ir::common::FontSize::Points(pts) => pts.to_string(),
+    }
+}
+
+/// Convert a CssFontSize to its MusicXML string representation.
+pub(crate) fn css_font_size_to_string(css: &crate::ir::common::CssFontSize) -> &'static str {
+    match css {
+        crate::ir::common::CssFontSize::XxSmall => "xx-small",
+        crate::ir::common::CssFontSize::XSmall => "x-small",
+        crate::ir::common::CssFontSize::Small => "small",
+        crate::ir::common::CssFontSize::Medium => "medium",
+        crate::ir::common::CssFontSize::Large => "large",
+        crate::ir::common::CssFontSize::XLarge => "x-large",
+        crate::ir::common::CssFontSize::XxLarge => "xx-large",
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

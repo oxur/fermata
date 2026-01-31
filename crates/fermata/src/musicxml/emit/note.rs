@@ -5,6 +5,7 @@
 
 use crate::ir::beam::{Beam, Notehead, Stem};
 use crate::ir::duration::TimeModification;
+use crate::ir::lyric::{Elision, Extend, Lyric, LyricContent, LyricExtension, TextElementData};
 use crate::ir::note::{
     Accidental, FullNote, Grace, Note, NoteContent, PitchRestUnpitched, Rest, Tie,
 };
@@ -13,9 +14,10 @@ use crate::musicxml::EmitError;
 use crate::musicxml::writer::{ElementBuilder, XmlWriter};
 
 use super::helpers::{
-    accidental_value_to_string, beam_value_to_string, fan_to_string, note_type_value_to_string,
-    notehead_value_to_string, start_stop_to_string, stem_value_to_string, step_to_string,
-    yes_no_to_string,
+    above_below_to_string, accidental_value_to_string, beam_value_to_string, fan_to_string,
+    left_center_right_to_string, note_type_value_to_string, notehead_value_to_string,
+    start_stop_continue_to_string, start_stop_to_string, stem_value_to_string, step_to_string,
+    syllabic_to_string, yes_no_to_string,
 };
 use super::notation::emit_notations;
 
@@ -148,7 +150,10 @@ pub(crate) fn emit_note(w: &mut XmlWriter, note: &Note) -> Result<(), EmitError>
         emit_notations(w, notations)?;
     }
 
-    // lyric* - skipped for now (Milestone 5)
+    // lyric*
+    for lyric in &note.lyrics {
+        emit_lyric(w, lyric)?;
+    }
 
     w.end_element("note")
         .map_err(|e| EmitError::XmlWrite(e.to_string()))?;
@@ -396,6 +401,175 @@ pub(crate) fn emit_beam(w: &mut XmlWriter, beam: &Beam) -> Result<(), EmitError>
     w.write_text(beam_value_to_string(&beam.value))
         .map_err(|e| EmitError::XmlWrite(e.to_string()))?;
     w.end_element("beam")
+        .map_err(|e| EmitError::XmlWrite(e.to_string()))?;
+    Ok(())
+}
+
+/// Emit a lyric element.
+///
+/// Lyrics are attached to notes and contain syllables, extending lines, or special indicators.
+/// The MusicXML structure is:
+/// ```xml
+/// <lyric number="1" placement="below">
+///   <syllabic>begin</syllabic>
+///   <text>Hap</text>
+///   <extend type="start"/>
+/// </lyric>
+/// ```
+pub(crate) fn emit_lyric(w: &mut XmlWriter, lyric: &Lyric) -> Result<(), EmitError> {
+    let mut elem = ElementBuilder::new("lyric");
+
+    if let Some(ref number) = lyric.number {
+        elem = elem.attr("number", number);
+    }
+    if let Some(ref name) = lyric.name {
+        elem = elem.attr("name", name);
+    }
+    if let Some(ref justify) = lyric.justify {
+        elem = elem.attr("justify", left_center_right_to_string(justify));
+    }
+    if let Some(ref placement) = lyric.placement {
+        elem = elem.attr("placement", above_below_to_string(placement));
+    }
+    if let Some(ref print_object) = lyric.print_object {
+        elem = elem.attr("print-object", yes_no_to_string(print_object));
+    }
+
+    w.write_start(elem)
+        .map_err(|e| EmitError::XmlWrite(e.to_string()))?;
+
+    match &lyric.content {
+        LyricContent::Syllable {
+            syllabic,
+            text,
+            extensions,
+            extend,
+        } => {
+            // syllabic?
+            if let Some(syl) = syllabic {
+                w.text_element("syllabic", syllabic_to_string(syl))
+                    .map_err(|e| EmitError::XmlWrite(e.to_string()))?;
+            }
+
+            // text
+            emit_text_element_data(w, text)?;
+
+            // (elision, syllabic?, text)*
+            for ext in extensions {
+                emit_lyric_extension(w, ext)?;
+            }
+
+            // extend?
+            if let Some(ext) = extend {
+                emit_extend(w, ext)?;
+            }
+        }
+        LyricContent::ExtendOnly(extend) => {
+            emit_extend(w, extend)?;
+        }
+        LyricContent::Laughing => {
+            w.empty_element("laughing")
+                .map_err(|e| EmitError::XmlWrite(e.to_string()))?;
+        }
+        LyricContent::Humming => {
+            w.empty_element("humming")
+                .map_err(|e| EmitError::XmlWrite(e.to_string()))?;
+        }
+    }
+
+    // end-line?
+    if lyric.end_line {
+        w.empty_element("end-line")
+            .map_err(|e| EmitError::XmlWrite(e.to_string()))?;
+    }
+
+    // end-paragraph?
+    if lyric.end_paragraph {
+        w.empty_element("end-paragraph")
+            .map_err(|e| EmitError::XmlWrite(e.to_string()))?;
+    }
+
+    w.end_element("lyric")
+        .map_err(|e| EmitError::XmlWrite(e.to_string()))?;
+    Ok(())
+}
+
+/// Emit a text element for lyrics.
+pub(crate) fn emit_text_element_data(
+    w: &mut XmlWriter,
+    text: &TextElementData,
+) -> Result<(), EmitError> {
+    let mut elem = ElementBuilder::new("text");
+
+    if let Some(ref lang) = text.lang {
+        elem = elem.attr("xml:lang", lang);
+    }
+    if let Some(ref color) = text.color {
+        elem = elem.attr("color", color);
+    }
+    // Font attributes could be added here if needed
+
+    w.write_start(elem)
+        .map_err(|e| EmitError::XmlWrite(e.to_string()))?;
+    w.write_text(&text.value)
+        .map_err(|e| EmitError::XmlWrite(e.to_string()))?;
+    w.end_element("text")
+        .map_err(|e| EmitError::XmlWrite(e.to_string()))?;
+    Ok(())
+}
+
+/// Emit a lyric extension (elision + optional syllabic + text).
+pub(crate) fn emit_lyric_extension(
+    w: &mut XmlWriter,
+    ext: &LyricExtension,
+) -> Result<(), EmitError> {
+    emit_elision(w, &ext.elision)?;
+
+    if let Some(ref syl) = ext.syllabic {
+        w.text_element("syllabic", syllabic_to_string(syl))
+            .map_err(|e| EmitError::XmlWrite(e.to_string()))?;
+    }
+
+    emit_text_element_data(w, &ext.text)?;
+    Ok(())
+}
+
+/// Emit an elision element.
+pub(crate) fn emit_elision(w: &mut XmlWriter, elision: &Elision) -> Result<(), EmitError> {
+    let mut elem = ElementBuilder::new("elision");
+
+    if let Some(ref color) = elision.color {
+        elem = elem.attr("color", color);
+    }
+    // Font attributes could be added here if needed
+
+    if elision.value.is_empty() {
+        w.empty_element_with_attrs(elem)
+            .map_err(|e| EmitError::XmlWrite(e.to_string()))?;
+    } else {
+        w.write_start(elem)
+            .map_err(|e| EmitError::XmlWrite(e.to_string()))?;
+        w.write_text(&elision.value)
+            .map_err(|e| EmitError::XmlWrite(e.to_string()))?;
+        w.end_element("elision")
+            .map_err(|e| EmitError::XmlWrite(e.to_string()))?;
+    }
+    Ok(())
+}
+
+/// Emit an extend element for lyrics (melisma line).
+pub(crate) fn emit_extend(w: &mut XmlWriter, extend: &Extend) -> Result<(), EmitError> {
+    let mut elem = ElementBuilder::new("extend");
+
+    if let Some(ref ext_type) = extend.r#type {
+        elem = elem.attr("type", start_stop_continue_to_string(ext_type));
+    }
+    if let Some(ref color) = extend.color {
+        elem = elem.attr("color", color);
+    }
+    // Position attributes could be added here if needed
+
+    w.empty_element_with_attrs(elem)
         .map_err(|e| EmitError::XmlWrite(e.to_string()))?;
     Ok(())
 }
@@ -913,5 +1087,270 @@ mod tests {
         assert!(xml.contains("<display-step>B</display-step>"));
         assert!(xml.contains("<display-octave>4</display-octave>"));
         assert!(xml.contains("</rest>"));
+    }
+
+    // === Lyric Tests ===
+
+    #[test]
+    fn test_emit_lyric_single_syllable() {
+        use crate::ir::lyric::{Lyric, LyricContent, Syllabic, TextElementData};
+
+        let mut w = XmlWriter::new();
+        let lyric = Lyric {
+            number: Some("1".to_string()),
+            name: None,
+            justify: None,
+            placement: Some(crate::ir::common::AboveBelow::Below),
+            print_object: None,
+            content: LyricContent::Syllable {
+                syllabic: Some(Syllabic::Single),
+                text: TextElementData {
+                    value: "love".to_string(),
+                    font: crate::ir::common::Font::default(),
+                    color: None,
+                    lang: None,
+                },
+                extensions: vec![],
+                extend: None,
+            },
+            end_line: false,
+            end_paragraph: false,
+        };
+
+        emit_lyric(&mut w, &lyric).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<lyric number=\"1\" placement=\"below\">"));
+        assert!(xml.contains("<syllabic>single</syllabic>"));
+        assert!(xml.contains("<text>love</text>"));
+        assert!(xml.contains("</lyric>"));
+    }
+
+    #[test]
+    fn test_emit_lyric_begin_syllable() {
+        use crate::ir::lyric::{Lyric, LyricContent, Syllabic, TextElementData};
+
+        let mut w = XmlWriter::new();
+        let lyric = Lyric {
+            number: Some("1".to_string()),
+            name: None,
+            justify: None,
+            placement: None,
+            print_object: None,
+            content: LyricContent::Syllable {
+                syllabic: Some(Syllabic::Begin),
+                text: TextElementData {
+                    value: "Hap".to_string(),
+                    font: crate::ir::common::Font::default(),
+                    color: None,
+                    lang: None,
+                },
+                extensions: vec![],
+                extend: None,
+            },
+            end_line: false,
+            end_paragraph: false,
+        };
+
+        emit_lyric(&mut w, &lyric).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<syllabic>begin</syllabic>"));
+        assert!(xml.contains("<text>Hap</text>"));
+    }
+
+    #[test]
+    fn test_emit_lyric_with_extend() {
+        use crate::ir::common::StartStopContinue;
+        use crate::ir::lyric::{Extend, Lyric, LyricContent, Syllabic, TextElementData};
+
+        let mut w = XmlWriter::new();
+        let lyric = Lyric {
+            number: Some("1".to_string()),
+            name: None,
+            justify: None,
+            placement: None,
+            print_object: None,
+            content: LyricContent::Syllable {
+                syllabic: Some(Syllabic::End),
+                text: TextElementData {
+                    value: "py".to_string(),
+                    font: crate::ir::common::Font::default(),
+                    color: None,
+                    lang: None,
+                },
+                extensions: vec![],
+                extend: Some(Extend {
+                    r#type: Some(StartStopContinue::Start),
+                    position: Position::default(),
+                    color: None,
+                }),
+            },
+            end_line: false,
+            end_paragraph: false,
+        };
+
+        emit_lyric(&mut w, &lyric).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<syllabic>end</syllabic>"));
+        assert!(xml.contains("<text>py</text>"));
+        assert!(xml.contains("<extend type=\"start\"/>"));
+    }
+
+    #[test]
+    fn test_emit_lyric_extend_only() {
+        use crate::ir::common::StartStopContinue;
+        use crate::ir::lyric::{Extend, Lyric, LyricContent};
+
+        let mut w = XmlWriter::new();
+        let lyric = Lyric {
+            number: Some("1".to_string()),
+            name: None,
+            justify: None,
+            placement: None,
+            print_object: None,
+            content: LyricContent::ExtendOnly(Extend {
+                r#type: Some(StartStopContinue::Continue),
+                position: Position::default(),
+                color: None,
+            }),
+            end_line: false,
+            end_paragraph: false,
+        };
+
+        emit_lyric(&mut w, &lyric).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<lyric number=\"1\">"));
+        assert!(xml.contains("<extend type=\"continue\"/>"));
+        assert!(xml.contains("</lyric>"));
+    }
+
+    #[test]
+    fn test_emit_lyric_laughing() {
+        use crate::ir::lyric::{Lyric, LyricContent};
+
+        let mut w = XmlWriter::new();
+        let lyric = Lyric {
+            number: Some("1".to_string()),
+            name: None,
+            justify: None,
+            placement: None,
+            print_object: None,
+            content: LyricContent::Laughing,
+            end_line: false,
+            end_paragraph: false,
+        };
+
+        emit_lyric(&mut w, &lyric).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<laughing/>"));
+    }
+
+    #[test]
+    fn test_emit_lyric_humming() {
+        use crate::ir::lyric::{Lyric, LyricContent};
+
+        let mut w = XmlWriter::new();
+        let lyric = Lyric {
+            number: Some("1".to_string()),
+            name: None,
+            justify: None,
+            placement: None,
+            print_object: None,
+            content: LyricContent::Humming,
+            end_line: false,
+            end_paragraph: false,
+        };
+
+        emit_lyric(&mut w, &lyric).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<humming/>"));
+    }
+
+    #[test]
+    fn test_emit_lyric_with_end_line() {
+        use crate::ir::lyric::{Lyric, LyricContent, Syllabic, TextElementData};
+
+        let mut w = XmlWriter::new();
+        let lyric = Lyric {
+            number: Some("1".to_string()),
+            name: None,
+            justify: None,
+            placement: None,
+            print_object: None,
+            content: LyricContent::Syllable {
+                syllabic: Some(Syllabic::End),
+                text: TextElementData {
+                    value: "line".to_string(),
+                    font: crate::ir::common::Font::default(),
+                    color: None,
+                    lang: None,
+                },
+                extensions: vec![],
+                extend: None,
+            },
+            end_line: true,
+            end_paragraph: false,
+        };
+
+        emit_lyric(&mut w, &lyric).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<end-line/>"));
+    }
+
+    #[test]
+    fn test_emit_lyric_with_elision() {
+        use crate::ir::lyric::{
+            Elision, Lyric, LyricContent, LyricExtension, Syllabic, TextElementData,
+        };
+
+        let mut w = XmlWriter::new();
+        let lyric = Lyric {
+            number: Some("1".to_string()),
+            name: None,
+            justify: None,
+            placement: None,
+            print_object: None,
+            content: LyricContent::Syllable {
+                syllabic: Some(Syllabic::Begin),
+                text: TextElementData {
+                    value: "fa".to_string(),
+                    font: crate::ir::common::Font::default(),
+                    color: None,
+                    lang: None,
+                },
+                extensions: vec![LyricExtension {
+                    elision: Elision {
+                        value: " ".to_string(),
+                        font: crate::ir::common::Font::default(),
+                        color: None,
+                    },
+                    syllabic: Some(Syllabic::End),
+                    text: TextElementData {
+                        value: "la".to_string(),
+                        font: crate::ir::common::Font::default(),
+                        color: None,
+                        lang: None,
+                    },
+                }],
+                extend: None,
+            },
+            end_line: false,
+            end_paragraph: false,
+        };
+
+        emit_lyric(&mut w, &lyric).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<syllabic>begin</syllabic>"));
+        assert!(xml.contains("<text>fa</text>"));
+        assert!(xml.contains("<elision> </elision>"));
+        assert!(xml.contains("<syllabic>end</syllabic>"));
+        assert!(xml.contains("<text>la</text>"));
     }
 }

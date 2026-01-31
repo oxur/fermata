@@ -23,9 +23,20 @@ use quick_xml::events::Event;
 
 use super::ParseError;
 use super::reader::{XmlReader, element_name};
-use crate::ir::common::Editorial;
+use super::values;
+use crate::ir::attributes::{
+    Attributes, Cancel, Clef, ClefSign, Key, KeyContent, Mode, Time, TimeContent, TimeSignature,
+    TraditionalKey,
+};
+use crate::ir::beam::{Beam, Notehead, Stem};
+use crate::ir::common::{Editorial, Font, Position, YesNo};
+use crate::ir::duration::{Dot, NoteType, TimeModification};
 use crate::ir::measure::Measure;
+use crate::ir::note::{
+    Accidental, FullNote, Grace, Note, NoteContent, PitchRestUnpitched, Rest, Tie,
+};
 use crate::ir::part::{PartList, PartListElement, PartName, ScorePart};
+use crate::ir::pitch::{Pitch, Unpitched};
 use crate::ir::score::ScorePartwise;
 use crate::ir::{Part, PrintStyle};
 
@@ -719,67 +730,1053 @@ fn parse_measure(
 
 // === Stub functions for elements that will be fully implemented in later milestones ===
 
-/// Parse a note element (stub - will be fully implemented in Milestone 2).
+/// Parse a note element.
+///
+/// Notes are the fundamental music content in MusicXML. They can be:
+/// - Regular notes (with pitch and duration)
+/// - Grace notes (no duration, steal time from surrounding notes)
+/// - Cue notes (small notes used as cues)
+/// - Chord notes (share duration with previous note)
+/// - Rests (no pitch)
 fn parse_note(
     reader: &mut XmlReader<'_>,
-    _start: &quick_xml::events::BytesStart<'_>,
-) -> Result<crate::ir::note::Note, ParseError> {
-    use crate::ir::common::Position;
-    use crate::ir::note::{FullNote, NoteContent, PitchRestUnpitched, Rest};
+    start: &quick_xml::events::BytesStart<'_>,
+) -> Result<Note, ParseError> {
+    // Parse note attributes
+    let print_object = reader
+        .get_optional_attr(start.attributes(), "print-object")?
+        .map(|s| values::parse_yes_no(&s, reader.position()))
+        .transpose()?;
+    let dynamics = reader.get_optional_attr_as::<f64>(start.attributes(), "dynamics")?;
+    let end_dynamics = reader.get_optional_attr_as::<f64>(start.attributes(), "end-dynamics")?;
+    let attack = reader.get_optional_attr_as::<i64>(start.attributes(), "attack")?;
+    let release = reader.get_optional_attr_as::<i64>(start.attributes(), "release")?;
+    let pizzicato = reader
+        .get_optional_attr(start.attributes(), "pizzicato")?
+        .map(|s| s == "yes");
 
-    // For now, just skip the note content and return a minimal note
-    reader.skip_element("note")?;
+    // State for building the note
+    let mut grace: Option<Grace> = None;
+    let mut is_cue = false;
+    let mut is_chord = false;
+    let mut pitch: Option<Pitch> = None;
+    let mut rest: Option<Rest> = None;
+    let mut unpitched: Option<Unpitched> = None;
+    let mut duration: Option<u64> = None;
+    let mut ties: Vec<Tie> = Vec::new();
+    let mut voice: Option<String> = None;
+    let mut note_type: Option<NoteType> = None;
+    let mut dots: Vec<Dot> = Vec::new();
+    let mut accidental: Option<Accidental> = None;
+    let mut time_modification: Option<TimeModification> = None;
+    let mut stem: Option<Stem> = None;
+    let mut notehead: Option<Notehead> = None;
+    let mut staff: Option<u16> = None;
+    let mut beams: Vec<Beam> = Vec::new();
 
-    // Return a minimal rest note as a placeholder
-    Ok(crate::ir::note::Note {
+    loop {
+        let event = reader.next_event()?;
+        match event {
+            Event::Start(e) => {
+                let name = element_name(&e);
+                match name.as_str() {
+                    "grace" => {
+                        grace = Some(parse_grace(reader, &e)?);
+                    }
+                    "cue" => {
+                        is_cue = true;
+                        reader.skip_element("cue")?;
+                    }
+                    "chord" => {
+                        is_chord = true;
+                        reader.skip_element("chord")?;
+                    }
+                    "pitch" => {
+                        pitch = Some(parse_pitch(reader)?);
+                    }
+                    "rest" => {
+                        rest = Some(parse_rest(reader, &e)?);
+                    }
+                    "unpitched" => {
+                        unpitched = Some(parse_unpitched(reader)?);
+                    }
+                    "duration" => {
+                        duration = Some(reader.read_text_as("duration")?);
+                    }
+                    "tie" => {
+                        ties.push(parse_tie(reader, &e)?);
+                    }
+                    "voice" => {
+                        voice = Some(reader.read_text("voice")?);
+                    }
+                    "type" => {
+                        note_type = Some(parse_note_type(reader, &e)?);
+                    }
+                    "dot" => {
+                        dots.push(parse_dot(reader, &e)?);
+                    }
+                    "accidental" => {
+                        accidental = Some(parse_accidental(reader, &e)?);
+                    }
+                    "time-modification" => {
+                        time_modification = Some(parse_time_modification(reader)?);
+                    }
+                    "stem" => {
+                        stem = Some(parse_stem(reader, &e)?);
+                    }
+                    "notehead" => {
+                        notehead = Some(parse_notehead(reader, &e)?);
+                    }
+                    "staff" => {
+                        staff = Some(reader.read_text_as("staff")?);
+                    }
+                    "beam" => {
+                        beams.push(parse_beam(reader, &e)?);
+                    }
+                    "notations" => {
+                        // TODO: Parse notations fully in a later milestone
+                        reader.skip_element("notations")?;
+                    }
+                    "lyric" => {
+                        // TODO: Parse lyrics fully in a later milestone
+                        reader.skip_element("lyric")?;
+                    }
+                    "instrument" => {
+                        // TODO: Parse instrument references
+                        reader.skip_element("instrument")?;
+                    }
+                    _ => {
+                        reader.skip_element(&name)?;
+                    }
+                }
+            }
+            Event::Empty(e) => {
+                let name = element_name(&e);
+                match name.as_str() {
+                    "grace" => {
+                        grace = Some(parse_grace_from_empty(&e, reader)?);
+                    }
+                    "cue" => {
+                        is_cue = true;
+                    }
+                    "chord" => {
+                        is_chord = true;
+                    }
+                    "rest" => {
+                        rest = Some(parse_rest_from_empty(&e, reader)?);
+                    }
+                    "tie" => {
+                        ties.push(parse_tie_from_empty(&e, reader)?);
+                    }
+                    "dot" => {
+                        dots.push(parse_dot_from_empty(&e, reader)?);
+                    }
+                    _ => {
+                        // Skip unknown empty elements
+                    }
+                }
+            }
+            Event::End(_) => {
+                break;
+            }
+            Event::Eof => {
+                return Err(ParseError::xml("unexpected EOF in note", reader.position()));
+            }
+            _ => {}
+        }
+    }
+
+    // Build the full note content
+    let content = if let Some(p) = pitch {
+        PitchRestUnpitched::Pitch(p)
+    } else if let Some(r) = rest {
+        PitchRestUnpitched::Rest(r)
+    } else if let Some(u) = unpitched {
+        PitchRestUnpitched::Unpitched(u)
+    } else {
+        // Default to rest if nothing specified
+        PitchRestUnpitched::Rest(Rest::default())
+    };
+
+    let full_note = FullNote {
+        chord: is_chord,
+        content,
+    };
+
+    // Build the note content variant
+    let note_content = if let Some(g) = grace {
+        NoteContent::Grace {
+            grace: g,
+            full_note,
+            ties,
+        }
+    } else if is_cue {
+        NoteContent::Cue {
+            full_note,
+            duration: duration.unwrap_or(1),
+        }
+    } else {
+        NoteContent::Regular {
+            full_note,
+            duration: duration.unwrap_or(1),
+            ties,
+        }
+    };
+
+    Ok(Note {
         position: Position::default(),
-        dynamics: None,
-        end_dynamics: None,
-        attack: None,
-        release: None,
-        pizzicato: None,
-        print_object: None,
-        content: NoteContent::Regular {
-            full_note: FullNote {
-                chord: false,
-                content: PitchRestUnpitched::Rest(Rest::default()),
-            },
-            duration: 1,
-            ties: vec![],
-        },
+        dynamics,
+        end_dynamics,
+        attack,
+        release,
+        pizzicato,
+        print_object,
+        content: note_content,
         instrument: vec![],
-        voice: None,
-        r#type: None,
-        dots: vec![],
-        accidental: None,
-        time_modification: None,
-        stem: None,
-        notehead: None,
-        staff: None,
-        beams: vec![],
+        voice,
+        r#type: note_type,
+        dots,
+        accidental,
+        time_modification,
+        stem,
+        notehead,
+        staff,
+        beams,
         notations: vec![],
         lyrics: vec![],
     })
 }
 
-/// Parse an attributes element (stub - will be fully implemented in Milestone 2).
-fn parse_attributes(
-    reader: &mut XmlReader<'_>,
-) -> Result<crate::ir::attributes::Attributes, ParseError> {
-    reader.skip_element("attributes")?;
+/// Parse a pitch element.
+fn parse_pitch(reader: &mut XmlReader<'_>) -> Result<Pitch, ParseError> {
+    let mut step: Option<crate::ir::pitch::Step> = None;
+    let mut alter: Option<f64> = None;
+    let mut octave: Option<u8> = None;
 
-    Ok(crate::ir::attributes::Attributes {
-        editorial: Editorial::default(),
-        divisions: None,
-        keys: vec![],
-        times: vec![],
-        staves: None,
-        part_symbol: None,
-        instruments: None,
-        clefs: vec![],
-        staff_details: vec![],
-        transpose: vec![],
-        measure_styles: vec![],
+    loop {
+        let event = reader.next_event()?;
+        match event {
+            Event::Start(e) => {
+                let name = element_name(&e);
+                match name.as_str() {
+                    "step" => {
+                        let step_text = reader.read_text("step")?;
+                        step = Some(values::parse_step(&step_text, reader.position())?);
+                    }
+                    "alter" => {
+                        alter = Some(reader.read_text_as("alter")?);
+                    }
+                    "octave" => {
+                        octave = Some(reader.read_text_as("octave")?);
+                    }
+                    _ => {
+                        reader.skip_element(&name)?;
+                    }
+                }
+            }
+            Event::End(_) => {
+                break;
+            }
+            Event::Eof => {
+                return Err(ParseError::xml(
+                    "unexpected EOF in pitch",
+                    reader.position(),
+                ));
+            }
+            _ => {}
+        }
+    }
+
+    Ok(Pitch {
+        step: step
+            .ok_or_else(|| ParseError::missing_element("step", "pitch", reader.position()))?,
+        alter,
+        octave: octave
+            .ok_or_else(|| ParseError::missing_element("octave", "pitch", reader.position()))?,
+    })
+}
+
+/// Parse a rest element.
+fn parse_rest(
+    reader: &mut XmlReader<'_>,
+    start: &quick_xml::events::BytesStart<'_>,
+) -> Result<Rest, ParseError> {
+    let measure = reader
+        .get_optional_attr(start.attributes(), "measure")?
+        .map(|s| values::parse_yes_no(&s, reader.position()))
+        .transpose()?;
+
+    let mut display_step: Option<crate::ir::pitch::Step> = None;
+    let mut display_octave: Option<u8> = None;
+
+    loop {
+        let event = reader.next_event()?;
+        match event {
+            Event::Start(e) => {
+                let name = element_name(&e);
+                match name.as_str() {
+                    "display-step" => {
+                        let step_text = reader.read_text("display-step")?;
+                        display_step = Some(values::parse_step(&step_text, reader.position())?);
+                    }
+                    "display-octave" => {
+                        display_octave = Some(reader.read_text_as("display-octave")?);
+                    }
+                    _ => {
+                        reader.skip_element(&name)?;
+                    }
+                }
+            }
+            Event::End(_) => {
+                break;
+            }
+            Event::Eof => {
+                return Err(ParseError::xml("unexpected EOF in rest", reader.position()));
+            }
+            _ => {}
+        }
+    }
+
+    Ok(Rest {
+        measure,
+        display_step,
+        display_octave,
+    })
+}
+
+/// Parse a rest from an empty element.
+fn parse_rest_from_empty(
+    start: &quick_xml::events::BytesStart<'_>,
+    reader: &XmlReader<'_>,
+) -> Result<Rest, ParseError> {
+    let measure = reader
+        .get_optional_attr(start.attributes(), "measure")?
+        .map(|s| values::parse_yes_no(&s, reader.position()))
+        .transpose()?;
+
+    Ok(Rest {
+        measure,
+        display_step: None,
+        display_octave: None,
+    })
+}
+
+/// Parse an unpitched element.
+fn parse_unpitched(reader: &mut XmlReader<'_>) -> Result<Unpitched, ParseError> {
+    let mut display_step: Option<crate::ir::pitch::Step> = None;
+    let mut display_octave: Option<u8> = None;
+
+    loop {
+        let event = reader.next_event()?;
+        match event {
+            Event::Start(e) => {
+                let name = element_name(&e);
+                match name.as_str() {
+                    "display-step" => {
+                        let step_text = reader.read_text("display-step")?;
+                        display_step = Some(values::parse_step(&step_text, reader.position())?);
+                    }
+                    "display-octave" => {
+                        display_octave = Some(reader.read_text_as("display-octave")?);
+                    }
+                    _ => {
+                        reader.skip_element(&name)?;
+                    }
+                }
+            }
+            Event::End(_) => {
+                break;
+            }
+            Event::Eof => {
+                return Err(ParseError::xml(
+                    "unexpected EOF in unpitched",
+                    reader.position(),
+                ));
+            }
+            _ => {}
+        }
+    }
+
+    Ok(Unpitched {
+        display_step,
+        display_octave,
+    })
+}
+
+/// Parse a grace element.
+fn parse_grace(
+    reader: &mut XmlReader<'_>,
+    start: &quick_xml::events::BytesStart<'_>,
+) -> Result<Grace, ParseError> {
+    let steal_time_previous =
+        reader.get_optional_attr_as::<f64>(start.attributes(), "steal-time-previous")?;
+    let steal_time_following =
+        reader.get_optional_attr_as::<f64>(start.attributes(), "steal-time-following")?;
+    let make_time = reader.get_optional_attr_as::<i64>(start.attributes(), "make-time")?;
+    let slash = reader
+        .get_optional_attr(start.attributes(), "slash")?
+        .map(|s| values::parse_yes_no(&s, reader.position()))
+        .transpose()?;
+
+    // Skip any content (grace is usually empty)
+    reader.skip_element("grace")?;
+
+    Ok(Grace {
+        steal_time_previous,
+        steal_time_following,
+        make_time,
+        slash,
+    })
+}
+
+/// Parse a grace element from an empty tag.
+fn parse_grace_from_empty(
+    start: &quick_xml::events::BytesStart<'_>,
+    reader: &XmlReader<'_>,
+) -> Result<Grace, ParseError> {
+    let steal_time_previous =
+        reader.get_optional_attr_as::<f64>(start.attributes(), "steal-time-previous")?;
+    let steal_time_following =
+        reader.get_optional_attr_as::<f64>(start.attributes(), "steal-time-following")?;
+    let make_time = reader.get_optional_attr_as::<i64>(start.attributes(), "make-time")?;
+    let slash = reader
+        .get_optional_attr(start.attributes(), "slash")?
+        .map(|s| values::parse_yes_no(&s, reader.position()))
+        .transpose()?;
+
+    Ok(Grace {
+        steal_time_previous,
+        steal_time_following,
+        make_time,
+        slash,
+    })
+}
+
+/// Parse a tie element.
+fn parse_tie(
+    reader: &mut XmlReader<'_>,
+    start: &quick_xml::events::BytesStart<'_>,
+) -> Result<Tie, ParseError> {
+    let type_attr = reader.get_attr(start.attributes(), "type", "tie")?;
+    let r#type = values::parse_start_stop(&type_attr, reader.position())?;
+    let time_only = reader.get_optional_attr(start.attributes(), "time-only")?;
+
+    // Skip any content
+    reader.skip_element("tie")?;
+
+    Ok(Tie { r#type, time_only })
+}
+
+/// Parse a tie element from an empty tag.
+fn parse_tie_from_empty(
+    start: &quick_xml::events::BytesStart<'_>,
+    reader: &XmlReader<'_>,
+) -> Result<Tie, ParseError> {
+    let type_attr = reader.get_attr(start.attributes(), "type", "tie")?;
+    let r#type = values::parse_start_stop(&type_attr, reader.position())?;
+    let time_only = reader.get_optional_attr(start.attributes(), "time-only")?;
+
+    Ok(Tie { r#type, time_only })
+}
+
+/// Parse a note type element.
+fn parse_note_type(
+    reader: &mut XmlReader<'_>,
+    _start: &quick_xml::events::BytesStart<'_>,
+) -> Result<NoteType, ParseError> {
+    let text = reader.read_text("type")?;
+    let value = values::parse_note_type_value(&text, reader.position())?;
+
+    Ok(NoteType { value, size: None })
+}
+
+/// Parse a dot element.
+fn parse_dot(
+    reader: &mut XmlReader<'_>,
+    start: &quick_xml::events::BytesStart<'_>,
+) -> Result<Dot, ParseError> {
+    let placement = reader
+        .get_optional_attr(start.attributes(), "placement")?
+        .map(|s| values::parse_above_below(&s, reader.position()))
+        .transpose()?;
+
+    // Skip any content
+    reader.skip_element("dot")?;
+
+    Ok(Dot {
+        placement,
+        position: Position::default(),
+    })
+}
+
+/// Parse a dot element from an empty tag.
+fn parse_dot_from_empty(
+    start: &quick_xml::events::BytesStart<'_>,
+    reader: &XmlReader<'_>,
+) -> Result<Dot, ParseError> {
+    let placement = reader
+        .get_optional_attr(start.attributes(), "placement")?
+        .map(|s| values::parse_above_below(&s, reader.position()))
+        .transpose()?;
+
+    Ok(Dot {
+        placement,
+        position: Position::default(),
+    })
+}
+
+/// Parse an accidental element.
+fn parse_accidental(
+    reader: &mut XmlReader<'_>,
+    start: &quick_xml::events::BytesStart<'_>,
+) -> Result<Accidental, ParseError> {
+    let cautionary = reader
+        .get_optional_attr(start.attributes(), "cautionary")?
+        .map(|s| values::parse_yes_no(&s, reader.position()))
+        .transpose()?;
+    let editorial = reader
+        .get_optional_attr(start.attributes(), "editorial")?
+        .map(|s| values::parse_yes_no(&s, reader.position()))
+        .transpose()?;
+    let parentheses = reader
+        .get_optional_attr(start.attributes(), "parentheses")?
+        .map(|s| values::parse_yes_no(&s, reader.position()))
+        .transpose()?;
+    let bracket = reader
+        .get_optional_attr(start.attributes(), "bracket")?
+        .map(|s| values::parse_yes_no(&s, reader.position()))
+        .transpose()?;
+
+    let text = reader.read_text("accidental")?;
+    let value = values::parse_accidental_value(&text, reader.position())?;
+
+    Ok(Accidental {
+        value,
+        cautionary,
+        editorial,
+        parentheses,
+        bracket,
+        size: None,
+    })
+}
+
+/// Parse a time-modification element.
+fn parse_time_modification(reader: &mut XmlReader<'_>) -> Result<TimeModification, ParseError> {
+    let mut actual_notes: Option<u32> = None;
+    let mut normal_notes: Option<u32> = None;
+    let mut normal_type: Option<crate::ir::duration::NoteTypeValue> = None;
+    let mut normal_dots: u32 = 0;
+
+    loop {
+        let event = reader.next_event()?;
+        match event {
+            Event::Start(e) => {
+                let name = element_name(&e);
+                match name.as_str() {
+                    "actual-notes" => {
+                        actual_notes = Some(reader.read_text_as("actual-notes")?);
+                    }
+                    "normal-notes" => {
+                        normal_notes = Some(reader.read_text_as("normal-notes")?);
+                    }
+                    "normal-type" => {
+                        let type_text = reader.read_text("normal-type")?;
+                        normal_type = Some(values::parse_note_type_value(
+                            &type_text,
+                            reader.position(),
+                        )?);
+                    }
+                    "normal-dot" => {
+                        normal_dots += 1;
+                        reader.skip_element("normal-dot")?;
+                    }
+                    _ => {
+                        reader.skip_element(&name)?;
+                    }
+                }
+            }
+            Event::Empty(e) => {
+                let name = element_name(&e);
+                if name.as_str() == "normal-dot" {
+                    normal_dots += 1;
+                }
+            }
+            Event::End(_) => {
+                break;
+            }
+            Event::Eof => {
+                return Err(ParseError::xml(
+                    "unexpected EOF in time-modification",
+                    reader.position(),
+                ));
+            }
+            _ => {}
+        }
+    }
+
+    Ok(TimeModification {
+        actual_notes: actual_notes.unwrap_or(3),
+        normal_notes: normal_notes.unwrap_or(2),
+        normal_type,
+        normal_dots,
+    })
+}
+
+/// Parse a stem element.
+fn parse_stem(
+    reader: &mut XmlReader<'_>,
+    start: &quick_xml::events::BytesStart<'_>,
+) -> Result<Stem, ParseError> {
+    let default_y = reader.get_optional_attr_as::<f64>(start.attributes(), "default-y")?;
+    let color = reader.get_optional_attr(start.attributes(), "color")?;
+
+    let text = reader.read_text("stem")?;
+    let value = values::parse_stem_value(&text, reader.position())?;
+
+    Ok(Stem {
+        value,
+        default_y,
+        color,
+    })
+}
+
+/// Parse a notehead element.
+fn parse_notehead(
+    reader: &mut XmlReader<'_>,
+    start: &quick_xml::events::BytesStart<'_>,
+) -> Result<Notehead, ParseError> {
+    let filled = reader
+        .get_optional_attr(start.attributes(), "filled")?
+        .map(|s| values::parse_yes_no(&s, reader.position()))
+        .transpose()?;
+    let parentheses = reader
+        .get_optional_attr(start.attributes(), "parentheses")?
+        .map(|s| values::parse_yes_no(&s, reader.position()))
+        .transpose()?;
+    let color = reader.get_optional_attr(start.attributes(), "color")?;
+
+    let text = reader.read_text("notehead")?;
+    let value = values::parse_notehead_value(&text, reader.position())?;
+
+    Ok(Notehead {
+        value,
+        filled,
+        parentheses,
+        font: Font::default(),
+        color,
+    })
+}
+
+/// Parse a beam element.
+fn parse_beam(
+    reader: &mut XmlReader<'_>,
+    start: &quick_xml::events::BytesStart<'_>,
+) -> Result<Beam, ParseError> {
+    let number: u8 = reader
+        .get_optional_attr_as(start.attributes(), "number")?
+        .unwrap_or(1);
+    let fan = reader
+        .get_optional_attr(start.attributes(), "fan")?
+        .map(|s| values::parse_fan(&s, reader.position()))
+        .transpose()?;
+    let color = reader.get_optional_attr(start.attributes(), "color")?;
+
+    let text = reader.read_text("beam")?;
+    let value = values::parse_beam_value(&text, reader.position())?;
+
+    Ok(Beam {
+        value,
+        number,
+        fan,
+        color,
+    })
+}
+
+/// Parse an attributes element.
+///
+/// Attributes contain information about key signature, time signature, clef,
+/// divisions, and other musical notation symbols that affect how subsequent
+/// notes are interpreted and displayed.
+fn parse_attributes(reader: &mut XmlReader<'_>) -> Result<Attributes, ParseError> {
+    let mut attrs = Attributes::default();
+
+    loop {
+        let event = reader.next_event()?;
+        match event {
+            Event::Start(e) => {
+                let name = element_name(&e);
+                match name.as_str() {
+                    "divisions" => {
+                        attrs.divisions = Some(reader.read_text_as("divisions")?);
+                    }
+                    "key" => {
+                        let key = parse_key(reader, &e)?;
+                        attrs.keys.push(key);
+                    }
+                    "time" => {
+                        let time = parse_time(reader, &e)?;
+                        attrs.times.push(time);
+                    }
+                    "staves" => {
+                        attrs.staves = Some(reader.read_text_as("staves")?);
+                    }
+                    "part-symbol" => {
+                        // TODO: Parse part-symbol fully
+                        reader.skip_element("part-symbol")?;
+                    }
+                    "instruments" => {
+                        attrs.instruments = Some(reader.read_text_as("instruments")?);
+                    }
+                    "clef" => {
+                        let clef = parse_clef(reader, &e)?;
+                        attrs.clefs.push(clef);
+                    }
+                    "staff-details" => {
+                        // TODO: Parse staff-details fully
+                        reader.skip_element("staff-details")?;
+                    }
+                    "transpose" => {
+                        let transpose = parse_transpose(reader, &e)?;
+                        attrs.transpose.push(transpose);
+                    }
+                    "measure-style" => {
+                        // TODO: Parse measure-style fully
+                        reader.skip_element("measure-style")?;
+                    }
+                    "footnote" | "level" => {
+                        // Skip editorial elements for now
+                        reader.skip_element(&name)?;
+                    }
+                    _ => {
+                        reader.skip_element(&name)?;
+                    }
+                }
+            }
+            Event::Empty(e) => {
+                let name = element_name(&e);
+                match name.as_str() {
+                    "clef" => {
+                        let clef = parse_clef_from_empty(&e, reader)?;
+                        attrs.clefs.push(clef);
+                    }
+                    _ => {
+                        // Skip unknown empty elements
+                    }
+                }
+            }
+            Event::End(_) => {
+                break;
+            }
+            Event::Eof => {
+                return Err(ParseError::xml(
+                    "unexpected EOF in attributes",
+                    reader.position(),
+                ));
+            }
+            _ => {}
+        }
+    }
+
+    Ok(attrs)
+}
+
+/// Parse a key element.
+fn parse_key(
+    reader: &mut XmlReader<'_>,
+    start: &quick_xml::events::BytesStart<'_>,
+) -> Result<Key, ParseError> {
+    let number = reader.get_optional_attr_as::<u16>(start.attributes(), "number")?;
+    let print_object = reader
+        .get_optional_attr(start.attributes(), "print-object")?
+        .map(|s| values::parse_yes_no(&s, reader.position()))
+        .transpose()?;
+
+    let mut fifths: Option<i8> = None;
+    let mut mode: Option<Mode> = None;
+    let mut cancel: Option<Cancel> = None;
+
+    loop {
+        let event = reader.next_event()?;
+        match event {
+            Event::Start(e) => {
+                let name = element_name(&e);
+                match name.as_str() {
+                    "cancel" => {
+                        // Get location attribute before reading text content
+                        let location = reader
+                            .get_optional_attr(e.attributes(), "location")?
+                            .map(|s| values::parse_cancel_location(&s, reader.position()))
+                            .transpose()?;
+                        let cancel_fifths: i8 = reader.read_text_as("cancel")?;
+                        cancel = Some(Cancel {
+                            fifths: cancel_fifths,
+                            location,
+                        });
+                    }
+                    "fifths" => {
+                        fifths = Some(reader.read_text_as("fifths")?);
+                    }
+                    "mode" => {
+                        let mode_text = reader.read_text("mode")?;
+                        mode = Some(values::parse_mode(&mode_text, reader.position())?);
+                    }
+                    "key-step" | "key-alter" | "key-accidental" => {
+                        // TODO: Support non-traditional keys
+                        reader.skip_element(&name)?;
+                    }
+                    _ => {
+                        reader.skip_element(&name)?;
+                    }
+                }
+            }
+            Event::End(_) => {
+                break;
+            }
+            Event::Eof => {
+                return Err(ParseError::xml("unexpected EOF in key", reader.position()));
+            }
+            _ => {}
+        }
+    }
+
+    // For traditional keys, fifths is required
+    let content = if let Some(f) = fifths {
+        KeyContent::Traditional(TraditionalKey {
+            cancel,
+            fifths: f,
+            mode,
+        })
+    } else {
+        // Default to C major if no key content specified
+        KeyContent::Traditional(TraditionalKey {
+            cancel: None,
+            fifths: 0,
+            mode: None,
+        })
+    };
+
+    Ok(Key {
+        content,
+        number,
+        print_object,
+    })
+}
+
+/// Parse a time element.
+fn parse_time(
+    reader: &mut XmlReader<'_>,
+    start: &quick_xml::events::BytesStart<'_>,
+) -> Result<Time, ParseError> {
+    let number = reader.get_optional_attr_as::<u16>(start.attributes(), "number")?;
+    let symbol = reader
+        .get_optional_attr(start.attributes(), "symbol")?
+        .map(|s| values::parse_time_symbol(&s, reader.position()))
+        .transpose()?;
+    let print_object = reader
+        .get_optional_attr(start.attributes(), "print-object")?
+        .map(|s| values::parse_yes_no(&s, reader.position()))
+        .transpose()?;
+
+    let mut signatures = Vec::new();
+    let mut current_beats: Option<String> = None;
+    let mut senza_misura: Option<String> = None;
+
+    loop {
+        let event = reader.next_event()?;
+        match event {
+            Event::Start(e) => {
+                let name = element_name(&e);
+                match name.as_str() {
+                    "beats" => {
+                        current_beats = Some(reader.read_text("beats")?);
+                    }
+                    "beat-type" => {
+                        let beat_type = reader.read_text("beat-type")?;
+                        if let Some(beats) = current_beats.take() {
+                            signatures.push(TimeSignature { beats, beat_type });
+                        }
+                    }
+                    "senza-misura" => {
+                        senza_misura = Some(reader.read_text("senza-misura")?);
+                    }
+                    "interchangeable" => {
+                        // TODO: Parse interchangeable time signatures
+                        reader.skip_element("interchangeable")?;
+                    }
+                    _ => {
+                        reader.skip_element(&name)?;
+                    }
+                }
+            }
+            Event::Empty(e) => {
+                let name = element_name(&e);
+                if name.as_str() == "senza-misura" {
+                    senza_misura = Some(String::new());
+                }
+            }
+            Event::End(_) => {
+                break;
+            }
+            Event::Eof => {
+                return Err(ParseError::xml("unexpected EOF in time", reader.position()));
+            }
+            _ => {}
+        }
+    }
+
+    let content = if let Some(text) = senza_misura {
+        TimeContent::SenzaMisura(text)
+    } else {
+        TimeContent::Measured { signatures }
+    };
+
+    Ok(Time {
+        content,
+        number,
+        symbol,
+        print_object,
+    })
+}
+
+/// Parse a clef element.
+fn parse_clef(
+    reader: &mut XmlReader<'_>,
+    start: &quick_xml::events::BytesStart<'_>,
+) -> Result<Clef, ParseError> {
+    let number = reader.get_optional_attr_as::<u16>(start.attributes(), "number")?;
+    let print_object = reader
+        .get_optional_attr(start.attributes(), "print-object")?
+        .map(|s| values::parse_yes_no(&s, reader.position()))
+        .transpose()?;
+
+    let mut sign: Option<ClefSign> = None;
+    let mut line: Option<u8> = None;
+    let mut octave_change: Option<i8> = None;
+
+    loop {
+        let event = reader.next_event()?;
+        match event {
+            Event::Start(e) => {
+                let name = element_name(&e);
+                match name.as_str() {
+                    "sign" => {
+                        let sign_text = reader.read_text("sign")?;
+                        sign = Some(values::parse_clef_sign(&sign_text, reader.position())?);
+                    }
+                    "line" => {
+                        line = Some(reader.read_text_as("line")?);
+                    }
+                    "clef-octave-change" => {
+                        octave_change = Some(reader.read_text_as("clef-octave-change")?);
+                    }
+                    _ => {
+                        reader.skip_element(&name)?;
+                    }
+                }
+            }
+            Event::End(_) => {
+                break;
+            }
+            Event::Eof => {
+                return Err(ParseError::xml("unexpected EOF in clef", reader.position()));
+            }
+            _ => {}
+        }
+    }
+
+    Ok(Clef {
+        sign: sign.unwrap_or(ClefSign::G),
+        line,
+        octave_change,
+        number,
+        size: None,
+        print_object,
+    })
+}
+
+/// Parse a clef from an empty element.
+fn parse_clef_from_empty(
+    start: &quick_xml::events::BytesStart<'_>,
+    reader: &XmlReader<'_>,
+) -> Result<Clef, ParseError> {
+    let number = reader.get_optional_attr_as::<u16>(start.attributes(), "number")?;
+    let print_object = reader
+        .get_optional_attr(start.attributes(), "print-object")?
+        .map(|s| values::parse_yes_no(&s, reader.position()))
+        .transpose()?;
+
+    Ok(Clef {
+        sign: ClefSign::G,
+        line: None,
+        octave_change: None,
+        number,
+        size: None,
+        print_object,
+    })
+}
+
+/// Parse a transpose element.
+fn parse_transpose(
+    reader: &mut XmlReader<'_>,
+    start: &quick_xml::events::BytesStart<'_>,
+) -> Result<crate::ir::attributes::Transpose, ParseError> {
+    let number = reader.get_optional_attr_as::<u16>(start.attributes(), "number")?;
+
+    let mut diatonic: Option<i32> = None;
+    let mut chromatic: i32 = 0;
+    let mut octave_change: Option<i32> = None;
+    let mut double: Option<YesNo> = None;
+
+    loop {
+        let event = reader.next_event()?;
+        match event {
+            Event::Start(e) => {
+                let name = element_name(&e);
+                match name.as_str() {
+                    "diatonic" => {
+                        diatonic = Some(reader.read_text_as("diatonic")?);
+                    }
+                    "chromatic" => {
+                        chromatic = reader.read_text_as("chromatic")?;
+                    }
+                    "octave-change" => {
+                        octave_change = Some(reader.read_text_as("octave-change")?);
+                    }
+                    "double" => {
+                        // Empty element means "yes"
+                        double = Some(YesNo::Yes);
+                        reader.skip_element("double")?;
+                    }
+                    _ => {
+                        reader.skip_element(&name)?;
+                    }
+                }
+            }
+            Event::Empty(e) => {
+                let name = element_name(&e);
+                if name.as_str() == "double" {
+                    double = Some(YesNo::Yes);
+                }
+            }
+            Event::End(_) => {
+                break;
+            }
+            Event::Eof => {
+                return Err(ParseError::xml(
+                    "unexpected EOF in transpose",
+                    reader.position(),
+                ));
+            }
+            _ => {}
+        }
+    }
+
+    Ok(crate::ir::attributes::Transpose {
+        number,
+        diatonic,
+        chromatic,
+        octave_change,
+        double,
     })
 }
 
@@ -913,6 +1910,7 @@ fn parse_forward(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ir::attributes::TimeSymbol;
 
     // === parse_score Tests ===
 
@@ -1270,6 +2268,661 @@ mod tests {
             assert_eq!(parent, "score-part");
         } else {
             panic!("Expected MissingElement error");
+        }
+    }
+
+    // === Attributes Tests ===
+
+    #[test]
+    fn test_parse_attributes_divisions() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <attributes>
+                            <divisions>4</divisions>
+                        </attributes>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        if let crate::ir::measure::MusicDataElement::Attributes(attrs) =
+            &score.parts[0].measures[0].content[0]
+        {
+            assert_eq!(attrs.divisions, Some(4));
+        } else {
+            panic!("Expected Attributes");
+        }
+    }
+
+    #[test]
+    fn test_parse_attributes_key_signature() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <attributes>
+                            <key>
+                                <fifths>2</fifths>
+                                <mode>major</mode>
+                            </key>
+                        </attributes>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        if let crate::ir::measure::MusicDataElement::Attributes(attrs) =
+            &score.parts[0].measures[0].content[0]
+        {
+            assert_eq!(attrs.keys.len(), 1);
+            if let KeyContent::Traditional(tk) = &attrs.keys[0].content {
+                assert_eq!(tk.fifths, 2);
+                assert_eq!(tk.mode, Some(Mode::Major));
+            } else {
+                panic!("Expected Traditional key");
+            }
+        } else {
+            panic!("Expected Attributes");
+        }
+    }
+
+    #[test]
+    fn test_parse_attributes_time_signature() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <attributes>
+                            <time>
+                                <beats>4</beats>
+                                <beat-type>4</beat-type>
+                            </time>
+                        </attributes>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        if let crate::ir::measure::MusicDataElement::Attributes(attrs) =
+            &score.parts[0].measures[0].content[0]
+        {
+            assert_eq!(attrs.times.len(), 1);
+            if let TimeContent::Measured { signatures } = &attrs.times[0].content {
+                assert_eq!(signatures.len(), 1);
+                assert_eq!(signatures[0].beats, "4");
+                assert_eq!(signatures[0].beat_type, "4");
+            } else {
+                panic!("Expected Measured time");
+            }
+        } else {
+            panic!("Expected Attributes");
+        }
+    }
+
+    #[test]
+    fn test_parse_attributes_clef() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <attributes>
+                            <clef>
+                                <sign>G</sign>
+                                <line>2</line>
+                            </clef>
+                        </attributes>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        if let crate::ir::measure::MusicDataElement::Attributes(attrs) =
+            &score.parts[0].measures[0].content[0]
+        {
+            assert_eq!(attrs.clefs.len(), 1);
+            assert_eq!(attrs.clefs[0].sign, ClefSign::G);
+            assert_eq!(attrs.clefs[0].line, Some(2));
+        } else {
+            panic!("Expected Attributes");
+        }
+    }
+
+    #[test]
+    fn test_parse_attributes_complete() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <attributes>
+                            <divisions>4</divisions>
+                            <key>
+                                <fifths>-1</fifths>
+                                <mode>major</mode>
+                            </key>
+                            <time symbol="common">
+                                <beats>4</beats>
+                                <beat-type>4</beat-type>
+                            </time>
+                            <clef>
+                                <sign>F</sign>
+                                <line>4</line>
+                            </clef>
+                        </attributes>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        if let crate::ir::measure::MusicDataElement::Attributes(attrs) =
+            &score.parts[0].measures[0].content[0]
+        {
+            assert_eq!(attrs.divisions, Some(4));
+            assert_eq!(attrs.keys.len(), 1);
+            assert_eq!(attrs.times.len(), 1);
+            assert_eq!(attrs.times[0].symbol, Some(TimeSymbol::Common));
+            assert_eq!(attrs.clefs.len(), 1);
+            assert_eq!(attrs.clefs[0].sign, ClefSign::F);
+        } else {
+            panic!("Expected Attributes");
+        }
+    }
+
+    // === Note Tests ===
+
+    #[test]
+    fn test_parse_note_pitched() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch>
+                                <step>C</step>
+                                <octave>4</octave>
+                            </pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        if let crate::ir::measure::MusicDataElement::Note(note) =
+            &score.parts[0].measures[0].content[0]
+        {
+            if let NoteContent::Regular {
+                full_note,
+                duration,
+                ..
+            } = &note.content
+            {
+                assert_eq!(*duration, 4);
+                if let PitchRestUnpitched::Pitch(p) = &full_note.content {
+                    assert_eq!(p.step, crate::ir::pitch::Step::C);
+                    assert_eq!(p.octave, 4);
+                } else {
+                    panic!("Expected Pitch");
+                }
+            } else {
+                panic!("Expected Regular note");
+            }
+        } else {
+            panic!("Expected Note");
+        }
+    }
+
+    #[test]
+    fn test_parse_note_with_accidental() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch>
+                                <step>F</step>
+                                <alter>1</alter>
+                                <octave>4</octave>
+                            </pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <accidental>sharp</accidental>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        if let crate::ir::measure::MusicDataElement::Note(note) =
+            &score.parts[0].measures[0].content[0]
+        {
+            assert!(note.accidental.is_some());
+            assert_eq!(
+                note.accidental.as_ref().unwrap().value,
+                crate::ir::common::AccidentalValue::Sharp
+            );
+            if let NoteContent::Regular { full_note, .. } = &note.content {
+                if let PitchRestUnpitched::Pitch(p) = &full_note.content {
+                    assert_eq!(p.alter, Some(1.0));
+                } else {
+                    panic!("Expected Pitch");
+                }
+            }
+        } else {
+            panic!("Expected Note");
+        }
+    }
+
+    #[test]
+    fn test_parse_rest() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <rest/>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        if let crate::ir::measure::MusicDataElement::Note(note) =
+            &score.parts[0].measures[0].content[0]
+        {
+            if let NoteContent::Regular { full_note, .. } = &note.content {
+                assert!(matches!(full_note.content, PitchRestUnpitched::Rest(_)));
+            } else {
+                panic!("Expected Regular note");
+            }
+        } else {
+            panic!("Expected Note");
+        }
+    }
+
+    #[test]
+    fn test_parse_whole_measure_rest() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <rest measure="yes"/>
+                            <duration>16</duration>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        if let crate::ir::measure::MusicDataElement::Note(note) =
+            &score.parts[0].measures[0].content[0]
+        {
+            if let NoteContent::Regular { full_note, .. } = &note.content {
+                if let PitchRestUnpitched::Rest(r) = &full_note.content {
+                    assert_eq!(r.measure, Some(YesNo::Yes));
+                } else {
+                    panic!("Expected Rest");
+                }
+            }
+        } else {
+            panic!("Expected Note");
+        }
+    }
+
+    #[test]
+    fn test_parse_chord_note() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch>
+                                <step>C</step>
+                                <octave>4</octave>
+                            </pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                        </note>
+                        <note>
+                            <chord/>
+                            <pitch>
+                                <step>E</step>
+                                <octave>4</octave>
+                            </pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        assert_eq!(score.parts[0].measures[0].content.len(), 2);
+        if let crate::ir::measure::MusicDataElement::Note(note) =
+            &score.parts[0].measures[0].content[1]
+        {
+            if let NoteContent::Regular { full_note, .. } = &note.content {
+                assert!(full_note.chord);
+            } else {
+                panic!("Expected Regular note");
+            }
+        } else {
+            panic!("Expected Note");
+        }
+    }
+
+    #[test]
+    fn test_parse_grace_note() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <grace slash="yes"/>
+                            <pitch>
+                                <step>D</step>
+                                <octave>5</octave>
+                            </pitch>
+                            <type>eighth</type>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        if let crate::ir::measure::MusicDataElement::Note(note) =
+            &score.parts[0].measures[0].content[0]
+        {
+            if let NoteContent::Grace { grace, .. } = &note.content {
+                assert_eq!(grace.slash, Some(YesNo::Yes));
+            } else {
+                panic!("Expected Grace note");
+            }
+        } else {
+            panic!("Expected Note");
+        }
+    }
+
+    #[test]
+    fn test_parse_note_with_beam() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch>
+                                <step>C</step>
+                                <octave>4</octave>
+                            </pitch>
+                            <duration>1</duration>
+                            <type>eighth</type>
+                            <beam number="1">begin</beam>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        if let crate::ir::measure::MusicDataElement::Note(note) =
+            &score.parts[0].measures[0].content[0]
+        {
+            assert_eq!(note.beams.len(), 1);
+            assert_eq!(note.beams[0].value, crate::ir::beam::BeamValue::Begin);
+            assert_eq!(note.beams[0].number, 1);
+        } else {
+            panic!("Expected Note");
+        }
+    }
+
+    #[test]
+    fn test_parse_note_with_stem() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch>
+                                <step>C</step>
+                                <octave>4</octave>
+                            </pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <stem>up</stem>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        if let crate::ir::measure::MusicDataElement::Note(note) =
+            &score.parts[0].measures[0].content[0]
+        {
+            assert!(note.stem.is_some());
+            assert_eq!(
+                note.stem.as_ref().unwrap().value,
+                crate::ir::beam::StemValue::Up
+            );
+        } else {
+            panic!("Expected Note");
+        }
+    }
+
+    #[test]
+    fn test_parse_note_with_tie() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch>
+                                <step>C</step>
+                                <octave>4</octave>
+                            </pitch>
+                            <duration>4</duration>
+                            <tie type="start"/>
+                            <type>quarter</type>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        if let crate::ir::measure::MusicDataElement::Note(note) =
+            &score.parts[0].measures[0].content[0]
+        {
+            if let NoteContent::Regular { ties, .. } = &note.content {
+                assert_eq!(ties.len(), 1);
+                assert_eq!(ties[0].r#type, crate::ir::common::StartStop::Start);
+            } else {
+                panic!("Expected Regular note");
+            }
+        } else {
+            panic!("Expected Note");
+        }
+    }
+
+    #[test]
+    fn test_parse_note_with_dots() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch>
+                                <step>C</step>
+                                <octave>4</octave>
+                            </pitch>
+                            <duration>6</duration>
+                            <type>quarter</type>
+                            <dot/>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        if let crate::ir::measure::MusicDataElement::Note(note) =
+            &score.parts[0].measures[0].content[0]
+        {
+            assert_eq!(note.dots.len(), 1);
+        } else {
+            panic!("Expected Note");
+        }
+    }
+
+    #[test]
+    fn test_parse_note_with_time_modification() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch>
+                                <step>C</step>
+                                <octave>4</octave>
+                            </pitch>
+                            <duration>2</duration>
+                            <type>eighth</type>
+                            <time-modification>
+                                <actual-notes>3</actual-notes>
+                                <normal-notes>2</normal-notes>
+                            </time-modification>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        if let crate::ir::measure::MusicDataElement::Note(note) =
+            &score.parts[0].measures[0].content[0]
+        {
+            assert!(note.time_modification.is_some());
+            let tm = note.time_modification.as_ref().unwrap();
+            assert_eq!(tm.actual_notes, 3);
+            assert_eq!(tm.normal_notes, 2);
+        } else {
+            panic!("Expected Note");
+        }
+    }
+
+    #[test]
+    fn test_parse_note_with_voice_and_staff() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch>
+                                <step>C</step>
+                                <octave>4</octave>
+                            </pitch>
+                            <duration>4</duration>
+                            <voice>1</voice>
+                            <type>quarter</type>
+                            <staff>1</staff>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        if let crate::ir::measure::MusicDataElement::Note(note) =
+            &score.parts[0].measures[0].content[0]
+        {
+            assert_eq!(note.voice, Some("1".to_string()));
+            assert_eq!(note.staff, Some(1));
+        } else {
+            panic!("Expected Note");
         }
     }
 }

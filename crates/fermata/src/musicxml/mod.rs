@@ -21,7 +21,7 @@ pub use divisions::{
     STANDARD_DIVISIONS, apply_dots, apply_time_modification, calculate_duration,
     note_type_to_divisions,
 };
-pub use emit::emit_score;
+pub use emit::{emit_score, note_type_value_to_string};
 
 use crate::ir::ScorePartwise;
 

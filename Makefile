@@ -247,16 +247,14 @@ push:
 # Crates in dependency order (leaf crates first, dependent crates later)
 # ECL crates: design -> core -> steps -> workflows -> cli -> ecl
 # Fabryk crates: core -> (client, acl, storage) -> query -> api -> (mcp, cli) -> fabryk
-PUBLISH_ORDER := ecl-core ecl-steps ecl-workflows ecl-cli ecl \
-                 fabryk-core fabryk-client fabryk-acl fabryk-storage \
-				 fabryk-query fabryk-api fabryk-mcp fabryk-cli fabryk
+PUBLISH_ORDER := fermata
 # crates.io rate limit delay (seconds)
 PUBLISH_DELAY := 372
 .PHONY: publish
 publish:
 	@echo ""
 	@echo "$(CYAN)╔══════════════════════════════════════════════════════════╗$(RESET)"
-	@echo "$(CYAN)║$(RESET) $(BLUE)Publishing $(PROJECT_NAME) Crates to crates.io$(RESET)                       $(CYAN)║$(RESET)"
+	@echo "$(CYAN)║$(RESET) $(BLUE)Publishing $(PROJECT_NAME) Crates to crates.io$(RESET)                   $(CYAN)║$(RESET)"
 	@echo "$(CYAN)╚══════════════════════════════════════════════════════════╝$(RESET)"
 	@echo ""
 	@echo "$(YELLOW)⚠ This will publish all crates in dependency order$(RESET)"
@@ -308,7 +306,7 @@ publish:
 publish-dry-run:
 	@echo ""
 	@echo "$(CYAN)╔══════════════════════════════════════════════════════════╗$(RESET)"
-	@echo "$(CYAN)║$(RESET) $(BLUE)Dry Run: Publishing $(PROJECT_NAME) Crates$(RESET)                           $(CYAN)║$(RESET)"
+	@echo "$(CYAN)║$(RESET) $(BLUE)Dry Run: Publishing $(PROJECT_NAME) Crates$(RESET)                       $(CYAN)║$(RESET)"
 	@echo "$(CYAN)╚══════════════════════════════════════════════════════════╝$(RESET)"
 	@echo ""
 	@echo "$(BLUE)Publishing order (in dependency order):$(RESET)"

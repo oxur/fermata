@@ -23,3 +23,5 @@ target
 # Misc
 /bin
 /workbench
+/assets/ai/ai-rust
+/.claude

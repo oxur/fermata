@@ -1,6 +1,6 @@
 [package]
 name = "fermata"
-version = "0.0.1"
+version = "0.1.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 description = "An S-expression DSL for working with MusicXML"
@@ -14,7 +14,7 @@ authors = ["oxur contributors"]
 rust-version = "1.85"
 
 [dependencies]
-quick-xml = "0.37"
+quick-xml = "0.39"
 # Coming soon:
 # - Parser (nom or pest)
 # - AST types

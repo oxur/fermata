@@ -3,7 +3,6 @@
 > **For:** Claude Code (Opus) with Rust-SKILL.md agents
 > **Scope:** Measure, part, score compilation; top-level pipeline; CLI tool; end-to-end tests
 > **Depends On:** Milestones 1-4
-> **Estimated Implementation Time:** 2-3 hours
 
 ---
 
@@ -23,7 +22,7 @@ This milestone wires them together:
 
 ---
 
-## Task 1: Measure Compilation (`src/fermata/measure.rs`)
+## Task 1: Measure Compilation (`src/lang/measure.rs`)
 
 Measures dispatch each child S-expression to the appropriate sub-compiler,
 collecting results into the IR `Measure` type. Attributes (key, time, clef)
@@ -37,6 +36,7 @@ emitted first, followed by directions and notes in source order.
 
 use crate::ir::measure::{Measure, MusicDataElement};
 use crate::ir::attributes::Attributes;
+use crate::ir::common::{Editorial, PositiveDivisions, YesNo};
 use crate::ir::voice::{Backup, Forward};
 use crate::sexpr::Sexpr;
 use super::ast::{FermataMeasure, MeasureElement, BarlineSpec};
@@ -189,6 +189,7 @@ fn parse_barline_form(args: &[Sexpr]) -> CompileResult<BarlineSpec> {
         return Ok(BarlineSpec::Regular);
     }
 
+    // Check for keyword first, then symbol
     let name = args[0].as_keyword()
         .or_else(|| args[0].as_symbol())
         .ok_or_else(|| CompileError::type_mismatch("barline type", format!("{:?}", args[0])))?;
@@ -204,11 +205,13 @@ fn parse_barline_form(args: &[Sexpr]) -> CompileResult<BarlineSpec> {
     }
 }
 
-fn parse_duration_value(args: &[Sexpr]) -> CompileResult<u32> {
-    args.first()
-        .and_then(|s| s.as_symbol())
-        .and_then(|s| s.parse::<u32>().ok())
-        .ok_or(CompileError::MissingField("duration value"))
+fn parse_duration_value(args: &[Sexpr]) -> CompileResult<PositiveDivisions> {
+    match args.first() {
+        Some(Sexpr::Integer(n)) => Ok(*n as PositiveDivisions),
+        Some(Sexpr::Symbol(s)) => s.parse::<u64>()
+            .map_err(|_| CompileError::type_mismatch("duration integer", s.clone())),
+        _ => Err(CompileError::MissingField("duration value")),
+    }
 }
 
 // ─── IR Compilation ─────────────────────────────────────────────────────────
@@ -247,7 +250,10 @@ pub fn compile_fermata_measure(measure: &FermataMeasure) -> CompileResult<Measur
     }
 
     if has_attributes {
+        // Note: Attributes has `editorial` and `transpose` (not transposes)
+        // No `directives` field exists in the IR
         ir_content.push(MusicDataElement::Attributes(Attributes {
+            editorial: Editorial::default(),
             divisions: Some(DEFAULT_DIVISIONS),
             keys,
             times,
@@ -256,8 +262,7 @@ pub fn compile_fermata_measure(measure: &FermataMeasure) -> CompileResult<Measur
             instruments: None,
             clefs,
             staff_details: Vec::new(),
-            transposes: Vec::new(),
-            directives: Vec::new(),
+            transpose: Vec::new(),
             measure_styles: Vec::new(),
         }));
     }
@@ -311,9 +316,11 @@ pub fn compile_fermata_measure(measure: &FermataMeasure) -> CompileResult<Measur
             }
 
             // Voice management
+            // Note: Backup and Forward have `editorial` field and use PositiveDivisions (u64)
             MeasureElement::Backup(dur) => {
                 ir_content.push(MusicDataElement::Backup(Backup {
                     duration: *dur,
+                    editorial: Editorial::default(),
                 }));
             }
             MeasureElement::Forward(dur) => {
@@ -321,6 +328,7 @@ pub fn compile_fermata_measure(measure: &FermataMeasure) -> CompileResult<Measur
                     duration: *dur,
                     voice: None,
                     staff: None,
+                    editorial: Editorial::default(),
                 }));
             }
 
@@ -338,52 +346,98 @@ pub fn compile_fermata_measure(measure: &FermataMeasure) -> CompileResult<Measur
 
     Ok(Measure {
         number: measure.number.map(|n| n.to_string()).unwrap_or_default(),
-        content: ir_content,
-        width: None,
         implicit: None,
         non_controlling: None,
+        width: None,
+        content: ir_content,
     })
 }
 
 fn compile_barline(spec: &BarlineSpec) -> CompileResult<crate::ir::attributes::Barline> {
-    use crate::ir::attributes::{Barline, BarStyle, BarStyleValue, BarlineLocation, Repeat, RepeatDirection};
+    // Note: BarStyle is an enum (not a struct with value field)
+    // Location uses RightLeftMiddle (not BarlineLocation)
+    // Repeat.direction uses BackwardForward (not RepeatDirection)
+    use crate::ir::attributes::{Barline, BarStyle, Repeat};
+    use crate::ir::common::{BackwardForward, Editorial, RightLeftMiddle};
 
     match spec {
         BarlineSpec::Regular => Ok(Barline {
-            location: Some(BarlineLocation::Right),
-            bar_style: Some(BarStyle { value: BarStyleValue::Regular, ..Default::default() }),
+            location: Some(RightLeftMiddle::Right),
+            bar_style: Some(BarStyle::Regular),
+            editorial: Editorial::default(),
+            wavy_line: None,
+            segno: None,
+            coda: None,
+            fermatas: Vec::new(),
+            ending: None,
             repeat: None,
-            ..Default::default()
         }),
         BarlineSpec::Double => Ok(Barline {
-            location: Some(BarlineLocation::Right),
-            bar_style: Some(BarStyle { value: BarStyleValue::LightLight, ..Default::default() }),
+            location: Some(RightLeftMiddle::Right),
+            bar_style: Some(BarStyle::LightLight),
+            editorial: Editorial::default(),
+            wavy_line: None,
+            segno: None,
+            coda: None,
+            fermatas: Vec::new(),
+            ending: None,
             repeat: None,
-            ..Default::default()
         }),
         BarlineSpec::Final => Ok(Barline {
-            location: Some(BarlineLocation::Right),
-            bar_style: Some(BarStyle { value: BarStyleValue::LightHeavy, ..Default::default() }),
+            location: Some(RightLeftMiddle::Right),
+            bar_style: Some(BarStyle::LightHeavy),
+            editorial: Editorial::default(),
+            wavy_line: None,
+            segno: None,
+            coda: None,
+            fermatas: Vec::new(),
+            ending: None,
             repeat: None,
-            ..Default::default()
         }),
         BarlineSpec::RepeatForward => Ok(Barline {
-            location: Some(BarlineLocation::Left),
-            bar_style: Some(BarStyle { value: BarStyleValue::HeavyLight, ..Default::default() }),
-            repeat: Some(Repeat { direction: RepeatDirection::Forward, times: None, ..Default::default() }),
-            ..Default::default()
+            location: Some(RightLeftMiddle::Left),
+            bar_style: Some(BarStyle::HeavyLight),
+            editorial: Editorial::default(),
+            wavy_line: None,
+            segno: None,
+            coda: None,
+            fermatas: Vec::new(),
+            ending: None,
+            repeat: Some(Repeat {
+                direction: BackwardForward::Forward,
+                times: None,
+                winged: None,
+            }),
         }),
         BarlineSpec::RepeatBackward => Ok(Barline {
-            location: Some(BarlineLocation::Right),
-            bar_style: Some(BarStyle { value: BarStyleValue::LightHeavy, ..Default::default() }),
-            repeat: Some(Repeat { direction: RepeatDirection::Backward, times: None, ..Default::default() }),
-            ..Default::default()
+            location: Some(RightLeftMiddle::Right),
+            bar_style: Some(BarStyle::LightHeavy),
+            editorial: Editorial::default(),
+            wavy_line: None,
+            segno: None,
+            coda: None,
+            fermatas: Vec::new(),
+            ending: None,
+            repeat: Some(Repeat {
+                direction: BackwardForward::Backward,
+                times: None,
+                winged: None,
+            }),
         }),
         BarlineSpec::RepeatBoth => Ok(Barline {
-            location: Some(BarlineLocation::Right),
-            bar_style: Some(BarStyle { value: BarStyleValue::LightHeavy, ..Default::default() }),
-            repeat: Some(Repeat { direction: RepeatDirection::Backward, times: None, ..Default::default() }),
-            ..Default::default()
+            location: Some(RightLeftMiddle::Right),
+            bar_style: Some(BarStyle::LightHeavy),
+            editorial: Editorial::default(),
+            wavy_line: None,
+            segno: None,
+            coda: None,
+            fermatas: Vec::new(),
+            ending: None,
+            repeat: Some(Repeat {
+                direction: BackwardForward::Backward,
+                times: None,
+                winged: None,
+            }),
         }),
     }
 }
@@ -391,7 +445,7 @@ fn compile_barline(spec: &BarlineSpec) -> CompileResult<crate::ir::attributes::B
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sexpr::parser::parse;
+    use crate::sexpr::parse;
 
     #[test]
     fn test_simple_measure() {
@@ -440,14 +494,15 @@ mod tests {
 
 ---
 
-## Task 2: Part Compilation (`src/fermata/part.rs`)
+## Task 2: Part Compilation (`src/lang/part.rs`)
 
 ```rust
 //! Part compilation for Fermata syntax.
 //!
 //! Compiles `(part "Piano" ...)` to IR `Part` and `ScorePart`.
 
-use crate::ir::score::{Part, PartListElement, ScorePart, PartName};
+use crate::ir::part::{Part, PartListElement, PartName, ScorePart};
+use crate::ir::common::PrintStyle;
 use crate::sexpr::Sexpr;
 use super::ast::{FermataPart, FermataMeasure};
 use super::error::{CompileError, CompileResult};
@@ -503,11 +558,10 @@ fn parse_part_form(args: &[Sexpr], index: usize) -> CompileResult<FermataPart> {
                 i += 1;
             }
 
-            // Keyword → option
-            Sexpr::Symbol(s) if s.starts_with(':') => {
-                let key = &s[1..];
+            // Keyword → option (parsed keywords are Sexpr::Keyword, not Symbol with colon)
+            Sexpr::Keyword(key) => {
                 i += 1;
-                match key {
+                match key.as_str() {
                     "id" => {
                         if i < args.len() {
                             id = args[i].as_symbol()
@@ -526,7 +580,7 @@ fn parse_part_form(args: &[Sexpr], index: usize) -> CompileResult<FermataPart> {
                     }
                     _ => {
                         // Skip unknown keyword + value
-                        if i < args.len() && !args[i].is_keyword() && !args[i].is_list() {
+                        if i < args.len() && args[i].as_keyword().is_none() && !args[i].is_list() {
                             i += 1;
                         }
                     }
@@ -548,6 +602,11 @@ fn parse_part_form(args: &[Sexpr], index: usize) -> CompileResult<FermataPart> {
                 }
                 i += 1;
             }
+
+            // Skip other types
+            _ => {
+                i += 1;
+            }
         }
     }
 
@@ -563,13 +622,13 @@ fn parse_part_form(args: &[Sexpr], index: usize) -> CompileResult<FermataPart> {
 }
 
 /// Compile `FermataPart` to IR `Part` + `ScorePart` (for part-list).
-fn compile_fermata_part(fermata_part: &FermataPart) -> CompileResult<(Part, ScorePart)> {
+pub fn compile_fermata_part(fermata_part: &FermataPart) -> CompileResult<(Part, ScorePart)> {
     let part_id = fermata_part.id.clone()
         .unwrap_or_else(|| "P1".to_string());
 
     // Compile each measure
     let mut ir_measures = Vec::new();
-    for (i, measure) in fermata_part.measures.iter().enumerate() {
+    for measure in fermata_part.measures.iter() {
         let ir_measure = super::measure::compile_fermata_measure(measure)?;
         ir_measures.push(ir_measure);
     }
@@ -579,17 +638,28 @@ fn compile_fermata_part(fermata_part: &FermataPart) -> CompileResult<(Part, Scor
         measures: ir_measures,
     };
 
+    // Note: PartName has print_style field
     let score_part = ScorePart {
         id: part_id,
+        identification: None,
         part_name: PartName {
             value: fermata_part.name.clone(),
-            ..Default::default()
+            print_style: PrintStyle::default(),
+            print_object: None,
+            justify: None,
         },
+        part_name_display: None,
         part_abbreviation: fermata_part.abbreviation.as_ref().map(|a| PartName {
             value: a.clone(),
-            ..Default::default()
+            print_style: PrintStyle::default(),
+            print_object: None,
+            justify: None,
         }),
-        ..Default::default()
+        part_abbreviation_display: None,
+        group: Vec::new(),
+        score_instruments: Vec::new(),
+        midi_devices: Vec::new(),
+        midi_instruments: Vec::new(),
     };
 
     Ok((part, score_part))
@@ -598,7 +668,7 @@ fn compile_fermata_part(fermata_part: &FermataPart) -> CompileResult<(Part, Scor
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sexpr::parser::parse;
+    use crate::sexpr::parse;
 
     #[test]
     fn test_simple_part() {
@@ -630,17 +700,16 @@ mod tests {
 
 ---
 
-## Task 3: Score Compilation (`src/fermata/score.rs`)
+## Task 3: Score Compilation (`src/lang/score.rs`)
 
 ```rust
 //! Score compilation for Fermata syntax.
 //!
 //! Compiles `(score ...)` to IR `ScorePartwise`.
 
-use crate::ir::score::{
-    ScorePartwise, PartList, PartListElement,
-    Work, Identification, TypedText,
-};
+use crate::ir::score::{ScorePartwise, Work};
+use crate::ir::part::{PartList, PartListElement};
+use crate::ir::common::{Identification, TypedText};
 use crate::sexpr::Sexpr;
 use super::ast::FermataScore;
 use super::error::{CompileError, CompileResult};
@@ -676,11 +745,10 @@ fn parse_score_form(args: &[Sexpr]) -> CompileResult<FermataScore> {
     let mut i = 0;
     while i < args.len() {
         match &args[i] {
-            // Keywords for metadata
-            Sexpr::Symbol(s) if s.starts_with(':') => {
-                let key = &s[1..];
+            // Keywords for metadata (parsed as Sexpr::Keyword, not Symbol with colon)
+            Sexpr::Keyword(key) => {
                 i += 1;
-                match key {
+                match key.as_str() {
                     "title" => {
                         if i < args.len() {
                             title = args[i].as_string()
@@ -699,7 +767,7 @@ fn parse_score_form(args: &[Sexpr]) -> CompileResult<FermataScore> {
                     }
                     _ => {
                         // Skip unknown keyword + value
-                        if i < args.len() && !args[i].is_keyword() && !args[i].is_list() {
+                        if i < args.len() && args[i].as_keyword().is_none() && !args[i].is_list() {
                             i += 1;
                         }
                     }
@@ -732,7 +800,7 @@ pub fn compile_fermata_score(ast: &FermataScore) -> CompileResult<ScorePartwise>
     let mut part_list_content = Vec::new();
     let mut ir_parts = Vec::new();
 
-    for (i, fermata_part) in ast.parts.iter().enumerate() {
+    for fermata_part in ast.parts.iter() {
         let (part, score_part) = super::part::compile_fermata_part(fermata_part)?;
         part_list_content.push(PartListElement::ScorePart(score_part));
         ir_parts.push(part);
@@ -740,8 +808,9 @@ pub fn compile_fermata_score(ast: &FermataScore) -> CompileResult<ScorePartwise>
 
     // Work (title)
     let work = ast.title.as_ref().map(|t| Work {
+        work_number: None,
         work_title: Some(t.clone()),
-        ..Default::default()
+        opus: None,
     });
 
     // Identification (composer)
@@ -750,25 +819,32 @@ pub fn compile_fermata_score(ast: &FermataScore) -> CompileResult<ScorePartwise>
             value: c.clone(),
             r#type: Some("composer".to_string()),
         }],
-        ..Default::default()
+        rights: Vec::new(),
+        encoding: None,
+        source: None,
+        relations: Vec::new(),
+        miscellaneous: None,
     });
 
     Ok(ScorePartwise {
         version: Some("4.0".to_string()),
         work,
+        movement_number: None,
+        movement_title: None,
         identification,
+        defaults: None,
+        credits: Vec::new(),
         part_list: PartList {
             content: part_list_content,
         },
         parts: ir_parts,
-        ..Default::default()
     })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sexpr::parser::parse;
+    use crate::sexpr::parse;
 
     #[test]
     fn test_minimal_score() {
@@ -809,7 +885,7 @@ mod tests {
 
 ---
 
-## Task 4: Top-Level Compiler (`src/fermata/compiler.rs`)
+## Task 4: Top-Level Compiler (`src/lang/compiler.rs`)
 
 Wire together parsing → AST → IR → (optional) MusicXML emission.
 
@@ -820,8 +896,9 @@ Wire together parsing → AST → IR → (optional) MusicXML emission.
 //! Milestone 1 with real implementations.
 
 use crate::ir::score::ScorePartwise;
+use crate::musicxml::EmitError;
 use crate::sexpr::Sexpr;
-use crate::sexpr::parser::parse as parse_sexpr_str;
+use crate::sexpr::parse as parse_sexpr_str;
 use super::ast::FermataScore;
 use super::error::{CompileError, CompileResult};
 
@@ -832,7 +909,7 @@ use super::error::{CompileError, CompileResult};
 /// # Example
 ///
 /// ```rust
-/// use fermata::fermata::compile;
+/// use fermata::lang::compile;
 ///
 /// let source = r#"
 ///     (score
@@ -855,12 +932,15 @@ pub fn compile(source: &str) -> CompileResult<ScorePartwise> {
 }
 
 /// Compile Fermata source and emit MusicXML string.
+///
+/// Note: emit() returns Result<String, EmitError>, so we handle the error.
 pub fn compile_to_musicxml(source: &str) -> CompileResult<String> {
     let score = compile(source)?;
 
     // Use the existing MusicXML emitter (Phase 2)
-    let xml = crate::musicxml::emit::emit_score(&score);
-    Ok(xml)
+    // Note: crate::musicxml::emit returns Result<String, EmitError>
+    crate::musicxml::emit(&score)
+        .map_err(|e| CompileError::EmitError(e.to_string()))
 }
 
 // ─── Internal Pipeline Steps ────────────────────────────────────────────────
@@ -1042,7 +1122,7 @@ mod tests {
 
 use std::env;
 use std::fs;
-use std::io::{self, Write};
+use std::io::{self, Read, Write};
 use std::process;
 
 fn main() {
@@ -1071,7 +1151,7 @@ fn cmd_compile(args: &[String]) {
 
     let source = read_input(&input);
 
-    match fermata::fermata::compile_to_musicxml(&source) {
+    match fermata::lang::compile_to_musicxml(&source) {
         Ok(xml) => {
             match output {
                 Some(path) => {
@@ -1098,18 +1178,18 @@ fn cmd_check(args: &[String]) {
 
     let source = read_input(&input);
 
-    match fermata::fermata::compile(&source) {
+    match fermata::lang::compile(&source) {
         Ok(score) => {
             let part_count = score.parts.len();
             let measure_count: usize = score.parts.iter()
                 .map(|p| p.measures.len())
                 .sum();
 
-            eprintln!("✓ Valid Fermata source");
+            eprintln!("Valid Fermata source");
             eprintln!("  {} part(s), {} measure(s)", part_count, measure_count);
         }
         Err(e) => {
-            eprintln!("✗ Error: {}", e);
+            eprintln!("Error: {}", e);
             process::exit(1);
         }
     }
@@ -1147,8 +1227,9 @@ fn read_input(path: &Option<String>) -> String {
             process::exit(1);
         }),
         None => {
+            // Read from stdin
             let mut buf = String::new();
-            io::stdin().read_line(&mut buf).unwrap_or_else(|e| {
+            io::stdin().read_to_string(&mut buf).unwrap_or_else(|e| {
                 eprintln!("Error reading stdin: {}", e);
                 process::exit(1);
             });
@@ -1158,7 +1239,7 @@ fn read_input(path: &Option<String>) -> String {
 }
 
 fn print_usage() {
-    eprintln!("Fermata — Ergonomic music notation compiler");
+    eprintln!("Fermata - Ergonomic music notation compiler");
     eprintln!();
     eprintln!("Usage:");
     eprintln!("  fermata compile <input.ferm> [-o <output.xml>]");
@@ -1184,24 +1265,19 @@ path = "src/bin/fermata.rs"
 
 ---
 
-## Task 6: End-to-End Integration Tests
+## Task 6: End-to-End Integration Tests (Inline)
 
-Create `tests/fermata_e2e.rs`:
+Add these tests to `src/lang/compiler.rs` in the existing `#[cfg(test)] mod tests` block:
 
 ```rust
-//! End-to-end integration tests for the Fermata compiler.
-//!
-//! These tests compile complete Fermata source to MusicXML and validate
-//! the output structure.
-
-use fermata::fermata::compile;
-use fermata::fermata::compile_to_musicxml;
-use fermata::ir::measure::MusicDataElement;
-use fermata::ir::score::PartListElement;
+// ─── End-to-End Integration Tests ───────────────────────────────────────────
 
 /// "Twinkle Twinkle Little Star" — the canonical test case
 #[test]
 fn test_twinkle_twinkle() {
+    use crate::ir::measure::MusicDataElement;
+    use crate::ir::part::PartListElement;
+
     let source = r#"
         (score
           :title "Twinkle Twinkle Little Star"
@@ -1270,6 +1346,8 @@ fn test_twinkle_twinkle() {
 /// Test with dynamics and tempo
 #[test]
 fn test_score_with_dynamics() {
+    use crate::ir::measure::MusicDataElement;
+
     let source = r#"
         (score
           :title "Dynamic Test"
@@ -1297,6 +1375,8 @@ fn test_score_with_dynamics() {
 /// Test chords
 #[test]
 fn test_score_with_chords() {
+    use crate::ir::measure::MusicDataElement;
+
     let source = r#"
         (score
           (part "Piano"
@@ -1319,6 +1399,8 @@ fn test_score_with_chords() {
 /// Test triplets
 #[test]
 fn test_score_with_tuplets() {
+    use crate::ir::measure::MusicDataElement;
+
     let source = r#"
         (score
           (part "Piano"
@@ -1354,6 +1436,8 @@ fn test_score_with_tuplets() {
 /// Multi-part score
 #[test]
 fn test_multi_part() {
+    use crate::ir::part::PartListElement;
+
     let source = r#"
         (score
           :title "Simple Duet"
@@ -1431,6 +1515,8 @@ fn test_bare_measure_compiles() {
 /// Grace notes in context
 #[test]
 fn test_grace_notes_in_score() {
+    use crate::ir::measure::MusicDataElement;
+
     let source = r#"
         (score
           (part "Flute"
@@ -1455,6 +1541,9 @@ fn test_grace_notes_in_score() {
 /// Key signatures compile correctly across modes
 #[test]
 fn test_modal_keys() {
+    use crate::ir::measure::MusicDataElement;
+    use crate::ir::attributes::KeyContent;
+
     let source = r#"
         (score
           (part "Music"
@@ -1468,7 +1557,6 @@ fn test_modal_keys() {
     let m1 = &score.parts[0].measures[0];
     if let MusicDataElement::Attributes(attrs) = &m1.content[0] {
         if let Some(key) = attrs.keys.first() {
-            use fermata::ir::attributes::KeyContent;
             if let KeyContent::Traditional(tk) = &key.content {
                 assert_eq!(tk.fifths, 0);
             }
@@ -1622,7 +1710,7 @@ functions, with the addition of extracting the child args from the full sexpr.
 
 ---
 
-## Module Exports (`src/fermata/mod.rs`)
+## Module Exports (`src/lang/mod.rs`)
 
 ```rust
 //! Fermata: Ergonomic music notation syntax.
@@ -1659,21 +1747,21 @@ pub use error::{CompileError, CompileResult};
 
 ## Acceptance Criteria
 
-1. ✅ `(measure ...)` compiles to IR `Measure` with correct element ordering
-2. ✅ Attributes (key, time, clef) gathered into single block at measure start
-3. ✅ `(part "Name" ...)` compiles to `(Part, ScorePart)` pair
-4. ✅ Part IDs auto-generated as P1, P2, etc.
-5. ✅ `(score ...)` compiles to `ScorePartwise` with part-list
-6. ✅ Title and composer propagate to Work and Identification
-7. ✅ Convenience forms work: bare `(note ...)`, `(measure ...)`, `(part ...)`
-8. ✅ `compile()` produces valid `ScorePartwise` IR
-9. ✅ `compile_to_musicxml()` produces valid MusicXML string
-10. ✅ CLI: `fermata compile input.ferm -o output.xml` works
-11. ✅ CLI: `fermata check input.ferm` validates without emitting
-12. ✅ "Twinkle Twinkle" round-trip test passes
-13. ✅ Multi-part scores compile with matching IDs
-14. ✅ Scores with dynamics, chords, tuplets, grace notes all compile
-15. ✅ All tests pass
+1. `(measure ...)` compiles to IR `Measure` with correct element ordering
+2. Attributes (key, time, clef) gathered into single block at measure start
+3. `(part "Name" ...)` compiles to `(Part, ScorePart)` pair
+4. Part IDs auto-generated as P1, P2, etc.
+5. `(score ...)` compiles to `ScorePartwise` with part-list
+6. Title and composer propagate to Work and Identification
+7. Convenience forms work: bare `(note ...)`, `(measure ...)`, `(part ...)`
+8. `compile()` produces valid `ScorePartwise` IR
+9. `compile_to_musicxml()` produces valid MusicXML string
+10. CLI: `fermata compile input.ferm -o output.xml` works
+11. CLI: `fermata check input.ferm` validates without emitting
+12. "Twinkle Twinkle" round-trip test passes
+13. Multi-part scores compile with matching IDs
+14. Scores with dynamics, chords, tuplets, grace notes all compile
+15. All tests pass
 
 ---
 
@@ -1694,12 +1782,33 @@ pub use error::{CompileError, CompileResult};
 4. **Error context** — The top-level `compile()` function should catch errors
    from each stage and add context about which part/measure/element failed.
 
-5. **MusicXML emission** — This task uses the Phase 2 emitter. If it's not
-   yet complete enough, `compile_to_musicxml` can return a placeholder or
-   partial output. The IR output from `compile()` is the primary deliverable.
+5. **MusicXML emission** — Uses `crate::musicxml::emit()` which returns
+   `Result<String, EmitError>`. The error is converted to `CompileError::EmitError`.
 
-6. **CLI stdin** — When no input file is given, read from stdin. This enables
-   piping: `echo "(note c4 :q)" | fermata compile`.
+6. **CLI stdin** — When no input file is given, read from stdin using
+   `read_to_string`. This enables piping: `echo "(note c4 :q)" | fermata compile`.
+
+7. **Paths use `src/lang/`** — The Fermata language module lives at `src/lang/`
+   to avoid `fermata::fermata::` stutter in import paths.
+
+8. **`PositiveDivisions` is `u64`** — Type alias for duration values. Use the
+   alias or `u64` directly; don't use `u32`.
+
+9. **`BarStyle` is an enum** — Direct variants like `BarStyle::Regular`,
+   `BarStyle::LightHeavy`. No separate `BarStyleValue` type.
+
+10. **`RightLeftMiddle` for barline location** — Not `BarlineLocation`.
+
+11. **`BackwardForward` for repeat direction** — Not `RepeatDirection`.
+
+12. **Barline has `editorial` field** — Include `editorial: Editorial::default()`.
+
+13. **Backup/Forward have `editorial` field** — Both structs include it.
+
+14. **Attributes has `transpose` (singular)** — Not `transposes`. No `directives` field.
+
+15. **Keywords are `Sexpr::Keyword`** — Parsed keywords become `Sexpr::Keyword("name")`
+    (without colon), not `Sexpr::Symbol(":name")`. Use `as_keyword()` method.
 
 ---
 

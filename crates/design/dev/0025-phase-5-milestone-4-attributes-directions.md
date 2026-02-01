@@ -3,7 +3,6 @@
 > **For:** Claude Code (Opus) with Rust-SKILL.md agents
 > **Scope:** Key signatures, time signatures, clefs, dynamics, tempo, articulations
 > **Depends On:** Milestone 2 (Core Elements)
-> **Estimated Implementation Time:** 3-4 hours
 
 ---
 
@@ -11,7 +10,7 @@
 
 This milestone implements musical attributes and directions:
 
-- **Key signatures** — `(key c :major)`, `(key g :major)`, `(key f :minor)`
+- **Key signatures** — `(key c :major)`, `(key g :major)`, `(key f :minor)`, `(key f# :major)`
 - **Time signatures** — `(time 4 4)`, `(time 6 8)`, `(time :common)`
 - **Clefs** — `(clef :treble)`, `(clef :bass)`, `(clef :alto)`
 - **Dynamics** — `(ff)`, `(pp)`, `(cresc)`, `(dim)`
@@ -20,7 +19,7 @@ This milestone implements musical attributes and directions:
 
 ---
 
-## Task 1: Key Signature Compilation (`src/fermata/attributes.rs`)
+## Task 1: Key Signature Compilation (`src/lang/attributes.rs`)
 
 ```rust
 //! Attribute compilation for Fermata syntax.
@@ -28,14 +27,13 @@ This milestone implements musical attributes and directions:
 //! Compiles key signatures, time signatures, clefs, and transposes.
 
 use crate::ir::attributes::{
-    Key, KeyContent, TraditionalKey, NonTraditionalKey, KeyStep,
-    Time, TimeContent, TimeMeasured, TimeSignature, TimeSymbol,
+    Key, KeyContent, TraditionalKey,
+    Time, TimeContent, TimeSignature, TimeSymbol,
     Clef, ClefSign,
-    Transpose,
 };
-use crate::ir::common::Mode;
+use crate::ir::common::{Mode, YesNo};
 use crate::sexpr::Sexpr;
-use super::ast::{KeySpec, TimeSpec, ClefSpec, PitchStep, Mode as FermataMode};
+use super::ast::{KeySpec, TimeSpec, ClefSpec, PitchStep, PitchAlter, Mode as FermataMode};
 use super::error::{CompileError, CompileResult};
 
 // ============ KEY SIGNATURE ============
@@ -45,6 +43,8 @@ use super::error::{CompileError, CompileResult};
 /// Syntax:
 /// - `(key c :major)` — C major (0 fifths)
 /// - `(key g :major)` — G major (1 fifth)
+/// - `(key f# :major)` — F# major (6 sharps)
+/// - `(key bb :minor)` — Bb minor (5 flats)
 /// - `(key a :minor)` — A minor (0 fifths, minor mode)
 /// - `(key d :dorian)` — D dorian
 pub fn compile_key(sexpr: &Sexpr) -> CompileResult<Key> {
@@ -64,11 +64,11 @@ fn parse_key_form(args: &[Sexpr]) -> CompileResult<KeySpec> {
         return Err(CompileError::MissingField("root"));
     }
 
-    // First arg: root note (c, g, d, etc.)
+    // First arg: root note (c, g, d, f#, bb, etc.)
     let root_str = args[0].as_symbol()
         .ok_or_else(|| CompileError::type_mismatch("root note", format!("{:?}", args[0])))?;
 
-    let root = parse_key_root(root_str)?;
+    let (root, root_alter) = parse_key_root(root_str)?;
 
     // Second arg: mode (required)
     if args.len() < 2 {
@@ -81,20 +81,35 @@ fn parse_key_form(args: &[Sexpr]) -> CompileResult<KeySpec> {
 
     let mode = parse_mode(mode_str)?;
 
-    Ok(KeySpec { root, mode })
+    Ok(KeySpec { root, root_alter, mode })
 }
 
-fn parse_key_root(s: &str) -> CompileResult<PitchStep> {
-    match s.to_lowercase().chars().next() {
-        Some('c') => Ok(PitchStep::C),
-        Some('d') => Ok(PitchStep::D),
-        Some('e') => Ok(PitchStep::E),
-        Some('f') => Ok(PitchStep::F),
-        Some('g') => Ok(PitchStep::G),
-        Some('a') => Ok(PitchStep::A),
-        Some('b') => Ok(PitchStep::B),
-        _ => Err(CompileError::InvalidKey(format!("invalid root: {}", s))),
-    }
+/// Parse key root with optional accidental (e.g., "f#", "bb", "c")
+fn parse_key_root(s: &str) -> CompileResult<(PitchStep, Option<PitchAlter>)> {
+    let s = s.to_lowercase();
+    let mut chars = s.chars();
+
+    let step = match chars.next() {
+        Some('c') => PitchStep::C,
+        Some('d') => PitchStep::D,
+        Some('e') => PitchStep::E,
+        Some('f') => PitchStep::F,
+        Some('g') => PitchStep::G,
+        Some('a') => PitchStep::A,
+        Some('b') => PitchStep::B,
+        _ => return Err(CompileError::InvalidKey(format!("invalid root: {}", s))),
+    };
+
+    // Check for accidental
+    let alter = match chars.next() {
+        Some('#') => Some(PitchAlter::Sharp),
+        Some('b') => Some(PitchAlter::Flat),
+        Some('x') => Some(PitchAlter::DoubleSharp),
+        None => None,
+        Some(c) => return Err(CompileError::InvalidKey(format!("invalid accidental '{}' in root: {}", c, s))),
+    };
+
+    Ok((step, alter))
 }
 
 fn parse_mode(s: &str) -> CompileResult<FermataMode> {
@@ -113,7 +128,7 @@ fn parse_mode(s: &str) -> CompileResult<FermataMode> {
 }
 
 fn compile_key_spec(spec: &KeySpec) -> CompileResult<Key> {
-    let fifths = compute_fifths(spec.root, &spec.mode);
+    let fifths = compute_fifths(spec.root, spec.root_alter.as_ref(), &spec.mode);
     let mode = match spec.mode {
         FermataMode::Major => Some(Mode::Major),
         FermataMode::Minor => Some(Mode::Minor),
@@ -148,9 +163,11 @@ fn compile_key_spec(spec: &KeySpec) -> CompileResult<Key> {
 /// | E    | 4     | 1     | 2      |
 /// | B    | 5     | 2     | 3      |
 /// | F    | -1    | -4    | -3     |
-fn compute_fifths(root: PitchStep, mode: &FermataMode) -> i8 {
-    // Major key fifths
-    let major_fifths = match root {
+/// | F#   | 6     | 3     | 4      |
+/// | Bb   | -2    | -5    | -4     |
+fn compute_fifths(root: PitchStep, root_alter: Option<&PitchAlter>, mode: &FermataMode) -> i8 {
+    // Major key fifths for natural roots
+    let base_fifths = match root {
         PitchStep::C => 0,
         PitchStep::G => 1,
         PitchStep::D => 2,
@@ -158,6 +175,15 @@ fn compute_fifths(root: PitchStep, mode: &FermataMode) -> i8 {
         PitchStep::E => 4,
         PitchStep::B => 5,
         PitchStep::F => -1,
+    };
+
+    // Adjust for root accidental (each sharp adds 7, each flat subtracts 7)
+    let alter_offset = match root_alter {
+        Some(PitchAlter::Sharp) => 7,
+        Some(PitchAlter::DoubleSharp) => 14,
+        Some(PitchAlter::Flat) => -7,
+        Some(PitchAlter::DoubleFlat) => -14,
+        _ => 0,
     };
 
     // Adjust for mode (relative to major)
@@ -171,7 +197,7 @@ fn compute_fifths(root: PitchStep, mode: &FermataMode) -> i8 {
         FermataMode::Locrian => -5,
     };
 
-    major_fifths + mode_offset
+    base_fifths + alter_offset + mode_offset
 }
 
 // ============ TIME SIGNATURE ============
@@ -222,8 +248,10 @@ fn parse_time_form(args: &[Sexpr]) -> CompileResult<TimeSpec> {
     Ok(TimeSpec::Simple { beats, beat_type })
 }
 
+/// Parse u8 from S-expression (handles both Symbol and Integer)
 fn parse_u8(sexpr: &Sexpr) -> CompileResult<u8> {
     match sexpr {
+        Sexpr::Integer(n) if *n >= 0 && *n <= 255 => Ok(*n as u8),
         Sexpr::Symbol(s) => s.parse::<u8>()
             .map_err(|_| CompileError::type_mismatch("integer", s.clone())),
         _ => Err(CompileError::type_mismatch("integer", format!("{:?}", sexpr))),
@@ -233,53 +261,68 @@ fn parse_u8(sexpr: &Sexpr) -> CompileResult<u8> {
 fn compile_time_spec(spec: &TimeSpec) -> CompileResult<Time> {
     match spec {
         TimeSpec::Simple { beats, beat_type } => {
+            // TimeContent::Measured is a struct variant, not a tuple variant
             Ok(Time {
-                content: TimeContent::Measured(TimeMeasured {
+                content: TimeContent::Measured {
                     signatures: vec![TimeSignature {
                         beats: beats.to_string(),
                         beat_type: beat_type.to_string(),
                     }],
-                    interchangeable: None,
-                }),
+                },
+                number: None,
                 symbol: None,
-                separator: None,
-                ..Default::default()
+                print_object: None,
             })
         }
         TimeSpec::Common => {
             Ok(Time {
-                content: TimeContent::Measured(TimeMeasured {
+                content: TimeContent::Measured {
                     signatures: vec![TimeSignature {
                         beats: "4".to_string(),
                         beat_type: "4".to_string(),
                     }],
-                    interchangeable: None,
-                }),
+                },
+                number: None,
                 symbol: Some(TimeSymbol::Common),
-                separator: None,
-                ..Default::default()
+                print_object: None,
             })
         }
         TimeSpec::Cut => {
             Ok(Time {
-                content: TimeContent::Measured(TimeMeasured {
+                content: TimeContent::Measured {
                     signatures: vec![TimeSignature {
                         beats: "2".to_string(),
                         beat_type: "2".to_string(),
                     }],
-                    interchangeable: None,
-                }),
+                },
+                number: None,
                 symbol: Some(TimeSymbol::Cut),
-                separator: None,
-                ..Default::default()
+                print_object: None,
             })
         }
         TimeSpec::SenzaMisura => {
+            // SenzaMisura takes a String, not Option<String>
             Ok(Time {
-                content: TimeContent::SenzaMisura(None),
+                content: TimeContent::SenzaMisura(String::new()),
+                number: None,
                 symbol: None,
-                separator: None,
-                ..Default::default()
+                print_object: None,
+            })
+        }
+        TimeSpec::Compound { signatures } => {
+            // Compound time signatures like 2/4 + 3/8
+            Ok(Time {
+                content: TimeContent::Measured {
+                    signatures: signatures.iter()
+                        .map(|(beats, beat_type)| TimeSignature {
+                            beats: beats.to_string(),
+                            beat_type: beat_type.to_string(),
+                        })
+                        .collect(),
+                },
+                number: None,
+                symbol: None,
+                print_object: None,
             })
         }
     }
@@ -358,7 +401,9 @@ fn compile_clef_spec(spec: &ClefSpec) -> CompileResult<Clef> {
         sign,
         line,
         octave_change,
-        ..Default::default()
+        number: None,
+        size: None,
+        print_object: None,
     })
 }
 
@@ -389,6 +434,28 @@ mod tests {
     }
 
     #[test]
+    fn test_key_f_sharp_major() {
+        let sexpr = parse("(key f# :major)").unwrap();
+        let key = compile_key(&sexpr).unwrap();
+
+        if let KeyContent::Traditional(tk) = &key.content {
+            assert_eq!(tk.fifths, 6); // F# major = 6 sharps
+            assert_eq!(tk.mode, Some(Mode::Major));
+        }
+    }
+
+    #[test]
+    fn test_key_bb_minor() {
+        let sexpr = parse("(key bb :minor)").unwrap();
+        let key = compile_key(&sexpr).unwrap();
+
+        if let KeyContent::Traditional(tk) = &key.content {
+            assert_eq!(tk.fifths, -5); // Bb minor = 5 flats
+            assert_eq!(tk.mode, Some(Mode::Minor));
+        }
+    }
+
+    #[test]
     fn test_key_a_minor() {
         let sexpr = parse("(key a :minor)").unwrap();
         let key = compile_key(&sexpr).unwrap();
@@ -404,9 +471,9 @@ mod tests {
         let sexpr = parse("(time 4 4)").unwrap();
         let time = compile_time(&sexpr).unwrap();
 
-        if let TimeContent::Measured(tm) = &time.content {
-            assert_eq!(tm.signatures[0].beats, "4");
-            assert_eq!(tm.signatures[0].beat_type, "4");
+        if let TimeContent::Measured { signatures } = &time.content {
+            assert_eq!(signatures[0].beats, "4");
+            assert_eq!(signatures[0].beat_type, "4");
         }
     }
 
@@ -440,7 +507,7 @@ mod tests {
 
 ---
 
-## Task 2: Direction Compilation (`src/fermata/direction.rs`)
+## Task 2: Direction Compilation (`src/lang/direction.rs`)
 
 ```rust
 //! Direction compilation for Fermata syntax.
@@ -449,15 +516,16 @@ mod tests {
 
 use crate::ir::direction::{
     Direction, DirectionType, DirectionTypeContent,
-    Dynamics, DynamicsContent,
+    Dynamics, DynamicElement,
     Wedge, WedgeType,
-    Metronome, MetronomeContent, PerMinute, BeatUnit,
-    Words,
+    Metronome, MetronomeContent, PerMinute,
+    Words, Segno, Coda, Pedal, PedalType,
+    FormattedText,
 };
-use crate::ir::common::{StartStop, AboveBelow};
 use crate::ir::duration::NoteTypeValue;
+use crate::ir::common::{AboveBelow, Position, PrintStyle, YesNo};
 use crate::sexpr::Sexpr;
-use super::ast::{DynamicMark, TempoMark, FermataDirection, DurationBase};
+use super::ast::{DynamicMark, TempoMark, DurationBase};
 use super::error::{CompileError, CompileResult};
 
 // ============ DYNAMICS ============
@@ -526,13 +594,9 @@ fn parse_dynamic_name(name: &str) -> CompileResult<DynamicMark> {
         // Niente
         "n" | "niente" => Ok(DynamicMark::N),
 
-        // Wedges
-        "cresc" | "crescendo" => Ok(DynamicMark::Crescendo(StartStop::Start)),
-        "dim" | "diminuendo" | "decresc" | "decrescendo" =>
-            Ok(DynamicMark::Diminuendo(StartStop::Start)),
-        "cresc-stop" | "crescendo-stop" => Ok(DynamicMark::Crescendo(StartStop::Stop)),
-        "dim-stop" | "diminuendo-stop" | "decresc-stop" =>
-            Ok(DynamicMark::Diminuendo(StartStop::Stop)),
+        // Wedges (cresc/dim)
+        "cresc" | "crescendo" => Ok(DynamicMark::Crescendo),
+        "dim" | "diminuendo" | "decresc" | "decrescendo" => Ok(DynamicMark::Diminuendo),
 
         _ => Err(CompileError::InvalidDynamic(name.to_string())),
     }
@@ -540,68 +604,79 @@ fn parse_dynamic_name(name: &str) -> CompileResult<DynamicMark> {
 
 fn compile_dynamic_mark(mark: &DynamicMark) -> CompileResult<Direction> {
     let content = match mark {
-        // Wedges
-        DynamicMark::Crescendo(action) => {
+        // Wedges become DirectionTypeContent::Wedge
+        DynamicMark::Crescendo => {
             DirectionTypeContent::Wedge(Wedge {
                 r#type: WedgeType::Crescendo,
                 number: None,
+                spread: None,
                 niente: None,
-                ..Default::default()
+                line_type: None,
+                position: Position::default(),
+                color: None,
             })
         }
-        DynamicMark::Diminuendo(action) => {
+        DynamicMark::Diminuendo => {
             DirectionTypeContent::Wedge(Wedge {
                 r#type: WedgeType::Diminuendo,
                 number: None,
+                spread: None,
                 niente: None,
-                ..Default::default()
+                line_type: None,
+                position: Position::default(),
+                color: None,
             })
         }
 
-        // Standard dynamics
+        // Standard dynamics become DirectionTypeContent::Dynamics
+        // Note: DynamicElement, not DynamicsContent
         _ => {
-            let dyn_content = match mark {
-                DynamicMark::PPPPPP => DynamicsContent::Pppppp,
-                DynamicMark::PPPPP => DynamicsContent::Ppppp,
-                DynamicMark::PPPP => DynamicsContent::Pppp,
-                DynamicMark::PPP => DynamicsContent::Ppp,
-                DynamicMark::PP => DynamicsContent::Pp,
-                DynamicMark::P => DynamicsContent::P,
-                DynamicMark::MP => DynamicsContent::Mp,
-                DynamicMark::MF => DynamicsContent::Mf,
-                DynamicMark::F => DynamicsContent::F,
-                DynamicMark::FF => DynamicsContent::Ff,
-                DynamicMark::FFF => DynamicsContent::Fff,
-                DynamicMark::FFFF => DynamicsContent::Ffff,
-                DynamicMark::FFFFF => DynamicsContent::Fffff,
-                DynamicMark::FFFFFF => DynamicsContent::Ffffff,
-                DynamicMark::FP => DynamicsContent::Fp,
-                DynamicMark::SF => DynamicsContent::Sf,
-                DynamicMark::SFP => DynamicsContent::Sfp,
-                DynamicMark::SFPP => DynamicsContent::Sfpp,
-                DynamicMark::SFZ => DynamicsContent::Sfz,
-                DynamicMark::SFFZ => DynamicsContent::Sffz,
-                DynamicMark::SFZP => DynamicsContent::Sfzp,
-                DynamicMark::FZ => DynamicsContent::Fz,
-                DynamicMark::PF => DynamicsContent::Pf,
-                DynamicMark::RFZ => DynamicsContent::Rfz,
-                DynamicMark::N => DynamicsContent::N,
+            let dyn_element = match mark {
+                DynamicMark::PPPPPP => DynamicElement::PPPPPP,
+                DynamicMark::PPPPP => DynamicElement::PPPPP,
+                DynamicMark::PPPP => DynamicElement::PPPP,
+                DynamicMark::PPP => DynamicElement::PPP,
+                DynamicMark::PP => DynamicElement::PP,
+                DynamicMark::P => DynamicElement::P,
+                DynamicMark::MP => DynamicElement::MP,
+                DynamicMark::MF => DynamicElement::MF,
+                DynamicMark::F => DynamicElement::F,
+                DynamicMark::FF => DynamicElement::FF,
+                DynamicMark::FFF => DynamicElement::FFF,
+                DynamicMark::FFFF => DynamicElement::FFFF,
+                DynamicMark::FFFFF => DynamicElement::FFFFF,
+                DynamicMark::FFFFFF => DynamicElement::FFFFFF,
+                DynamicMark::FP => DynamicElement::FP,
+                DynamicMark::SF => DynamicElement::SF,
+                DynamicMark::SFP => DynamicElement::SFP,
+                DynamicMark::SFPP => DynamicElement::SFPP,
+                DynamicMark::SFZ => DynamicElement::SFZ,
+                DynamicMark::SFFZ => DynamicElement::SFFZ,
+                DynamicMark::SFZP => DynamicElement::SFZP,
+                DynamicMark::FZ => DynamicElement::FZ,
+                DynamicMark::PF => DynamicElement::PF,
+                DynamicMark::RFZ => DynamicElement::RFZ,
+                DynamicMark::N => DynamicElement::N,
                 _ => return Err(CompileError::InvalidDynamic("unexpected variant".to_string())),
             };
 
+            // Dynamics has print_style field
             DirectionTypeContent::Dynamics(Dynamics {
-                content: vec![dyn_content],
-                ..Default::default()
+                content: vec![dyn_element],
+                print_style: PrintStyle::default(),
+                placement: Some(AboveBelow::Below),
             })
         }
     };
 
     Ok(Direction {
-        direction_types: vec![DirectionType { content }],
         placement: Some(AboveBelow::Below),
-        staff: None,
+        directive: None,
+        direction_types: vec![DirectionType { content }],
+        offset: None,
         voice: None,
-        ..Default::default()
+        staff: None,
+        sound: None,
     })
 }
 
@@ -628,7 +703,7 @@ pub fn compile_tempo(sexpr: &Sexpr) -> CompileResult<Direction> {
 fn parse_tempo_form(args: &[Sexpr]) -> CompileResult<TempoMark> {
     let mut text = None;
     let mut beat_unit = None;
-    let mut beat_unit_dots = 0u8;
+    let mut beat_unit_dots = 0u32;  // Note: u32 not u8
     let mut per_minute = None;
 
     let mut i = 0;
@@ -638,17 +713,32 @@ fn parse_tempo_form(args: &[Sexpr]) -> CompileResult<TempoMark> {
                 text = Some(s.clone());
                 i += 1;
             }
-            Sexpr::Symbol(s) if s.starts_with(':') => {
-                // Duration keyword
-                let dur_str = &s[1..];
-                let (base, dots) = parse_duration_for_tempo(dur_str)?;
+            Sexpr::Keyword(k) => {
+                // Duration keyword (without leading :)
+                let (base, dots) = parse_duration_for_tempo(k)?;
                 beat_unit = Some(base);
-                beat_unit_dots = dots;
+                beat_unit_dots = dots as u32;
                 i += 1;
 
                 // Next should be BPM
                 if i < args.len() {
-                    if let Some(bpm) = args[i].as_symbol().and_then(|s| s.parse::<u32>().ok()) {
+                    if let Some(bpm) = parse_bpm(&args[i]) {
+                        per_minute = Some(bpm);
+                        i += 1;
+                    }
+                }
+            }
+            Sexpr::Symbol(s) if s.starts_with(':') => {
+                // Duration keyword with : prefix
+                let dur_str = &s[1..];
+                let (base, dots) = parse_duration_for_tempo(dur_str)?;
+                beat_unit = Some(base);
+                beat_unit_dots = dots as u32;
+                i += 1;
+
+                // Next should be BPM
+                if i < args.len() {
+                    if let Some(bpm) = parse_bpm(&args[i]) {
                         per_minute = Some(bpm);
                         i += 1;
                     }
@@ -663,6 +753,10 @@ fn parse_tempo_form(args: &[Sexpr]) -> CompileResult<TempoMark> {
                 }
                 i += 1;
             }
+            Sexpr::Integer(n) => {
+                per_minute = Some(*n as u32);
+                i += 1;
+            }
             _ => i += 1,
         }
     }
@@ -673,6 +767,14 @@ fn parse_tempo_form(args: &[Sexpr]) -> CompileResult<TempoMark> {
         beat_unit_dots,
         per_minute,
     })
+}
+
+fn parse_bpm(sexpr: &Sexpr) -> Option<u32> {
+    match sexpr {
+        Sexpr::Integer(n) if *n > 0 => Some(*n as u32),
+        Sexpr::Symbol(s) => s.parse::<u32>().ok(),
+        _ => None,
+    }
 }
 
 fn parse_duration_for_tempo(s: &str) -> CompileResult<(DurationBase, u8)> {
@@ -695,50 +797,57 @@ fn compile_tempo_mark(mark: &TempoMark) -> CompileResult<Direction> {
     let mut direction_types = Vec::new();
 
     // Add text if present
+    // Note: DirectionTypeContent::Words takes Vec<Words>
     if let Some(text) = &mark.text {
         direction_types.push(DirectionType {
-            content: DirectionTypeContent::Words(Words {
+            content: DirectionTypeContent::Words(vec![Words {
                 value: text.clone(),
-                ..Default::default()
-            }),
+                print_style: PrintStyle::default(),
+                justify: None,
+                lang: None,
+            }]),
         });
     }
 
     // Add metronome if beat unit is present
     if let Some(beat_unit) = &mark.beat_unit {
+        // Use NoteTypeValue directly - there is no BeatUnit enum
         let bu = match beat_unit {
-            DurationBase::Whole => BeatUnit::Whole,
-            DurationBase::Half => BeatUnit::Half,
-            DurationBase::Quarter => BeatUnit::Quarter,
-            DurationBase::Eighth => BeatUnit::Eighth,
-            DurationBase::Sixteenth => BeatUnit::N16th,
-            _ => BeatUnit::Quarter,
+            DurationBase::Whole => NoteTypeValue::Whole,
+            DurationBase::Half => NoteTypeValue::Half,
+            DurationBase::Quarter => NoteTypeValue::Quarter,
+            DurationBase::Eighth => NoteTypeValue::Eighth,
+            DurationBase::Sixteenth => NoteTypeValue::N16th,
+            _ => NoteTypeValue::Quarter,
         };
 
-        let pm = mark.per_minute.map(|bpm| PerMinute {
-            value: bpm.to_string(),
-        });
+        if let Some(bpm) = mark.per_minute {
+            let per_minute = PerMinute {
+                value: bpm.to_string(),
+            };
 
-        if let Some(per_minute) = pm {
             direction_types.push(DirectionType {
                 content: DirectionTypeContent::Metronome(Metronome {
+                    parentheses: None,
                     content: MetronomeContent::PerMinute {
                         beat_unit: bu,
-                        beat_unit_dots: mark.beat_unit_dots,
+                        beat_unit_dots: mark.beat_unit_dots,  // Already u32
                         per_minute,
                     },
-                    ..Default::default()
+                    print_style: PrintStyle::default(),
                 }),
             });
         }
     }
 
     Ok(Direction {
-        direction_types,
         placement: Some(AboveBelow::Above),
-        staff: None,
+        directive: None,
+        direction_types,
+        offset: None,
         voice: None,
-        ..Default::default()
+        staff: None,
+        sound: None,
     })
 }
 
@@ -768,62 +877,90 @@ fn compile_rehearsal(args: &[Sexpr]) -> CompileResult<Direction> {
         .unwrap_or("A")
         .to_string();
 
+    // DirectionTypeContent::Rehearsal takes Vec<FormattedText>
     Ok(Direction {
-        direction_types: vec![DirectionType {
-            content: DirectionTypeContent::Rehearsal(vec![
-                crate::ir::direction::FormattedText {
-                    value: text,
-                    ..Default::default()
-                }
-            ]),
-        }],
         placement: Some(AboveBelow::Above),
-        ..Default::default()
+        directive: None,
+        direction_types: vec![DirectionType {
+            content: DirectionTypeContent::Rehearsal(vec![FormattedText {
+                value: text,
+                print_style: PrintStyle::default(),
+                enclosure: None,
+                lang: None,
+            }]),
+        }],
+        offset: None,
+        voice: None,
+        staff: None,
+        sound: None,
     })
 }
 
 fn compile_segno() -> CompileResult<Direction> {
+    // DirectionTypeContent::Segno takes Vec<Segno>
     Ok(Direction {
-        direction_types: vec![DirectionType {
-            content: DirectionTypeContent::Segno(crate::ir::direction::Segno::default()),
-        }],
         placement: Some(AboveBelow::Above),
-        ..Default::default()
+        directive: None,
+        direction_types: vec![DirectionType {
+            content: DirectionTypeContent::Segno(vec![Segno {
+                print_style: PrintStyle::default(),
+                smufl: None,
+            }]),
+        }],
+        offset: None,
+        voice: None,
+        staff: None,
+        sound: None,
     })
 }
 
 fn compile_coda() -> CompileResult<Direction> {
+    // DirectionTypeContent::Coda takes Vec<Coda>
     Ok(Direction {
-        direction_types: vec![DirectionType {
-            content: DirectionTypeContent::Coda(crate::ir::direction::Coda::default()),
-        }],
         placement: Some(AboveBelow::Above),
-        ..Default::default()
+        directive: None,
+        direction_types: vec![DirectionType {
+            content: DirectionTypeContent::Coda(vec![Coda {
+                print_style: PrintStyle::default(),
+                smufl: None,
+            }]),
+        }],
+        offset: None,
+        voice: None,
+        staff: None,
+        sound: None,
     })
 }
 
 fn compile_pedal(args: &[Sexpr]) -> CompileResult<Direction> {
-    use crate::ir::direction::{Pedal, PedalType};
-
     let action = args.first()
         .and_then(|s| s.as_keyword().or_else(|| s.as_symbol()))
         .map(|s| match s {
             "start" => PedalType::Start,
             "stop" => PedalType::Stop,
             "change" => PedalType::Change,
+            "continue" => PedalType::Continue,
             _ => PedalType::Start,
         })
         .unwrap_or(PedalType::Start);
 
     Ok(Direction {
+        placement: Some(AboveBelow::Below),
+        directive: None,
         direction_types: vec![DirectionType {
             content: DirectionTypeContent::Pedal(Pedal {
                 r#type: action,
-                ..Default::default()
+                number: None,
+                line: None,
+                sign: None,
+                abbreviated: None,
+                print_style: PrintStyle::default(),
             }),
         }],
-        placement: Some(AboveBelow::Below),
-        ..Default::default()
+        offset: None,
+        voice: None,
+        staff: None,
+        sound: None,
     })
 }
 
@@ -833,15 +970,22 @@ fn compile_words(args: &[Sexpr]) -> CompileResult<Direction> {
         .ok_or(CompileError::MissingField("text"))?
         .to_string();
 
+    // DirectionTypeContent::Words takes Vec<Words>
     Ok(Direction {
-        direction_types: vec![DirectionType {
-            content: DirectionTypeContent::Words(Words {
-                value: text,
-                ..Default::default()
-            }),
-        }],
         placement: None,
-        ..Default::default()
+        directive: None,
+        direction_types: vec![DirectionType {
+            content: DirectionTypeContent::Words(vec![Words {
+                value: text,
+                print_style: PrintStyle::default(),
+                justify: None,
+                lang: None,
+            }]),
+        }],
+        offset: None,
+        voice: None,
+        staff: None,
+        sound: None,
     })
 }
 
@@ -887,133 +1031,189 @@ mod tests {
         // Should have words and metronome
         assert!(dir.direction_types.len() >= 2);
     }
+
+    #[test]
+    fn test_segno() {
+        let sexpr = parse("(segno)").unwrap();
+        let dir = compile_direction(&sexpr).unwrap();
+
+        assert!(!dir.direction_types.is_empty());
+        assert!(matches!(
+            &dir.direction_types[0].content,
+            DirectionTypeContent::Segno(_)
+        ));
+    }
+
+    #[test]
+    fn test_coda() {
+        let sexpr = parse("(coda)").unwrap();
+        let dir = compile_direction(&sexpr).unwrap();
+
+        assert!(!dir.direction_types.is_empty());
+        assert!(matches!(
+            &dir.direction_types[0].content,
+            DirectionTypeContent::Coda(_)
+        ));
+    }
+
+    #[test]
+    fn test_pedal_start() {
+        let sexpr = parse("(pedal :start)").unwrap();
+        let dir = compile_direction(&sexpr).unwrap();
+
+        if let DirectionTypeContent::Pedal(p) = &dir.direction_types[0].content {
+            assert!(matches!(p.r#type, PedalType::Start));
+        } else {
+            panic!("Expected pedal");
+        }
+    }
 }
 ```
 
 ---
 
-## Task 3: Integration Tests
+## Task 3: Integration Tests (inline)
 
-Create `tests/fermata_attributes.rs`:
+Add comprehensive tests to `src/lang/attributes.rs`:
 
 ```rust
-//! Integration tests for attributes and directions.
+#[cfg(test)]
+mod integration_tests {
+    use super::*;
+    use crate::sexpr::parser::parse;
+    use crate::ir::attributes::{ClefSign, TimeSymbol, KeyContent};
+    use crate::ir::common::Mode;
 
-use fermata::fermata::attributes::{compile_key, compile_time, compile_clef};
-use fermata::fermata::direction::{compile_dynamic, compile_tempo};
-use fermata::ir::attributes::{ClefSign, TimeSymbol, KeyContent};
-use fermata::ir::common::Mode;
-use fermata::sexpr::parser::parse;
+    #[test]
+    fn test_all_major_keys() {
+        let keys = [
+            ("(key c :major)", 0),
+            ("(key g :major)", 1),
+            ("(key d :major)", 2),
+            ("(key a :major)", 3),
+            ("(key e :major)", 4),
+            ("(key b :major)", 5),
+            ("(key f :major)", -1),
+            ("(key f# :major)", 6),   // F# major
+            ("(key c# :major)", 7),   // C# major
+        ];
 
-#[test]
-fn test_all_major_keys() {
-    let keys = [
-        ("(key c :major)", 0),
-        ("(key g :major)", 1),
-        ("(key d :major)", 2),
-        ("(key a :major)", 3),
-        ("(key e :major)", 4),
-        ("(key b :major)", 5),
-        ("(key f :major)", -1),
-    ];
+        for (source, expected_fifths) in keys {
+            let sexpr = parse(source).unwrap();
+            let key = compile_key(&sexpr).unwrap();
 
-    for (source, expected_fifths) in keys {
-        let sexpr = parse(source).unwrap();
-        let key = compile_key(&sexpr).unwrap();
-
-        if let KeyContent::Traditional(tk) = &key.content {
-            assert_eq!(tk.fifths, expected_fifths, "Key {} should have {} fifths", source, expected_fifths);
+            if let KeyContent::Traditional(tk) = &key.content {
+                assert_eq!(tk.fifths, expected_fifths, "Key {} should have {} fifths", source, expected_fifths);
+            }
         }
     }
-}
 
-#[test]
-fn test_minor_keys() {
-    let keys = [
-        ("(key a :minor)", 0),   // Relative to C major
-        ("(key e :minor)", 1),   // Relative to G major
-        ("(key d :minor)", -1),  // Relative to F major
-    ];
+    #[test]
+    fn test_minor_keys() {
+        let keys = [
+            ("(key a :minor)", 0),   // Relative to C major
+            ("(key e :minor)", 1),   // Relative to G major
+            ("(key d :minor)", -1),  // Relative to F major
+        ];
 
-    for (source, expected_fifths) in keys {
-        let sexpr = parse(source).unwrap();
-        let key = compile_key(&sexpr).unwrap();
+        for (source, expected_fifths) in keys {
+            let sexpr = parse(source).unwrap();
+            let key = compile_key(&sexpr).unwrap();
 
-        if let KeyContent::Traditional(tk) = &key.content {
-            assert_eq!(tk.fifths, expected_fifths);
-            assert_eq!(tk.mode, Some(Mode::Minor));
+            if let KeyContent::Traditional(tk) = &key.content {
+                assert_eq!(tk.fifths, expected_fifths);
+                assert_eq!(tk.mode, Some(Mode::Minor));
+            }
         }
     }
-}
 
-#[test]
-fn test_time_signatures() {
-    let times = [
-        "(time 4 4)",
-        "(time 3 4)",
-        "(time 6 8)",
-        "(time 2 2)",
-        "(time 12 8)",
-        "(time :common)",
-        "(time :cut)",
-    ];
+    #[test]
+    fn test_flat_keys() {
+        let keys = [
+            ("(key bb :major)", -2),  // Bb major = 2 flats
+            ("(key eb :major)", -3),  // Eb major = 3 flats
+            ("(key ab :major)", -4),  // Ab major = 4 flats
+        ];
 
-    for source in times {
-        let sexpr = parse(source).unwrap();
-        let result = compile_time(&sexpr);
-        assert!(result.is_ok(), "Failed to compile: {}", source);
+        for (source, expected_fifths) in keys {
+            let sexpr = parse(source).unwrap();
+            let key = compile_key(&sexpr).unwrap();
+
+            if let KeyContent::Traditional(tk) = &key.content {
+                assert_eq!(tk.fifths, expected_fifths, "Key {} should have {} fifths", source, expected_fifths);
+            }
+        }
     }
-}
 
-#[test]
-fn test_clefs() {
-    let clefs = [
-        ("(clef :treble)", ClefSign::G, Some(2)),
-        ("(clef :bass)", ClefSign::F, Some(4)),
-        ("(clef :alto)", ClefSign::C, Some(3)),
-        ("(clef :tenor)", ClefSign::C, Some(4)),
-    ];
+    #[test]
+    fn test_time_signatures() {
+        let times = [
+            "(time 4 4)",
+            "(time 3 4)",
+            "(time 6 8)",
+            "(time 2 2)",
+            "(time 12 8)",
+            "(time :common)",
+            "(time :cut)",
+        ];
 
-    for (source, expected_sign, expected_line) in clefs {
-        let sexpr = parse(source).unwrap();
-        let clef = compile_clef(&sexpr).unwrap();
-
-        assert_eq!(clef.sign, expected_sign, "Clef {} sign mismatch", source);
-        assert_eq!(clef.line, expected_line, "Clef {} line mismatch", source);
+        for source in times {
+            let sexpr = parse(source).unwrap();
+            let result = compile_time(&sexpr);
+            assert!(result.is_ok(), "Failed to compile: {}", source);
+        }
     }
-}
 
-#[test]
-fn test_all_dynamics() {
-    let dynamics = [
-        "(pppp)", "(ppp)", "(pp)", "(p)",
-        "(mp)", "(mf)",
-        "(f)", "(ff)", "(fff)", "(ffff)",
-        "(sf)", "(sfz)", "(fp)",
-        "(cresc)", "(dim)",
-    ];
+    #[test]
+    fn test_clefs() {
+        let clefs = [
+            ("(clef :treble)", ClefSign::G, Some(2)),
+            ("(clef :bass)", ClefSign::F, Some(4)),
+            ("(clef :alto)", ClefSign::C, Some(3)),
+            ("(clef :tenor)", ClefSign::C, Some(4)),
+        ];
 
-    for source in dynamics {
-        let sexpr = parse(source).unwrap();
-        let result = compile_dynamic(&sexpr);
-        assert!(result.is_ok(), "Failed to compile dynamic: {}", source);
+        for (source, expected_sign, expected_line) in clefs {
+            let sexpr = parse(source).unwrap();
+            let clef = compile_clef(&sexpr).unwrap();
+
+            assert_eq!(clef.sign, expected_sign, "Clef {} sign mismatch", source);
+            assert_eq!(clef.line, expected_line, "Clef {} line mismatch", source);
+        }
     }
-}
 
-#[test]
-fn test_tempo_forms() {
-    let tempos = [
-        "(tempo :q 120)",
-        "(tempo :h 60)",
-        "(tempo :q. 80)",
-        r#"(tempo "Allegro" :q 132)"#,
-        r#"(tempo "Adagio")"#,
-    ];
+    #[test]
+    fn test_all_dynamics() {
+        let dynamics = [
+            "(pppp)", "(ppp)", "(pp)", "(p)",
+            "(mp)", "(mf)",
+            "(f)", "(ff)", "(fff)", "(ffff)",
+            "(sf)", "(sfz)", "(fp)",
+            "(cresc)", "(dim)",
+        ];
 
-    for source in tempos {
-        let sexpr = parse(source).unwrap();
-        let result = compile_tempo(&sexpr);
-        assert!(result.is_ok(), "Failed to compile tempo: {}", source);
+        for source in dynamics {
+            let sexpr = parse(source).unwrap();
+            let result = crate::lang::direction::compile_dynamic(&sexpr);
+            assert!(result.is_ok(), "Failed to compile dynamic: {}", source);
+        }
+    }
+
+    #[test]
+    fn test_tempo_forms() {
+        let tempos = [
+            "(tempo :q 120)",
+            "(tempo :h 60)",
+            "(tempo :q. 80)",
+            r#"(tempo "Allegro" :q 132)"#,
+            r#"(tempo "Adagio")"#,
+        ];
+
+        for source in tempos {
+            let sexpr = parse(source).unwrap();
+            let result = crate::lang::direction::compile_tempo(&sexpr);
+            assert!(result.is_ok(), "Failed to compile tempo: {}", source);
+        }
     }
 }
 ```
@@ -1024,32 +1224,52 @@ fn test_tempo_forms() {
 
 1. ✅ `(key c :major)` compiles to fifths=0, mode=major
 2. ✅ `(key g :major)` compiles to fifths=1
-3. ✅ `(key a :minor)` compiles to fifths=0, mode=minor
-4. ✅ All modes compile correctly: major, minor, dorian, etc.
-5. ✅ `(time 4 4)` compiles to beats="4", beat-type="4"
-6. ✅ `(time :common)` includes Common symbol
-7. ✅ `(clef :treble)` compiles to G clef on line 2
-8. ✅ `(clef :bass)` compiles to F clef on line 4
-9. ✅ All dynamics compile: pp, p, mp, mf, f, ff, sf, etc.
-10. ✅ Wedges compile: cresc, dim
-11. ✅ `(tempo :q 120)` compiles to metronome
-12. ✅ All tests pass
+3. ✅ `(key f# :major)` compiles to fifths=6
+4. ✅ `(key bb :minor)` compiles to fifths=-5, mode=minor
+5. ✅ `(key a :minor)` compiles to fifths=0, mode=minor
+6. ✅ All modes compile correctly: major, minor, dorian, etc.
+7. ✅ `(time 4 4)` compiles to beats="4", beat-type="4"
+8. ✅ `(time :common)` includes Common symbol
+9. ✅ `(clef :treble)` compiles to G clef on line 2
+10. ✅ `(clef :bass)` compiles to F clef on line 4
+11. ✅ All dynamics compile: pp, p, mp, mf, f, ff, sf, etc.
+12. ✅ Wedges compile: cresc, dim
+13. ✅ `(tempo :q 120)` compiles to metronome
+14. ✅ All tests pass
 
 ---
 
 ## Implementation Notes
 
-1. **Key signature math** — The fifths value is computed from root + mode offset
+1. **Key signature math** — The fifths value is computed from root + root_alter + mode offset. Sharps add 7, flats subtract 7.
 
-2. **Mode strings** — Accept both keyword (`:major`) and symbol (`major`) forms
+2. **KeySpec includes `root_alter`** — For keys like F# major and Bb minor, the `root_alter` field captures the accidental.
 
-3. **Time symbol** — Common and cut time set both the signature AND the symbol attribute
+3. **Mode strings** — Accept both keyword (`:major`) and symbol (`major`) forms
 
-4. **Clef variants** — Support common names and octave-transposing variants
+4. **Time struct** — Has NO `separator` field. `TimeContent::Measured` is a struct variant, not a tuple with `TimeMeasured` struct.
 
-5. **Dynamic placement** — Default to `below` for dynamics, `above` for tempo
+5. **TimeContent::SenzaMisura** — Takes `String`, not `Option<String>`
 
-6. **Missing IR types** — You may need to add `Default` impls to various IR types
+6. **Clef variants** — Support common names and octave-transposing variants
+
+7. **Dynamic placement** — Default to `below` for dynamics, `above` for tempo
+
+8. **DynamicElement not DynamicsContent** — The IR uses `DynamicElement` enum with UPPERCASE variants (e.g., `DynamicElement::FF`)
+
+9. **Dynamics.print_style** — Required field, use `PrintStyle::default()`
+
+10. **DirectionTypeContent variants take Vec** — `Words(Vec<Words>)`, `Rehearsal(Vec<FormattedText>)`, `Segno(Vec<Segno>)`, `Coda(Vec<Coda>)`
+
+11. **No BeatUnit type** — Use `NoteTypeValue` directly for metronome beat units
+
+12. **beat_unit_dots is u32** — Not u8
+
+13. **All Direction structs have print_style** — `Words`, `Metronome`, `Pedal`, `Segno`, `Coda` all need `print_style: PrintStyle::default()`
+
+14. **Wedge has position field** — And `spread`, `line_type`, `color` fields
+
+15. **parse_u8 handles Integer** — Must handle both `Sexpr::Integer` and `Sexpr::Symbol`
 
 ---
 

@@ -3,7 +3,6 @@
 > **For:** Claude Code (Opus) with Rust-SKILL.md agents
 > **Scope:** Pitch parsing, duration parsing, note compilation, rest compilation
 > **Depends On:** Milestone 1 (Foundation)
-> **Estimated Implementation Time:** 3-4 hours
 
 ---
 
@@ -18,7 +17,7 @@ This milestone implements the core musical element parsers and compilers:
 
 ---
 
-## Task 1: Pitch Parsing (`src/fermata/pitch.rs`)
+## Task 1: Pitch Parsing (`src/lang/pitch.rs`)
 
 Parse scientific pitch notation into Fermata AST and compile to IR.
 
@@ -32,7 +31,8 @@ Parse scientific pitch notation into Fermata AST and compile to IR.
 //! - `cn4` — C natural (explicit)
 //! - `c+4` — C quarter-sharp (microtone)
 
-use crate::ir::pitch::{Pitch, Step, Octave, Semitones};
+use crate::ir::pitch::{Pitch, Step};
+use crate::ir::common::{Octave, Semitones};
 use crate::sexpr::Sexpr;
 use super::ast::{FermataPitch, PitchStep, PitchAlter};
 use super::error::{CompileError, CompileResult};
@@ -69,7 +69,7 @@ pub fn parse_pitch_str(s: &str) -> CompileResult<FermataPitch> {
                     _ => return Err(CompileError::InvalidPitch(format!("invalid alteration in '{}'", s))),
                 });
             }
-            'b' if chars.clone().skip(1).next().map(|c| c.is_ascii_digit()).unwrap_or(false) == false => {
+            'b' if !chars.clone().skip(1).next().map(|c| c.is_ascii_digit()).unwrap_or(false) => {
                 chars.next();
                 alter = Some(match alter {
                     None => PitchAlter::Flat,
@@ -142,12 +142,13 @@ pub fn compile_pitch(pitch: &FermataPitch) -> CompileResult<Pitch> {
         PitchStep::B => Step::B,
     };
 
-    let alter = pitch.alter.as_ref().map(|a| Semitones(a.to_semitones() as f32));
+    // Semitones and Octave are type aliases (f64 and u8), not newtypes
+    let alter: Option<Semitones> = pitch.alter.as_ref().map(|a| a.to_semitones());
 
     Ok(Pitch {
         step,
         alter,
-        octave: Octave(pitch.octave),
+        octave: pitch.octave,
     })
 }
 
@@ -220,8 +221,10 @@ mod tests {
     fn test_compile_to_ir() {
         let p = parse_pitch("f#5").unwrap();
         assert_eq!(p.step, Step::F);
-        assert_eq!(p.alter, Some(Semitones(1.0)));
-        assert_eq!(p.octave, Octave(5));
+        // Semitones is a type alias (f64), not a newtype
+        assert_eq!(p.alter, Some(1.0));
+        // Octave is a type alias (u8), not a newtype
+        assert_eq!(p.octave, 5);
     }
 
     #[test]
@@ -236,7 +239,7 @@ mod tests {
 
 ---
 
-## Task 2: Duration Parsing (`src/fermata/duration.rs`)
+## Task 2: Duration Parsing (`src/lang/duration.rs`)
 
 Parse duration keywords and compile to IR.
 
@@ -244,12 +247,13 @@ Parse duration keywords and compile to IR.
 //! Duration parsing for Fermata syntax.
 //!
 //! Supports multiple naming conventions:
-//! - Short: `:w`, `:h`, `:q`, `:8`, `:16`, `:32`, `:64`
+//! - Short: `:w`, `:h`, `:q`, `:8`, `:16`, `:32`, `:64`, `:128`, `:256`, `:512`, `:1024`
 //! - Long: `:whole`, `:half`, `:quarter`, `:eighth`, `:sixteenth`
 //! - British: `:semibreve`, `:minim`, `:crotchet`, `:quaver`, `:semiquaver`
 //! - Dots: `:q.` (dotted), `:h..` (double-dotted)
 
-use crate::ir::duration::{NoteType, NoteTypeValue, Dot, PositiveDivisions};
+use crate::ir::common::PositiveDivisions;
+use crate::ir::duration::{NoteType, NoteTypeValue, Dot};
 use crate::sexpr::Sexpr;
 use super::ast::{FermataDuration, DurationBase};
 use super::error::{CompileError, CompileResult};
@@ -261,6 +265,10 @@ pub fn parse_duration(s: &str) -> CompileResult<FermataDuration> {
 
     // Handle keyword prefix
     let s = if s.starts_with(':') { &s[1..] } else { s };
+
+    if s.is_empty() {
+        return Err(CompileError::InvalidDuration("empty duration".to_string()));
+    }
 
     // Count trailing dots
     let dot_count = s.chars().rev().take_while(|&c| c == '.').count() as u8;
@@ -283,6 +291,8 @@ fn parse_duration_base(s: &str) -> CompileResult<DurationBase> {
         "64" => Ok(DurationBase::SixtyFourth),
         "128" => Ok(DurationBase::OneTwentyEighth),
         "256" => Ok(DurationBase::TwoFiftySixth),
+        "512" => Ok(DurationBase::FiveTwelfth),
+        "1024" => Ok(DurationBase::OneThousandTwentyFourth),
 
         // Long forms (American)
         "whole" => Ok(DurationBase::Whole),
@@ -292,15 +302,21 @@ fn parse_duration_base(s: &str) -> CompileResult<DurationBase> {
         "sixteenth" => Ok(DurationBase::Sixteenth),
         "thirty-second" | "thirtysecond" => Ok(DurationBase::ThirtySecond),
         "sixty-fourth" | "sixtyfourth" => Ok(DurationBase::SixtyFourth),
+        "one-twenty-eighth" | "onetwentyeighth" => Ok(DurationBase::OneTwentyEighth),
+        "two-fifty-sixth" | "twofiftysixth" => Ok(DurationBase::TwoFiftySixth),
+        "five-twelfth" | "fivetwelfth" => Ok(DurationBase::FiveTwelfth),
+        "one-thousand-twenty-fourth" | "onethousandtwentyfourth" => Ok(DurationBase::OneThousandTwentyFourth),
 
-        // British forms
+        // British forms (minim maps to Half, not a separate variant)
         "semibreve" => Ok(DurationBase::Whole),
-        "minim" => Ok(DurationBase::Minim),
+        "minim" => Ok(DurationBase::Half),
         "crotchet" => Ok(DurationBase::Quarter),
         "quaver" => Ok(DurationBase::Eighth),
         "semiquaver" => Ok(DurationBase::Sixteenth),
         "demisemiquaver" => Ok(DurationBase::ThirtySecond),
         "hemidemisemiquaver" => Ok(DurationBase::SixtyFourth),
+        "semihemidemisemiquaver" => Ok(DurationBase::OneTwentyEighth),
+        "demisemihemidemisemiquaver" => Ok(DurationBase::TwoFiftySixth),
 
         // Breve and long
         "breve" | "double-whole" => Ok(DurationBase::Breve),
@@ -313,7 +329,13 @@ fn parse_duration_base(s: &str) -> CompileResult<DurationBase> {
 
 /// Compile Fermata duration to IR NoteType
 pub fn compile_duration_type(dur: &FermataDuration) -> CompileResult<NoteType> {
-    let value = match dur.base {
+    let value = duration_base_to_note_type_value(dur.base);
+    Ok(NoteType { value, size: None })
+}
+
+/// Convert DurationBase to NoteTypeValue
+fn duration_base_to_note_type_value(base: DurationBase) -> NoteTypeValue {
+    match base {
         DurationBase::Maxima => NoteTypeValue::Maxima,
         DurationBase::Long => NoteTypeValue::Long,
         DurationBase::Breve => NoteTypeValue::Breve,
@@ -326,9 +348,9 @@ pub fn compile_duration_type(dur: &FermataDuration) -> CompileResult<NoteType> {
         DurationBase::SixtyFourth => NoteTypeValue::N64th,
         DurationBase::OneTwentyEighth => NoteTypeValue::N128th,
         DurationBase::TwoFiftySixth => NoteTypeValue::N256th,
-    };
-
-    Ok(NoteType { value, size: None })
+        DurationBase::FiveTwelfth => NoteTypeValue::N512th,
+        DurationBase::OneThousandTwentyFourth => NoteTypeValue::N1024th,
+    }
 }
 
 /// Compile duration to IR dots vector
@@ -337,30 +359,18 @@ pub fn compile_dots(dur: &FermataDuration) -> Vec<Dot> {
 }
 
 /// Compile duration to divisions value
+/// PositiveDivisions is a type alias (u64), not a newtype
 pub fn compile_duration_divisions(dur: &FermataDuration) -> PositiveDivisions {
     use super::defaults::duration_to_divisions;
 
-    let note_type = match dur.base {
-        DurationBase::Maxima => NoteTypeValue::Maxima,
-        DurationBase::Long => NoteTypeValue::Long,
-        DurationBase::Breve => NoteTypeValue::Breve,
-        DurationBase::Whole => NoteTypeValue::Whole,
-        DurationBase::Half => NoteTypeValue::Half,
-        DurationBase::Quarter => NoteTypeValue::Quarter,
-        DurationBase::Eighth => NoteTypeValue::Eighth,
-        DurationBase::Sixteenth => NoteTypeValue::N16th,
-        DurationBase::ThirtySecond => NoteTypeValue::N32nd,
-        DurationBase::SixtyFourth => NoteTypeValue::N64th,
-        DurationBase::OneTwentyEighth => NoteTypeValue::N128th,
-        DurationBase::TwoFiftySixth => NoteTypeValue::N256th,
-    };
-
-    PositiveDivisions(duration_to_divisions(note_type, dur.dots))
+    let note_type = duration_base_to_note_type_value(dur.base);
+    duration_to_divisions(note_type, dur.dots)
 }
 
 /// Parse duration from S-expression keyword
 pub fn parse_duration_sexpr(sexpr: &Sexpr) -> CompileResult<FermataDuration> {
     match sexpr {
+        Sexpr::Keyword(k) => parse_duration(k),
         Sexpr::Symbol(s) if s.starts_with(':') => parse_duration(s),
         Sexpr::Symbol(s) => parse_duration(s),
         _ => Err(CompileError::type_mismatch("duration keyword", format!("{:?}", sexpr))),
@@ -403,6 +413,10 @@ mod tests {
 
         let d = parse_duration(":semibreve").unwrap();
         assert_eq!(d.base, DurationBase::Whole);
+
+        // Minim maps to Half (not a separate variant)
+        let d = parse_duration(":minim").unwrap();
+        assert_eq!(d.base, DurationBase::Half);
     }
 
     #[test]
@@ -414,6 +428,15 @@ mod tests {
         let d = parse_duration(":h..").unwrap();
         assert_eq!(d.base, DurationBase::Half);
         assert_eq!(d.dots, 2);
+    }
+
+    #[test]
+    fn test_parse_very_short_durations() {
+        let d = parse_duration(":512").unwrap();
+        assert_eq!(d.base, DurationBase::FiveTwelfth);
+
+        let d = parse_duration(":1024").unwrap();
+        assert_eq!(d.base, DurationBase::OneThousandTwentyFourth);
     }
 
     #[test]
@@ -431,15 +454,16 @@ mod tests {
     fn test_duration_divisions() {
         let d = parse_duration(":q").unwrap();
         let divs = compile_duration_divisions(&d);
-        assert_eq!(divs.0, DEFAULT_DIVISIONS);
+        // PositiveDivisions is a type alias, so compare directly
+        assert_eq!(divs, DEFAULT_DIVISIONS);
 
         let d = parse_duration(":h").unwrap();
         let divs = compile_duration_divisions(&d);
-        assert_eq!(divs.0, DEFAULT_DIVISIONS * 2);
+        assert_eq!(divs, DEFAULT_DIVISIONS * 2);
 
         let d = parse_duration(":q.").unwrap();
         let divs = compile_duration_divisions(&d);
-        assert_eq!(divs.0, DEFAULT_DIVISIONS + DEFAULT_DIVISIONS / 2);
+        assert_eq!(divs, DEFAULT_DIVISIONS + DEFAULT_DIVISIONS / 2);
     }
 
     #[test]
@@ -450,11 +474,9 @@ mod tests {
 }
 ```
 
-**Note:** Add `Minim` alias to the AST `DurationBase` enum if not already present (it's an alias for `Half` in British terminology).
-
 ---
 
-## Task 3: Note Compilation (`src/fermata/note.rs`)
+## Task 3: Note Compilation (`src/lang/note.rs`)
 
 Compile note S-expressions to IR.
 
@@ -463,12 +485,18 @@ Compile note S-expressions to IR.
 //!
 //! Compiles `(note c4 :q)` to IR Note structure.
 
-use crate::ir::note::{Note, NoteContent, FullNote};
-use crate::ir::pitch::{Pitch, PitchRestUnpitched};
-use crate::ir::duration::{NoteType, Dot, PositiveDivisions};
+use crate::ir::common::{Position, PositiveDivisions, StartStop, StartStopContinue, EmptyPlacement};
+use crate::ir::note::{Note, NoteContent, FullNote, Tie};
+use crate::ir::pitch::PitchRestUnpitched;
+use crate::ir::duration::{NoteType, Dot};
 use crate::ir::beam::{Stem, StemValue};
+use crate::ir::notation::{
+    Notations, NotationContent, Articulations, ArticulationElement, StrongAccent,
+    Ornaments, OrnamentWithAccidentals, OrnamentElement, EmptyTrillSound, Mordent, Turn,
+    Slur, Tied, Fermata,
+};
 use crate::sexpr::Sexpr;
-use super::ast::{FermataNote, FermataPitch, FermataDuration, StemDirection};
+use super::ast::{FermataNote, FermataDuration, StemDirection, Articulation, Ornament};
 use super::error::{CompileError, CompileResult};
 use super::pitch::{parse_pitch_sexpr, compile_pitch};
 use super::duration::{parse_duration_sexpr, compile_duration_type, compile_dots, compile_duration_divisions};
@@ -516,7 +544,8 @@ fn parse_note_form(args: &[Sexpr]) -> CompileResult<FermataNote> {
     let mut ornaments = Vec::new();
     let mut tie = None;
     let mut slur = None;
-    let mut lyric = None;
+    let mut fermata = None;
+    let lyric = None;
 
     let mut i = 2;
     while i < args.len() {
@@ -554,18 +583,19 @@ fn parse_note_form(args: &[Sexpr]) -> CompileResult<FermataNote> {
                     }
                 }
                 // Articulation shorthands
-                "staccato" => articulations.push(super::ast::Articulation::Staccato),
-                "accent" => articulations.push(super::ast::Articulation::Accent),
-                "tenuto" => articulations.push(super::ast::Articulation::Tenuto),
-                "marcato" => articulations.push(super::ast::Articulation::StrongAccent),
-                "fermata" => articulations.push(super::ast::Articulation::Fermata),
+                "staccato" => articulations.push(Articulation::Staccato),
+                "accent" => articulations.push(Articulation::Accent),
+                "tenuto" => articulations.push(Articulation::Tenuto),
+                "marcato" => articulations.push(Articulation::StrongAccent),
+                // Fermata is separate (not an Articulation in our AST)
+                "fermata" => fermata = Some(super::ast::FermataMark::default()),
                 // Ornament shorthands
-                "trill" => ornaments.push(super::ast::Ornament::Trill),
-                "mordent" => ornaments.push(super::ast::Ornament::Mordent),
-                "turn" => ornaments.push(super::ast::Ornament::Turn),
+                "trill" => ornaments.push(Ornament::Trill),
+                "mordent" => ornaments.push(Ornament::Mordent),
+                "turn" => ornaments.push(Ornament::Turn),
                 _ => {
                     // Unknown keyword - skip value if present
-                    if i < args.len() && !args[i].is_keyword() {
+                    if i < args.len() && args[i].as_keyword().is_none() {
                         i += 1;
                     }
                 }
@@ -589,8 +619,16 @@ fn parse_note_form(args: &[Sexpr]) -> CompileResult<FermataNote> {
     })
 }
 
+/// Parse an integer from S-expression (handles both Symbol and Integer)
 fn parse_u32(sexpr: &Sexpr) -> CompileResult<u32> {
     match sexpr {
+        Sexpr::Integer(n) => {
+            if *n >= 0 {
+                Ok(*n as u32)
+            } else {
+                Err(CompileError::type_mismatch("positive integer", n.to_string()))
+            }
+        }
         Sexpr::Symbol(s) => s.parse::<u32>()
             .map_err(|_| CompileError::type_mismatch("integer", s.clone())),
         _ => Err(CompileError::type_mismatch("integer", format!("{:?}", sexpr))),
@@ -607,10 +645,10 @@ fn parse_stem(sexpr: &Sexpr) -> CompileResult<StemDirection> {
     }
 }
 
-fn parse_start_stop(sexpr: &Sexpr) -> CompileResult<crate::ir::common::StartStop> {
+fn parse_start_stop(sexpr: &Sexpr) -> CompileResult<StartStop> {
     match sexpr.as_symbol() {
-        Some("start") => Ok(crate::ir::common::StartStop::Start),
-        Some("stop") => Ok(crate::ir::common::StartStop::Stop),
+        Some("start") => Ok(StartStop::Start),
+        Some("stop") => Ok(StartStop::Stop),
         _ => Err(CompileError::type_mismatch("start/stop", format!("{:?}", sexpr))),
     }
 }
@@ -633,33 +671,43 @@ pub fn compile_fermata_note(note: &FermataNote) -> CompileResult<Note> {
         ties: compile_ties(&note.tie),
     };
 
-    let stem = note.stem.as_ref().map(|s| compile_stem(s));
+    let stem = note.stem.as_ref().map(compile_stem_ir);
 
     Ok(Note {
+        // Position/playback attributes (defaults for user-facing syntax)
+        position: Position::default(),
+        dynamics: None,
+        end_dynamics: None,
+        attack: None,
+        release: None,
+        pizzicato: None,
+        print_object: None,
+        // Core content
         content,
+        // Common fields
+        instrument: Vec::new(),
         voice: Some(note.voice.map(|v| v.to_string()).unwrap_or_else(|| DEFAULT_VOICE.to_string())),
         r#type: Some(note_type),
         dots,
         accidental: None,  // Derived from pitch in Phase 5 extension
         time_modification: None,
         stem,
+        notehead: None,
         staff: note.staff,
         beams: Vec::new(),  // Auto-beaming TBD
         notations: compile_notations(note)?,
         lyrics: Vec::new(),  // Lyric compilation TBD
-        notehead: None,
-        instrument: None,
     })
 }
 
-fn compile_ties(tie: &Option<crate::ir::common::StartStop>) -> Vec<crate::ir::note::Tie> {
-    tie.as_ref().map(|t| vec![crate::ir::note::Tie {
+fn compile_ties(tie: &Option<StartStop>) -> Vec<Tie> {
+    tie.as_ref().map(|t| vec![Tie {
         r#type: *t,
         time_only: None,
     }]).unwrap_or_default()
 }
 
-fn compile_stem(dir: &StemDirection) -> Stem {
+fn compile_stem_ir(dir: &StemDirection) -> Stem {
     let value = match dir {
         StemDirection::Up => StemValue::Up,
         StemDirection::Down => StemValue::Down,
@@ -674,45 +722,43 @@ fn compile_stem(dir: &StemDirection) -> Stem {
     }
 }
 
-fn compile_notations(note: &FermataNote) -> CompileResult<Vec<crate::ir::notation::Notations>> {
-    use crate::ir::notation::*;
-
+fn compile_notations(note: &FermataNote) -> CompileResult<Vec<Notations>> {
     let mut content = Vec::new();
 
     // Compile articulations
+    // ArticulationElement uses EmptyPlacement for most articulations, not separate structs
     if !note.articulations.is_empty() {
-        let arts: Vec<ArticulationContent> = note.articulations.iter()
-            .filter_map(|a| match a {
-                super::ast::Articulation::Staccato => Some(ArticulationContent::Staccato(Staccato::default())),
-                super::ast::Articulation::Accent => Some(ArticulationContent::Accent(Accent::default())),
-                super::ast::Articulation::Tenuto => Some(ArticulationContent::Tenuto(Tenuto::default())),
-                super::ast::Articulation::StrongAccent => Some(ArticulationContent::StrongAccent(StrongAccent::default())),
-                super::ast::Articulation::Fermata => None, // Fermata goes elsewhere
-                _ => None,
+        let arts: Vec<ArticulationElement> = note.articulations.iter()
+            .map(|a| match a {
+                Articulation::Staccato => ArticulationElement::Staccato(EmptyPlacement::default()),
+                Articulation::Accent => ArticulationElement::Accent(EmptyPlacement::default()),
+                Articulation::Tenuto => ArticulationElement::Tenuto(EmptyPlacement::default()),
+                Articulation::StrongAccent => ArticulationElement::StrongAccent(StrongAccent::default()),
+                Articulation::Staccatissimo => ArticulationElement::Staccatissimo(EmptyPlacement::default()),
+                Articulation::Spiccato => ArticulationElement::Spiccato(EmptyPlacement::default()),
+                Articulation::DetachedLegato => ArticulationElement::DetachedLegato(EmptyPlacement::default()),
             })
             .collect();
 
         if !arts.is_empty() {
-            content.push(NotationContent::Articulations(Articulations { content: arts }));
-        }
-    }
-
-    // Compile fermata separately
-    for art in &note.articulations {
-        if matches!(art, super::ast::Articulation::Fermata) {
-            content.push(NotationContent::Fermata(Fermata::default()));
+            // Articulations is boxed in NotationContent
+            content.push(NotationContent::Articulations(Box::new(Articulations { content: arts })));
         }
     }
 
     // Compile ornaments
+    // OrnamentElement uses EmptyTrillSound for TrillMark, concrete structs for Mordent/Turn
     if !note.ornaments.is_empty() {
         let orns: Vec<OrnamentWithAccidentals> = note.ornaments.iter()
             .map(|o| {
                 let ornament = match o {
-                    super::ast::Ornament::Trill => OrnamentContent::TrillMark(TrillMark::default()),
-                    super::ast::Ornament::Mordent => OrnamentContent::Mordent(Mordent::default()),
-                    super::ast::Ornament::Turn => OrnamentContent::Turn(Turn::default()),
-                    _ => OrnamentContent::TrillMark(TrillMark::default()),
+                    Ornament::Trill => OrnamentElement::TrillMark(EmptyTrillSound::default()),
+                    Ornament::Mordent => OrnamentElement::Mordent(Mordent::default()),
+                    Ornament::InvertedMordent => OrnamentElement::InvertedMordent(Mordent::default()),
+                    Ornament::Turn => OrnamentElement::Turn(Turn::default()),
+                    Ornament::InvertedTurn => OrnamentElement::InvertedTurn(Turn::default()),
+                    Ornament::DelayedTurn => OrnamentElement::DelayedTurn(Turn::default()),
+                    Ornament::Shake => OrnamentElement::Shake(EmptyTrillSound::default()),
                 };
                 OrnamentWithAccidentals {
                     ornament,
@@ -721,30 +767,54 @@ fn compile_notations(note: &FermataNote) -> CompileResult<Vec<crate::ir::notatio
             })
             .collect();
 
-        content.push(NotationContent::Ornaments(Ornaments { content: orns }));
+        // Ornaments is boxed in NotationContent
+        content.push(NotationContent::Ornaments(Box::new(Ornaments { content: orns })));
     }
 
     // Compile slur
+    // Slur.number is NumberLevel (u8), not Option<u8> - it's required
     if let Some(action) = &note.slur {
         content.push(NotationContent::Slur(Slur {
-            r#type: *action,
-            number: Some(1),
-            ..Default::default()
+            r#type: start_stop_to_continue(*action),
+            number: 1,  // Required field, not Option
+            line_type: None,
+            position: Default::default(),
+            placement: None,
+            orientation: None,
+            color: None,
         }));
     }
 
     // Compile tied (visual)
+    // Tied.r#type is StartStopContinue, not StartStop
     if let Some(action) = &note.tie {
         content.push(NotationContent::Tied(Tied {
-            r#type: *action,
-            ..Default::default()
+            r#type: start_stop_to_continue(*action),
+            number: None,
+            line_type: None,
+            position: Default::default(),
+            placement: None,
+            orientation: None,
+            color: None,
         }));
     }
 
     if content.is_empty() {
         Ok(Vec::new())
     } else {
-        Ok(vec![Notations { content }])
+        Ok(vec![Notations {
+            print_object: None,
+            content,
+            editorial: Default::default(),
+        }])
+    }
+}
+
+/// Convert StartStop to StartStopContinue (for Tied and Slur)
+fn start_stop_to_continue(ss: StartStop) -> StartStopContinue {
+    match ss {
+        StartStop::Start => StartStopContinue::Start,
+        StartStop::Stop => StartStopContinue::Stop,
     }
 }
 
@@ -752,6 +822,7 @@ fn compile_notations(note: &FermataNote) -> CompileResult<Vec<crate::ir::notatio
 mod tests {
     use super::*;
     use crate::sexpr::parser::parse;
+    use crate::ir::duration::NoteTypeValue;
 
     #[test]
     fn test_simple_note() {
@@ -759,7 +830,7 @@ mod tests {
         let note = compile_note(&sexpr).unwrap();
 
         assert!(matches!(note.content, NoteContent::Regular { .. }));
-        assert_eq!(note.r#type.as_ref().unwrap().value, crate::ir::duration::NoteTypeValue::Quarter);
+        assert_eq!(note.r#type.as_ref().unwrap().value, NoteTypeValue::Quarter);
     }
 
     #[test]
@@ -797,6 +868,14 @@ mod tests {
             panic!("Expected regular note");
         }
     }
+
+    #[test]
+    fn test_note_with_integer_voice() {
+        // Test that Integer sexpr works for voice
+        let sexpr = parse("(note c4 :q :voice 3)").unwrap();
+        let note = compile_note(&sexpr).unwrap();
+        assert_eq!(note.voice, Some("3".to_string()));
+    }
 }
 ```
 
@@ -804,7 +883,7 @@ mod tests {
 
 ## Task 4: Rest Compilation
 
-Add rest handling to `src/fermata/note.rs`:
+Add rest handling to `src/lang/note.rs`:
 
 ```rust
 /// Compile a rest S-expression
@@ -854,7 +933,8 @@ fn parse_rest_form(args: &[Sexpr]) -> CompileResult<super::ast::FermataRest> {
                     measure_rest = true;
                 }
                 _ => {
-                    if i < args.len() && !args[i].is_keyword() {
+                    // Unknown keyword - skip value if present
+                    if i < args.len() && args[i].as_keyword().is_none() {
                         i += 1;
                     }
                 }
@@ -874,7 +954,6 @@ fn parse_rest_form(args: &[Sexpr]) -> CompileResult<super::ast::FermataRest> {
 
 fn compile_fermata_rest(rest: &super::ast::FermataRest) -> CompileResult<Note> {
     use crate::ir::note::Rest;
-    use crate::ir::pitch::PitchRestUnpitched;
 
     let note_type = compile_duration_type(&rest.duration)?;
     let dots = compile_dots(&rest.duration);
@@ -896,19 +975,29 @@ fn compile_fermata_rest(rest: &super::ast::FermataRest) -> CompileResult<Note> {
     };
 
     Ok(Note {
+        // Position/playback attributes (defaults for user-facing syntax)
+        position: Position::default(),
+        dynamics: None,
+        end_dynamics: None,
+        attack: None,
+        release: None,
+        pizzicato: None,
+        print_object: None,
+        // Core content
         content,
+        // Common fields
+        instrument: Vec::new(),
         voice: Some(rest.voice.map(|v| v.to_string()).unwrap_or_else(|| DEFAULT_VOICE.to_string())),
         r#type: Some(note_type),
         dots,
         accidental: None,
         time_modification: None,
         stem: None,
+        notehead: None,
         staff: rest.staff,
         beams: Vec::new(),
         notations: Vec::new(),
         lyrics: Vec::new(),
-        notehead: None,
-        instrument: None,
     })
 }
 
@@ -940,95 +1029,127 @@ mod rest_tests {
             }
         }
     }
+
+    #[test]
+    fn test_rest_with_voice() {
+        let sexpr = parse("(rest :q :voice 2)").unwrap();
+        let note = compile_rest(&sexpr).unwrap();
+        assert_eq!(note.voice, Some("2".to_string()));
+    }
 }
 ```
 
 ---
 
-## Task 5: Integration Tests
+## Task 5: Additional Integration Tests (inline)
 
-Create `tests/fermata_core_elements.rs`:
+Add comprehensive tests to `src/lang/note.rs`:
 
 ```rust
-//! Integration tests for core musical elements.
+#[cfg(test)]
+mod integration_tests {
+    use super::*;
+    use crate::sexpr::parser::parse;
+    use crate::ir::pitch::Step;
+    use crate::ir::duration::NoteTypeValue;
 
-use fermata::fermata::compiler::{compile_note_str, compile_pitch_str};
-use fermata::ir::pitch::{Step, Octave, Semitones};
-use fermata::ir::duration::NoteTypeValue;
-use fermata::ir::note::NoteContent;
-
-#[test]
-fn test_pitch_c4() {
-    let pitch = compile_pitch_str("c4").unwrap();
-    assert_eq!(pitch.step, Step::C);
-    assert_eq!(pitch.octave, Octave(4));
-    assert_eq!(pitch.alter, None);
-}
-
-#[test]
-fn test_pitch_f_sharp_5() {
-    let pitch = compile_pitch_str("f#5").unwrap();
-    assert_eq!(pitch.step, Step::F);
-    assert_eq!(pitch.octave, Octave(5));
-    assert_eq!(pitch.alter, Some(Semitones(1.0)));
-}
-
-#[test]
-fn test_pitch_b_flat_3() {
-    let pitch = compile_pitch_str("bb3").unwrap();
-    assert_eq!(pitch.step, Step::B);
-    assert_eq!(pitch.octave, Octave(3));
-    assert_eq!(pitch.alter, Some(Semitones(-1.0)));
-}
-
-#[test]
-fn test_note_quarter() {
-    let note = compile_note_str("(note c4 :q)").unwrap();
-
-    match note.content {
-        NoteContent::Regular { full_note, .. } => {
-            assert!(!full_note.chord);
-        }
-        _ => panic!("Expected regular note"),
+    #[test]
+    fn test_pitch_c4() {
+        let pitch = parse_pitch("c4").unwrap();
+        assert_eq!(pitch.step, Step::C);
+        // Octave is type alias u8, not newtype
+        assert_eq!(pitch.octave, 4);
+        assert_eq!(pitch.alter, None);
     }
 
-    assert_eq!(note.r#type.as_ref().unwrap().value, NoteTypeValue::Quarter);
-}
-
-#[test]
-fn test_note_dotted_half() {
-    let note = compile_note_str("(note d5 :h.)").unwrap();
-
-    assert_eq!(note.r#type.as_ref().unwrap().value, NoteTypeValue::Half);
-    assert_eq!(note.dots.len(), 1);
-}
-
-#[test]
-fn test_note_all_durations() {
-    // Verify all duration forms compile
-    let durations = [
-        ":w", ":h", ":q", ":8", ":16", ":32",
-        ":whole", ":half", ":quarter", ":eighth",
-        ":semibreve", ":minim", ":crotchet", ":quaver",
-    ];
-
-    for dur in durations {
-        let source = format!("(note c4 {})", dur);
-        let result = compile_note_str(&source);
-        assert!(result.is_ok(), "Failed to compile duration {}: {:?}", dur, result);
+    #[test]
+    fn test_pitch_f_sharp_5() {
+        let pitch = parse_pitch("f#5").unwrap();
+        assert_eq!(pitch.step, Step::F);
+        assert_eq!(pitch.octave, 5);
+        // Semitones is type alias f64, not newtype
+        assert_eq!(pitch.alter, Some(1.0));
     }
-}
 
-#[test]
-fn test_rest_basic() {
-    let note = compile_note_str("(rest :q)").unwrap();
+    #[test]
+    fn test_pitch_b_flat_3() {
+        let pitch = parse_pitch("bb3").unwrap();
+        assert_eq!(pitch.step, Step::B);
+        assert_eq!(pitch.octave, 3);
+        assert_eq!(pitch.alter, Some(-1.0));
+    }
 
-    match note.content {
-        NoteContent::Regular { full_note, .. } => {
-            use fermata::ir::pitch::PitchRestUnpitched;
-            assert!(matches!(full_note.content, PitchRestUnpitched::Rest(_)));
+    #[test]
+    fn test_note_quarter() {
+        let sexpr = parse("(note c4 :q)").unwrap();
+        let note = compile_note(&sexpr).unwrap();
+
+        match note.content {
+            NoteContent::Regular { full_note, .. } => {
+                assert!(!full_note.chord);
+            }
+            _ => panic!("Expected regular note"),
         }
-        _ => panic!("Expected regular note content"),
+
+        assert_eq!(note.r#type.as_ref().unwrap().value, NoteTypeValue::Quarter);
+    }
+
+    #[test]
+    fn test_note_dotted_half() {
+        let sexpr = parse("(note d5 :h.)").unwrap();
+        let note = compile_note(&sexpr).unwrap();
+
+        assert_eq!(note.r#type.as_ref().unwrap().value, NoteTypeValue::Half);
+        assert_eq!(note.dots.len(), 1);
+    }
+
+    #[test]
+    fn test_note_all_durations() {
+        // Verify all duration forms compile
+        let durations = [
+            ":w", ":h", ":q", ":8", ":16", ":32", ":64", ":128", ":256", ":512", ":1024",
+            ":whole", ":half", ":quarter", ":eighth",
+            ":semibreve", ":minim", ":crotchet", ":quaver",
+        ];
+
+        for dur in durations {
+            let source = format!("(note c4 {})", dur);
+            let sexpr = parse(&source).unwrap();
+            let result = compile_note(&sexpr);
+            assert!(result.is_ok(), "Failed to compile duration {}: {:?}", dur, result);
+        }
+    }
+
+    #[test]
+    fn test_rest_basic() {
+        let sexpr = parse("(rest :q)").unwrap();
+        let note = compile_rest(&sexpr).unwrap();
+
+        match note.content {
+            NoteContent::Regular { full_note, .. } => {
+                assert!(matches!(full_note.content, PitchRestUnpitched::Rest(_)));
+            }
+            _ => panic!("Expected regular note content"),
+        }
+    }
+
+    #[test]
+    fn test_note_with_multiple_articulations() {
+        let sexpr = parse("(note c4 :q :staccato :accent)").unwrap();
+        let note = compile_note(&sexpr).unwrap();
+
+        assert!(!note.notations.is_empty());
+        // Should have articulations content
+        let notations = &note.notations[0];
+        assert!(!notations.content.is_empty());
+    }
+
+    #[test]
+    fn test_note_with_ornament() {
+        let sexpr = parse("(note c4 :q :trill)").unwrap();
+        let note = compile_note(&sexpr).unwrap();
+
+        assert!(!note.notations.is_empty());
     }
 }
 ```
@@ -1038,27 +1159,46 @@ fn test_rest_basic() {
 ## Acceptance Criteria
 
 1. ✅ Pitch parsing handles all cases: `c4`, `f#5`, `bb3`, `cn4`, `c+4`, `cx4`
-2. ✅ Duration parsing handles all aliases: `:q`, `:quarter`, `:crotchet`
+2. ✅ Duration parsing handles all aliases: `:q`, `:quarter`, `:crotchet`, `:minim`
 3. ✅ Dotted durations work: `:q.`, `:h..`
-4. ✅ `(note c4 :q)` compiles to valid IR Note
-5. ✅ `(rest :h)` compiles to valid IR Rest Note
-6. ✅ Optional kwargs work: `:voice`, `:staff`, `:stem`
-7. ✅ Articulation/ornament shorthands work: `:staccato`, `:trill`
-8. ✅ All unit and integration tests pass
+4. ✅ Extended durations work: `:512`, `:1024`
+5. ✅ `(note c4 :q)` compiles to valid IR Note
+6. ✅ `(rest :h)` compiles to valid IR Rest Note
+7. ✅ Optional kwargs work: `:voice`, `:staff`, `:stem`
+8. ✅ Articulation/ornament shorthands work: `:staccato`, `:trill`
+9. ✅ All unit and integration tests pass
 
 ---
 
 ## Implementation Notes
 
-1. **Case insensitivity** — Pitch steps are case-insensitive (`C4` = `c4`)
+1. **Type aliases** — `Semitones`, `Octave`, and `PositiveDivisions` are type aliases (not newtypes), so use values directly: `pitch.octave` not `Octave(pitch.octave)`
 
-2. **Ambiguity with 'b'** — `b4` is pitch B, `bb4` is B-flat; parser must look ahead
+2. **Case insensitivity** — Pitch steps are case-insensitive (`C4` = `c4`)
 
-3. **Default voice** — Use `"1"` as default voice string
+3. **Ambiguity with 'b'** — `b4` is pitch B, `bb4` is B-flat; parser must look ahead
 
-4. **Duration divisions** — Use `DEFAULT_DIVISIONS` (960) as base unit
+4. **British terminology** — `:minim` maps to `DurationBase::Half` (not a separate variant)
 
-5. **Missing types** — You may need to add `Default` impls to some IR notation types
+5. **Default voice** — Use `"1"` as default voice string
+
+6. **Duration divisions** — Use `DEFAULT_DIVISIONS` (960) as base unit
+
+7. **Articulation types** — `ArticulationElement` uses `EmptyPlacement` for most articulations, not separate structs
+
+8. **Ornament types** — `OrnamentElement` uses `EmptyTrillSound` for trill marks, concrete structs for `Mordent`/`Turn`
+
+9. **Boxing** — `NotationContent::Articulations` and `NotationContent::Ornaments` wrap boxed values
+
+10. **Slur.number** — Is a required `NumberLevel` (u8), not `Option<u8>`
+
+11. **Tied/Slur types** — Use `StartStopContinue`, not `StartStop`; convert with helper function
+
+12. **Fermata handling** — Fermata is separate from Articulation in the AST (uses `FermataMark`)
+
+13. **parse_u32** — Must handle both `Sexpr::Integer` and `Sexpr::Symbol` for flexibility
+
+14. **Note struct has many fields** — The IR `Note` struct includes position/playback fields (`position`, `dynamics`, `end_dynamics`, `attack`, `release`, `pizzicato`, `print_object`) that should be set to defaults for user-facing syntax. The `instrument` field is `Vec<Instrument>`, not `Option`.
 
 ---
 

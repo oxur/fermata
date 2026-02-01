@@ -2,7 +2,6 @@
 
 > **For:** Claude Code (Opus) with Rust-SKILL.md agents
 > **Scope:** Parser infrastructure, Fermata AST, error types, module setup
-> **Estimated Implementation Time:** 2-3 hours
 
 ---
 
@@ -13,7 +12,7 @@ This milestone establishes the foundation for Fermata syntax compilation:
 - **Fermata AST** — Intermediate representation specific to user-facing syntax
 - **Parser infrastructure** — Reuse `nom` patterns from Phase 4
 - **Error types** — Compilation errors with source locations
-- **Module structure** — Organize the `fermata/` module
+- **Module structure** — Organize the `lang/` module
 
 ---
 
@@ -48,10 +47,23 @@ The Fermata AST provides:
 
 ---
 
-## Task 1: Module Structure (`src/fermata/mod.rs`)
+## Task 0: Add `thiserror` Dependency
+
+Add to `crates/fermata/Cargo.toml`:
+
+```toml
+[dependencies]
+thiserror = "1.0"
+```
+
+Note: `thiserror` is the standard choice for library error types in Rust. It provides derive macros for the `Error` trait with minimal boilerplate. (For applications, `anyhow` is often used instead, but for libraries, `thiserror` is preferred.)
+
+---
+
+## Task 1: Module Structure (`src/lang/mod.rs`)
 
 ```rust
-//! Fermata: Ergonomic S-expression syntax for music notation.
+//! Fermata Language: Ergonomic S-expression syntax for music notation.
 //!
 //! This module provides:
 //! - A typed AST for Fermata syntax
@@ -61,7 +73,7 @@ The Fermata AST provides:
 //! # Example
 //!
 //! ```rust
-//! use fermata::fermata::compile;
+//! use fermata::lang::compile;
 //!
 //! let source = r#"
 //!     (score :title "Test"
@@ -101,14 +113,16 @@ pub fn compile_str(source: &str) -> CompileResult<crate::ir::score::ScorePartwis
 
 ---
 
-## Task 2: Error Types (`src/fermata/error.rs`)
+## Task 2: Error Types (`src/lang/error.rs`)
 
 ```rust
+//! Compilation error types for Fermata syntax.
+
 use thiserror::Error;
 use crate::sexpr::error::{ParseError, ConvertError};
 
 /// Source location for error reporting
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct SourceSpan {
     pub start: usize,
     pub end: usize,
@@ -222,11 +236,43 @@ impl CompileError {
 }
 
 pub type CompileResult<T> = Result<T, CompileError>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_error_types() {
+        let err = CompileError::InvalidPitch("xyz".to_string());
+        assert!(err.to_string().contains("xyz"));
+
+        let err = CompileError::type_mismatch("pitch", "list");
+        assert!(err.to_string().contains("pitch"));
+        assert!(err.to_string().contains("list"));
+    }
+
+    #[test]
+    fn test_source_span() {
+        let source = "line1\nline2\nline3";
+        let span = SourceSpan::new(7, 12).with_source(source);
+        assert_eq!(span.line, 2);
+        assert_eq!(span.column, 2);
+    }
+
+    #[test]
+    fn test_source_span_default() {
+        let span = SourceSpan::default();
+        assert_eq!(span.start, 0);
+        assert_eq!(span.end, 0);
+        assert_eq!(span.line, 0);
+        assert_eq!(span.column, 0);
+    }
+}
 ```
 
 ---
 
-## Task 3: Fermata AST Types (`src/fermata/ast.rs`)
+## Task 3: Fermata AST Types (`src/lang/ast.rs`)
 
 Define the typed AST for Fermata syntax.
 
@@ -238,7 +284,7 @@ Define the typed AST for Fermata syntax.
 use crate::ir::common::StartStop;
 
 /// A complete Fermata score
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct FermataScore {
     pub title: Option<String>,
     pub composer: Option<String>,
@@ -254,7 +300,7 @@ pub struct FermataPart {
 }
 
 /// A measure containing music elements
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct FermataMeasure {
     pub number: Option<u32>,
     pub content: Vec<MeasureElement>,
@@ -277,6 +323,7 @@ pub enum MeasureElement {
     Barline(BarlineSpec),
     Slur(SlurMark),
     Tie(TieMark),
+    Fermata(FermataMark),
     Backup(u32),
     Forward(u32),
 }
@@ -385,14 +432,24 @@ pub struct FermataDuration {
     pub dots: u8,
 }
 
+impl Default for FermataDuration {
+    fn default() -> Self {
+        Self {
+            base: DurationBase::Quarter,
+            dots: 0,
+        }
+    }
+}
+
 /// Base duration value
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum DurationBase {
     Maxima,
     Long,
     Breve,
     Whole,
     Half,
+    #[default]
     Quarter,
     Eighth,
     Sixteenth,
@@ -400,6 +457,8 @@ pub enum DurationBase {
     SixtyFourth,
     OneTwentyEighth,
     TwoFiftySixth,
+    FiveTwelfth,
+    OneThousandTwentyFourth,
 }
 
 impl DurationBase {
@@ -418,20 +477,23 @@ impl DurationBase {
             DurationBase::SixtyFourth => 0.015625,
             DurationBase::OneTwentyEighth => 0.0078125,
             DurationBase::TwoFiftySixth => 0.00390625,
+            DurationBase::FiveTwelfth => 0.001953125,
+            DurationBase::OneThousandTwentyFourth => 0.0009765625,
         }
     }
 }
 
 /// Stem direction
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum StemDirection {
+    #[default]
     Up,
     Down,
     None,
     Double,
 }
 
-/// Articulation marks
+/// Articulation marks (excluding fermata, which is a notation)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Articulation {
     Staccato,
@@ -442,7 +504,27 @@ pub enum Articulation {
     DetachedLegato,
     BreathMark,
     Caesura,
-    Fermata,
+}
+
+/// Fermata mark (separate from articulations per MusicXML/IR structure)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct FermataMark {
+    pub shape: FermataShape,
+    pub inverted: bool,
+}
+
+/// Fermata shape
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum FermataShape {
+    #[default]
+    Normal,
+    Angled,
+    Square,
+    DoubleAngled,
+    DoubleSquare,
+    DoubleDot,
+    HalfCurve,
+    Curlew,
 }
 
 /// Ornament marks
@@ -459,10 +541,11 @@ pub enum Ornament {
 }
 
 /// Arpeggio direction
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ArpeggiateDirection {
     Up,
     Down,
+    #[default]
     None,
 }
 
@@ -483,7 +566,7 @@ pub enum DynamicMark {
 }
 
 /// Tempo marking
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct TempoMark {
     pub text: Option<String>,
     pub beat_unit: Option<DurationBase>,
@@ -506,12 +589,14 @@ pub enum FermataDirection {
 #[derive(Debug, Clone, PartialEq)]
 pub struct KeySpec {
     pub root: PitchStep,
+    pub root_alter: Option<PitchAlter>,  // For F# major, Bb minor, etc.
     pub mode: Mode,
 }
 
 /// Mode for key signature
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Mode {
+    #[default]
     Major,
     Minor,
     Dorian,
@@ -527,9 +612,16 @@ pub enum Mode {
 #[derive(Debug, Clone, PartialEq)]
 pub enum TimeSpec {
     Simple { beats: u8, beat_type: u8 },
+    Compound { signatures: Vec<(u8, u8)> },  // e.g., [(2,4), (3,8)] for 2/4 + 3/8
     Common,
     Cut,
     SenzaMisura,
+}
+
+impl Default for TimeSpec {
+    fn default() -> Self {
+        TimeSpec::Simple { beats: 4, beat_type: 4 }
+    }
 }
 
 /// Clef specification
@@ -549,6 +641,20 @@ pub enum ClefSpec {
     Custom { sign: char, line: u8, octave_change: Option<i8> },
 }
 
+impl Default for ClefSpec {
+    fn default() -> Self {
+        ClefSpec::Treble
+    }
+}
+
+/// Action for endings (start, stop, or discontinue for jumps)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EndingAction {
+    Start,
+    Stop,
+    Discontinue,  // When jumping back (e.g., D.S. skips ending 1)
+}
+
 /// Barline specification
 #[derive(Debug, Clone, PartialEq)]
 pub enum BarlineSpec {
@@ -558,14 +664,29 @@ pub enum BarlineSpec {
     RepeatForward,
     RepeatBackward,
     RepeatBoth,
-    Ending { number: u8, action: StartStop },
+    Ending { number: u8, action: EndingAction },
+}
+
+impl Default for BarlineSpec {
+    fn default() -> Self {
+        BarlineSpec::Regular
+    }
 }
 
 /// Slur mark
 #[derive(Debug, Clone, PartialEq)]
 pub struct SlurMark {
     pub action: StartStop,
-    pub number: Option<u8>,
+    pub number: u8,  // Defaults to 1 in parsing
+}
+
+impl Default for SlurMark {
+    fn default() -> Self {
+        Self {
+            action: StartStop::Start,
+            number: 1,
+        }
+    }
 }
 
 /// Tie mark
@@ -582,18 +703,57 @@ pub struct LyricSpec {
     pub verse: Option<u8>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Syllabic {
+    #[default]
     Single,
     Begin,
     Middle,
     End,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_duration_base_fractions() {
+        assert_eq!(DurationBase::Whole.to_fraction(), 1.0);
+        assert_eq!(DurationBase::Half.to_fraction(), 0.5);
+        assert_eq!(DurationBase::Quarter.to_fraction(), 0.25);
+        assert_eq!(DurationBase::Eighth.to_fraction(), 0.125);
+        assert_eq!(DurationBase::OneThousandTwentyFourth.to_fraction(), 0.0009765625);
+    }
+
+    #[test]
+    fn test_pitch_alter_semitones() {
+        assert_eq!(PitchAlter::Sharp.to_semitones(), 1.0);
+        assert_eq!(PitchAlter::Flat.to_semitones(), -1.0);
+        assert_eq!(PitchAlter::DoubleSharp.to_semitones(), 2.0);
+        assert_eq!(PitchAlter::QuarterSharp.to_semitones(), 0.5);
+    }
+
+    #[test]
+    fn test_defaults() {
+        assert_eq!(DurationBase::default(), DurationBase::Quarter);
+        assert_eq!(StemDirection::default(), StemDirection::Up);
+        assert_eq!(Mode::default(), Mode::Major);
+        assert_eq!(ClefSpec::default(), ClefSpec::Treble);
+        assert_eq!(TimeSpec::default(), TimeSpec::Simple { beats: 4, beat_type: 4 });
+    }
+
+    #[test]
+    fn test_slur_mark_default() {
+        let slur = SlurMark::default();
+        assert_eq!(slur.number, 1);
+        assert_eq!(slur.action, StartStop::Start);
+    }
+}
 ```
 
 ---
 
-## Task 4: Defaults Module (`src/fermata/defaults.rs`)
+## Task 4: Defaults Module (`src/lang/defaults.rs`)
 
 ```rust
 //! Default value inference for Fermata compilation.
@@ -601,6 +761,7 @@ pub enum Syllabic {
 //! When optional fields are not specified, these defaults are used.
 
 use crate::ir::duration::NoteTypeValue;
+use super::ast::{PitchStep, PitchAlter};
 
 /// Default divisions per quarter note
 pub const DEFAULT_DIVISIONS: u32 = 960;
@@ -644,51 +805,113 @@ pub fn duration_to_divisions(note_type: NoteTypeValue, dots: u8) -> u32 {
 }
 
 /// Compute the fifths value for a key signature
-pub fn key_to_fifths(root: char, mode: &str) -> i8 {
-    use std::collections::HashMap;
+///
+/// Handles both natural keys (C major, G major) and keys with accidentals
+/// (F# major, Bb minor, etc.)
+pub fn key_to_fifths(root: PitchStep, root_alter: Option<PitchAlter>, mode: &str) -> i8 {
+    // Base fifths for natural major keys
+    let natural_major_fifths: i8 = match root {
+        PitchStep::C => 0,
+        PitchStep::G => 1,
+        PitchStep::D => 2,
+        PitchStep::A => 3,
+        PitchStep::E => 4,
+        PitchStep::B => 5,
+        PitchStep::F => -1,
+    };
 
-    // Major key fifths
-    let major_fifths: HashMap<char, i8> = [
-        ('C', 0), ('G', 1), ('D', 2), ('A', 3), ('E', 4), ('B', 5), ('F', -1),
-    ].into_iter().collect();
-
-    // Minor keys are relative to their major
-    // A minor = C major, E minor = G major, etc.
-    let minor_offset: i8 = 0; // Same fifths, different mode label
-
-    let base = match mode.to_lowercase().as_str() {
-        "major" | "ionian" => *major_fifths.get(&root.to_ascii_uppercase()).unwrap_or(&0),
-        "minor" | "aeolian" => {
-            // Minor is 3 semitones below its relative major
-            // A minor (0 fifths), E minor (1 fifth), etc.
-            let minor_fifths: HashMap<char, i8> = [
-                ('A', 0), ('E', 1), ('B', 2), ('D', -1), ('G', -2), ('C', -3), ('F', -4),
-            ].into_iter().collect();
-            *minor_fifths.get(&root.to_ascii_uppercase()).unwrap_or(&0)
-        }
-        "dorian" => {
-            // D dorian = 0, A dorian = 1, etc.
-            let dorian_fifths: HashMap<char, i8> = [
-                ('D', 0), ('A', 1), ('E', 2), ('B', 3), ('G', -1), ('C', -2), ('F', -3),
-            ].into_iter().collect();
-            *dorian_fifths.get(&root.to_ascii_uppercase()).unwrap_or(&0)
-        }
-        // Add other modes as needed
+    // Adjust for accidentals on the root
+    let alter_offset: i8 = match root_alter {
+        Some(PitchAlter::Sharp) => 7,        // F# major = 6 = F major (-1) + 7
+        Some(PitchAlter::Flat) => -7,        // Gb major = -6 = G major (1) - 7
+        Some(PitchAlter::DoubleSharp) => 14,
+        Some(PitchAlter::DoubleFlat) => -14,
         _ => 0,
     };
 
-    base
+    let major_fifths = natural_major_fifths + alter_offset;
+
+    // Adjust for mode (relative to major)
+    let mode_offset: i8 = match mode.to_lowercase().as_str() {
+        "major" | "ionian" => 0,
+        "minor" | "aeolian" => -3,  // A minor = C major, so -3 from relative major
+        "dorian" => -2,
+        "phrygian" => -4,
+        "lydian" => 1,
+        "mixolydian" => -1,
+        "locrian" => -5,
+        _ => 0,
+    };
+
+    major_fifths + mode_offset
 }
 
-/// Generate a part ID from a name
-pub fn generate_part_id(name: &str, index: usize) -> String {
+/// Generate a part ID from index
+pub fn generate_part_id(index: usize) -> String {
     format!("P{}", index + 1)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_duration_to_divisions() {
+        assert_eq!(duration_to_divisions(NoteTypeValue::Quarter, 0), DEFAULT_DIVISIONS);
+        assert_eq!(duration_to_divisions(NoteTypeValue::Half, 0), DEFAULT_DIVISIONS * 2);
+
+        // Dotted quarter = 1.5 * quarter
+        let dotted_quarter = duration_to_divisions(NoteTypeValue::Quarter, 1);
+        assert_eq!(dotted_quarter, DEFAULT_DIVISIONS + DEFAULT_DIVISIONS / 2);
+    }
+
+    #[test]
+    fn test_key_to_fifths_natural_major() {
+        assert_eq!(key_to_fifths(PitchStep::C, None, "major"), 0);
+        assert_eq!(key_to_fifths(PitchStep::G, None, "major"), 1);
+        assert_eq!(key_to_fifths(PitchStep::F, None, "major"), -1);
+        assert_eq!(key_to_fifths(PitchStep::D, None, "major"), 2);
+    }
+
+    #[test]
+    fn test_key_to_fifths_with_accidentals() {
+        // F# major = 6 fifths
+        assert_eq!(key_to_fifths(PitchStep::F, Some(PitchAlter::Sharp), "major"), 6);
+        // Bb major = -2 fifths
+        assert_eq!(key_to_fifths(PitchStep::B, Some(PitchAlter::Flat), "major"), -2);
+        // Gb major = -6 fifths
+        assert_eq!(key_to_fifths(PitchStep::G, Some(PitchAlter::Flat), "major"), -6);
+    }
+
+    #[test]
+    fn test_key_to_fifths_minor() {
+        assert_eq!(key_to_fifths(PitchStep::A, None, "minor"), -3);
+        assert_eq!(key_to_fifths(PitchStep::E, None, "minor"), -2);
+        assert_eq!(key_to_fifths(PitchStep::D, None, "minor"), -1);
+    }
+
+    #[test]
+    fn test_key_to_fifths_modes() {
+        // D dorian = same key sig as C major = 0 fifths
+        assert_eq!(key_to_fifths(PitchStep::D, None, "dorian"), 0);
+        // E phrygian = same key sig as C major = 0 fifths
+        assert_eq!(key_to_fifths(PitchStep::E, None, "phrygian"), 0);
+        // F lydian = same key sig as C major = 0 fifths
+        assert_eq!(key_to_fifths(PitchStep::F, None, "lydian"), 0);
+    }
+
+    #[test]
+    fn test_generate_part_id() {
+        assert_eq!(generate_part_id(0), "P1");
+        assert_eq!(generate_part_id(1), "P2");
+        assert_eq!(generate_part_id(9), "P10");
+    }
 }
 ```
 
 ---
 
-## Task 5: Basic Compiler Stub (`src/fermata/compiler.rs`)
+## Task 5: Basic Compiler Stub (`src/lang/compiler.rs`)
 
 ```rust
 //! Fermata → IR compiler.
@@ -704,8 +927,8 @@ use super::error::{CompileError, CompileResult};
 ///
 /// # Example
 ///
-/// ```rust
-/// use fermata::fermata::compile;
+/// ```rust,ignore
+/// use fermata::lang::compile;
 ///
 /// let source = r#"(note c4 :q)"#;
 /// let result = compile(source);
@@ -722,14 +945,14 @@ pub fn compile(source: &str) -> CompileResult<ScorePartwise> {
 }
 
 /// Interpret an S-expression as Fermata AST
-fn interpret_sexpr(sexpr: &Sexpr) -> CompileResult<super::ast::FermataScore> {
-    // TODO: Implement in Milestone 5
+fn interpret_sexpr(_sexpr: &Sexpr) -> CompileResult<super::ast::FermataScore> {
+    // TODO: Implement in later milestones
     todo!("interpret_sexpr")
 }
 
 /// Compile Fermata AST to Music IR
-fn compile_to_ir(ast: &super::ast::FermataScore) -> CompileResult<ScorePartwise> {
-    // TODO: Implement in Milestone 5
+fn compile_to_ir(_ast: &super::ast::FermataScore) -> CompileResult<ScorePartwise> {
+    // TODO: Implement in later milestones
     todo!("compile_to_ir")
 }
 
@@ -757,96 +980,21 @@ Add the new module to the library:
 
 ```rust
 // In src/lib.rs, add:
-pub mod fermata;
-```
-
----
-
-## Task 7: Integration Tests
-
-Create `tests/fermata_foundation.rs`:
-
-```rust
-//! Foundation tests for Fermata syntax module.
-
-use fermata::fermata::error::CompileError;
-
-#[test]
-fn test_error_types() {
-    let err = CompileError::InvalidPitch("xyz".to_string());
-    assert!(err.to_string().contains("xyz"));
-
-    let err = CompileError::type_mismatch("pitch", "list");
-    assert!(err.to_string().contains("pitch"));
-    assert!(err.to_string().contains("list"));
-}
-
-#[test]
-fn test_source_span() {
-    use fermata::fermata::error::SourceSpan;
-
-    let source = "line1\nline2\nline3";
-    let span = SourceSpan::new(7, 12).with_source(source);
-    assert_eq!(span.line, 2);
-    assert_eq!(span.column, 2);
-}
-
-#[test]
-fn test_duration_base_fractions() {
-    use fermata::fermata::ast::DurationBase;
-
-    assert_eq!(DurationBase::Whole.to_fraction(), 1.0);
-    assert_eq!(DurationBase::Half.to_fraction(), 0.5);
-    assert_eq!(DurationBase::Quarter.to_fraction(), 0.25);
-    assert_eq!(DurationBase::Eighth.to_fraction(), 0.125);
-}
-
-#[test]
-fn test_pitch_alter_semitones() {
-    use fermata::fermata::ast::PitchAlter;
-
-    assert_eq!(PitchAlter::Sharp.to_semitones(), 1.0);
-    assert_eq!(PitchAlter::Flat.to_semitones(), -1.0);
-    assert_eq!(PitchAlter::DoubleSharp.to_semitones(), 2.0);
-    assert_eq!(PitchAlter::QuarterSharp.to_semitones(), 0.5);
-}
-
-#[test]
-fn test_defaults_duration_to_divisions() {
-    use fermata::fermata::defaults::{duration_to_divisions, DEFAULT_DIVISIONS};
-    use fermata::ir::duration::NoteTypeValue;
-
-    assert_eq!(duration_to_divisions(NoteTypeValue::Quarter, 0), DEFAULT_DIVISIONS);
-    assert_eq!(duration_to_divisions(NoteTypeValue::Half, 0), DEFAULT_DIVISIONS * 2);
-
-    // Dotted quarter = 1.5 * quarter
-    let dotted_quarter = duration_to_divisions(NoteTypeValue::Quarter, 1);
-    assert_eq!(dotted_quarter, DEFAULT_DIVISIONS + DEFAULT_DIVISIONS / 2);
-}
-
-#[test]
-fn test_defaults_key_to_fifths() {
-    use fermata::fermata::defaults::key_to_fifths;
-
-    assert_eq!(key_to_fifths('C', "major"), 0);
-    assert_eq!(key_to_fifths('G', "major"), 1);
-    assert_eq!(key_to_fifths('F', "major"), -1);
-    assert_eq!(key_to_fifths('D', "major"), 2);
-    assert_eq!(key_to_fifths('A', "minor"), 0);
-}
+pub mod lang;
 ```
 
 ---
 
 ## Acceptance Criteria
 
-1. ✅ `src/fermata/` module exists with proper structure
-2. ✅ `CompileError` enum covers all error types with spans
-3. ✅ `SourceSpan` computes line/column from source
-4. ✅ Fermata AST types defined for all musical constructs
-5. ✅ `defaults.rs` provides duration, key, and ID generation helpers
-6. ✅ Compiler stub compiles (with `todo!()` bodies)
-7. ✅ All tests pass
+1. ✅ `src/lang/` module exists with proper structure
+2. ✅ `thiserror` added to `Cargo.toml`
+3. ✅ `CompileError` enum covers all error types with spans
+4. ✅ `SourceSpan` computes line/column from source
+5. ✅ Fermata AST types defined for all musical constructs
+6. ✅ `defaults.rs` provides duration, key, and ID generation helpers
+7. ✅ Compiler stub compiles (with `todo!()` bodies)
+8. ✅ All tests pass (inline `#[cfg(test)]` modules)
 
 ---
 
@@ -859,6 +1007,8 @@ fn test_defaults_key_to_fifths() {
 3. **Error context** — Use `CompileError::with_span()` to preserve source locations through the compilation pipeline.
 
 4. **Incremental compilation** — Provide `compile_pitch_str`, `compile_note_str`, etc. for testing individual elements.
+
+5. **Default derives** — Use `#[derive(Default)]` where sensible to simplify construction and testing.
 
 ---
 

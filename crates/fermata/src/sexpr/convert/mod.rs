@@ -10,6 +10,8 @@
 //! - [`duration`] - Duration-related types (NoteTypeValue, NoteType, Dot, TimeModification)
 //! - [`beam`] - Beam-related types (BeamValue, Beam, Fan, StemValue, Stem, NoteheadValue, Notehead)
 //! - [`note`] - Note-related types (Rest, FullNote, Tie, Grace, NoteContent, Accidental, Instrument, Note)
+//! - [`attributes`] - Measure attributes (Clef, Key, Time, Transpose, Barline, etc.)
+//! - [`direction`] - Direction types (Dynamics, Wedge, Metronome, Words, Pedal, etc.)
 //!
 //! # Helpers
 //!
@@ -21,8 +23,10 @@
 //! - [`optional_kwarg`] - Find and parse an optional keyword argument
 //! - [`parse_kwargs`] - Iterate over keyword-value pairs
 
+pub mod attributes;
 pub mod beam;
 pub mod common;
+pub mod direction;
 pub mod duration;
 pub mod note;
 pub mod pitch;

@@ -5,9 +5,9 @@
 
 use crate::ir::common::{
     AboveBelow, AccidentalValue, BackwardForward, CssFontSize, Font, FontSize, FontStyle,
-    FontWeight, LeftCenterRight, LineType, OverUnder, Position, PrintStyle, RightLeftMiddle,
-    StartStop, StartStopContinue, StartStopDiscontinue, StartStopSingle, SymbolSize,
-    TopMiddleBottom, UpDown, UprightInverted, YesNo,
+    FontWeight, FormattedText, LeftCenterRight, LineType, OverUnder, Position, PrintStyle,
+    RightLeftMiddle, StartStop, StartStopContinue, StartStopDiscontinue, StartStopSingle,
+    SymbolSize, TopMiddleBottom, UpDown, UprightInverted, WavyLine, YesNo,
 };
 use crate::sexpr::{
     ConvertError, ConvertResult, FromSexpr, ListBuilder, Sexpr, ToSexpr,
@@ -679,6 +679,110 @@ impl FromSexpr for PrintStyle {
             position,
             font,
             color,
+        })
+    }
+}
+
+// ============================================================================
+// FormattedText
+// ============================================================================
+
+impl ToSexpr for FormattedText {
+    fn to_sexpr(&self) -> Sexpr {
+        let mut builder = ListBuilder::new("formatted-text").kwarg("value", &self.value);
+
+        // Print style (inline)
+        let pos = &self.print_style.position;
+        if pos.default_x.is_some()
+            || pos.default_y.is_some()
+            || pos.relative_x.is_some()
+            || pos.relative_y.is_some()
+        {
+            builder = builder.kwarg_raw("position", pos.to_sexpr());
+        }
+        if let Some(ref color) = self.print_style.color {
+            builder = builder.kwarg("color", color);
+        }
+
+        builder = builder.kwarg_opt("lang", &self.lang);
+
+        builder.build()
+    }
+}
+
+impl FromSexpr for FormattedText {
+    fn from_sexpr(sexpr: &Sexpr) -> ConvertResult<Self> {
+        let list = sexpr
+            .as_list()
+            .ok_or_else(|| ConvertError::type_mismatch("formatted-text list", sexpr))?;
+
+        // Check head
+        if !list.first().map_or(false, |h| h.is_symbol("formatted-text")) {
+            return Err(ConvertError::type_mismatch("formatted-text", sexpr));
+        }
+
+        let position = match super::find_kwarg(list, "position") {
+            Some(ps) => Position::from_sexpr(ps)?,
+            None => Position::default(),
+        };
+        let color = optional_kwarg::<String>(list, "color")?;
+
+        Ok(FormattedText {
+            value: super::require_kwarg(list, "value")?,
+            print_style: PrintStyle {
+                position,
+                font: Default::default(),
+                color,
+            },
+            lang: optional_kwarg(list, "lang")?,
+        })
+    }
+}
+
+// ============================================================================
+// WavyLine
+// ============================================================================
+
+impl ToSexpr for WavyLine {
+    fn to_sexpr(&self) -> Sexpr {
+        let mut builder = ListBuilder::new("wavy-line")
+            .kwarg("type", &self.r#type)
+            .kwarg_opt("number", &self.number);
+
+        // Position
+        let pos = &self.position;
+        if pos.default_x.is_some()
+            || pos.default_y.is_some()
+            || pos.relative_x.is_some()
+            || pos.relative_y.is_some()
+        {
+            builder = builder.kwarg_raw("position", pos.to_sexpr());
+        }
+
+        builder.build()
+    }
+}
+
+impl FromSexpr for WavyLine {
+    fn from_sexpr(sexpr: &Sexpr) -> ConvertResult<Self> {
+        let list = sexpr
+            .as_list()
+            .ok_or_else(|| ConvertError::type_mismatch("wavy-line list", sexpr))?;
+
+        // Check head
+        if !list.first().map_or(false, |h| h.is_symbol("wavy-line")) {
+            return Err(ConvertError::type_mismatch("wavy-line", sexpr));
+        }
+
+        let position = match super::find_kwarg(list, "position") {
+            Some(ps) => Position::from_sexpr(ps)?,
+            None => Position::default(),
+        };
+
+        Ok(WavyLine {
+            r#type: super::require_kwarg(list, "type")?,
+            number: optional_kwarg(list, "number")?,
+            position,
         })
     }
 }

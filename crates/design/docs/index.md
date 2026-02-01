@@ -6,15 +6,12 @@ This index is automatically generated. Do not edit manually.
 
 | Number | Title | State | Updated |
 |--------|-------|-------|----------|
+| 0004 | Fermata IR S-Expression Format Reference | Final | 2026-02-01 |
 | 0003 | MusicXML Schema Triage for Fermata | Final | 2026-01-31 |
 | 0002 | MusicXML → Fermata IR Analysis Workflow | Active | 2026-01-31 |
 | 0001 | Fermata Lisp — Project Inception | Under Review | 2026-01-30 |
 
 ## Documents by State
-
-### Final
-
-- [0003 - MusicXML Schema Triage for Fermata](06-final/0003-musicxml-schema-triage-for-fermata.md)
 
 ### Under Review
 
@@ -23,3 +20,8 @@ This index is automatically generated. Do not edit manually.
 ### Active
 
 - [0002 - MusicXML → Fermata IR Analysis Workflow](05-active/0002-musicxml-fermata-ir-analysis-workflow.md)
+
+### Final
+
+- [0004 - Fermata IR S-Expression Format Reference](06-final/0004-fermata-ir-s-expression-format-reference.md)
+- [0003 - MusicXML Schema Triage for Fermata](06-final/0003-musicxml-schema-triage-for-fermata.md)

@@ -12,6 +12,9 @@
 //! - [`note`] - Note-related types (Rest, FullNote, Tie, Grace, NoteContent, Accidental, Instrument, Note)
 //! - [`attributes`] - Measure attributes (Clef, Key, Time, Transpose, Barline, etc.)
 //! - [`direction`] - Direction types (Dynamics, Wedge, Metronome, Words, Pedal, etc.)
+//! - [`notation`] - Notation types (Articulations, Ornaments, Technical, Slurs, Ties, Tuplets, etc.)
+//! - [`lyric`] - Lyric types (Lyric, Syllabic, TextElementData, Extend, etc.)
+//! - [`voice`] - Voice control types (Backup, Forward)
 //!
 //! # Helpers
 //!
@@ -28,8 +31,11 @@ pub mod beam;
 pub mod common;
 pub mod direction;
 pub mod duration;
+pub mod lyric;
+pub mod notation;
 pub mod note;
 pub mod pitch;
+pub mod voice;
 
 use super::{ConvertError, ConvertResult, FromSexpr, Sexpr};
 

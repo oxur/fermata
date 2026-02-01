@@ -13,20 +13,20 @@
 * [x] Phase 1 (IR types) is complete
 * [x] Phase 2 (MusicXML emitter) is complete
 * [x] Phase 3 (the MusicXML parser) is complete
-* [ ] Phase 4 (S-expr Read/Print) is next
+* [x] Phase 4 (S-expr Read/Print) is next
 * [ ] Phase 5 (Fermata Syntax)
 * [ ] Phase 6 (REPL + Verovio Integration)
 
 **Repository structure:**
 
 ```
-oxur/fermata/             # remote: ssh://git@codeberg.org/oxur/fermata.git
+oxur/fermata/        # remote: ssh://git@codeberg.org/oxur/
 └── crates/fermata/
     ├── Cargo.toml
     └── src/
         ├── lib.rs
         ├── main.rs
-        └── ir/           # ✅ COMPLETE - all types implemented
+        └── ir/
             ├── mod.rs
             ├── common.rs
             ├── pitch.rs

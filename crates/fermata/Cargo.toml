@@ -15,11 +15,8 @@ rust-version = "1.85"
 
 [dependencies]
 quick-xml = "0.39"
-# Coming soon:
-# - Parser (nom or pest)
-# - AST types
-# - LilyPond generation
-# - REPL (rustyline)
+nom = "7"
+thiserror = "2"
 
 [dev-dependencies]
 

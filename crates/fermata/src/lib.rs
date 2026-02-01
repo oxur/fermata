@@ -33,6 +33,7 @@
 
 pub mod ir;
 pub mod musicxml;
+pub mod sexpr;
 
 pub mod ast {
     //! Abstract Syntax Tree for Fermata expressions.

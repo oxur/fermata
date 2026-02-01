@@ -11,7 +11,11 @@
 **Where are we?**
 
 * [x] Phase 1 (IR types) is complete
-* [ ] Phase 2 (MusicXML emitter) is next
+* [x] Phase 2 (MusicXML emitter) is complete
+* [x] Phase 3 (the MusicXML parser) is complete
+* [ ] Phase 4 (S-expr Read/Print) is next
+* [ ] Phase 5 (Fermata Syntax)
+* [ ] Phase 6 (REPL + Verovio Integration)
 
 **Repository structure:**
 

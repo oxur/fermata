@@ -6,6 +6,10 @@
 //! # Module Organization
 //!
 //! - [`common`] - Common types from `ir::common` (enums, Position, Font, etc.)
+//! - [`pitch`] - Pitch-related types (Step, Pitch, Unpitched)
+//! - [`duration`] - Duration-related types (NoteTypeValue, NoteType, Dot, TimeModification)
+//! - [`beam`] - Beam-related types (BeamValue, Beam, Fan, StemValue, Stem, NoteheadValue, Notehead)
+//! - [`note`] - Note-related types (Rest, FullNote, Tie, Grace, NoteContent, Accidental, Instrument, Note)
 //!
 //! # Helpers
 //!
@@ -17,7 +21,11 @@
 //! - [`optional_kwarg`] - Find and parse an optional keyword argument
 //! - [`parse_kwargs`] - Iterate over keyword-value pairs
 
+pub mod beam;
 pub mod common;
+pub mod duration;
+pub mod note;
+pub mod pitch;
 
 use super::{ConvertError, ConvertResult, FromSexpr, Sexpr};
 

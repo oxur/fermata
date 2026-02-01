@@ -44,6 +44,7 @@ pub use divisions::{
     note_type_to_divisions,
 };
 pub use emit::{emit_score, note_type_value_to_string};
+// Using the original parse module until parser migration is complete
 pub use parse::parse_score;
 
 use crate::ir::ScorePartwise;

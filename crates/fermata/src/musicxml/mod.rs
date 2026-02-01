@@ -33,8 +33,8 @@
 //! ```
 
 mod divisions;
-mod emit;
-mod parse;
+mod emitter;
+mod parser;
 mod reader;
 mod values;
 mod writer;
@@ -43,9 +43,8 @@ pub use divisions::{
     STANDARD_DIVISIONS, apply_dots, apply_time_modification, calculate_duration,
     note_type_to_divisions,
 };
-pub use emit::{emit_score, note_type_value_to_string};
-// Using the original parse module until parser migration is complete
-pub use parse::parse_score;
+pub use emitter::{emit_score, note_type_value_to_string};
+pub use parser::parse_score;
 
 use crate::ir::ScorePartwise;
 
@@ -80,7 +79,7 @@ use crate::ir::ScorePartwise;
 /// let score = parse(xml)?;
 /// ```
 pub fn parse(xml: &str) -> Result<ScorePartwise, ParseError> {
-    parse::parse_score(xml)
+    parser::parse_score(xml)
 }
 
 /// Emit a MusicXML document from a ScorePartwise IR.
@@ -100,7 +99,7 @@ pub fn parse(xml: &str) -> Result<ScorePartwise, ParseError> {
 /// Returns `EmitError::XmlWrite` if there's an error writing XML elements.
 /// Returns `EmitError::InvalidData` if the IR contains invalid data.
 pub fn emit(score: &ScorePartwise) -> Result<String, EmitError> {
-    emit::emit_score(score)
+    emitter::emit_score(score)
 }
 
 /// Errors that can occur during MusicXML parsing.

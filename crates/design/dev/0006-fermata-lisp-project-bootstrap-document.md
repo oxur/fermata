@@ -22,25 +22,66 @@
 ```
 oxur/fermata/        # remote: ssh://git@codeberg.org/oxur/
 └── crates/fermata/
+crates
+├── design
+└── fermata
     ├── Cargo.toml
-    └── src/
+    └── src
+        ├── ir
+        │   ├── attributes.rs
+        │   ├── beam.rs
+        │   ├── common.rs
+        │   ├── direction.rs
+        │   ├── duration.rs
+        │   ├── lyric.rs
+        │   ├── measure.rs
+        │   ├── mod.rs
+        │   ├── notation.rs
+        │   ├── note.rs
+        │   ├── part.rs
+        │   ├── pitch.rs
+        │   ├── score.rs
+        │   └── voice.rs
         ├── lib.rs
         ├── main.rs
-        └── ir/
+        ├── musicxml
+        │   ├── divisions.rs
+        │   ├── emitter
+        │   │   ├── attributes.rs
+        │   │   ├── barline.rs
+        │   │   ├── direction.rs
+        │   │   ├── helpers.rs
+        │   │   ├── notation.rs
+        │   │   ├── note.rs
+        │   │   ├── score.rs
+        │   │   └── voice.rs
+        │   ├── emitter.rs
+        │   ├── mod.rs
+        │   ├── parser
+        │   │   ├── mod.rs
+        │   │   └── tests.rs
+        │   ├── reader.rs
+        │   ├── values.rs
+        │   └── writer.rs
+        └── sexpr
+            ├── ast.rs
+            ├── convert
+            │   ├── attributes.rs
+            │   ├── beam.rs
+            │   ├── common.rs
+            │   ├── direction.rs
+            │   ├── duration.rs
+            │   ├── lyric.rs
+            │   ├── mod.rs
+            │   ├── notation.rs
+            │   ├── note.rs
+            │   ├── pitch.rs
+            │   └── voice.rs
+            ├── error.rs
             ├── mod.rs
-            ├── common.rs
-            ├── pitch.rs
-            ├── duration.rs
-            ├── note.rs
-            ├── beam.rs
-            ├── attributes.rs
-            ├── direction.rs
-            ├── notation.rs
-            ├── voice.rs
-            ├── lyric.rs
-            ├── measure.rs
-            ├── part.rs
-            └── score.rs
+            ├── parser.rs
+            ├── printer.rs
+            └── traits.rs
 ```
 
 ---
@@ -104,7 +145,7 @@ We want:
                             │ compile / desugar
                             ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│                     Music IR (Implemented ✅)                       │
+│                     Music IR                                        │
 │                                                                     │
 │   (score-partwise :version "4.0"                                    │
 │     (part-list (score-part :id "P1" :name "Piano"))                 │
@@ -246,14 +287,14 @@ Both preserved (MusicXML distinguishes them):
 
 ## Implementation Phases
 
-### Phase 1: IR Types ✅ COMPLETE
+### Phase 1: IR Types
 
 * All Rust types implemented in `src/ir/`
 
 * Matches MusicXML 4.0 structure
 * Derives `Debug, Clone, PartialEq`
 
-### Phase 2: MusicXML Emitter ← **YOU ARE HERE**
+### Phase 2: MusicXML Emitter
 
 * Walk IR tree → emit MusicXML
 

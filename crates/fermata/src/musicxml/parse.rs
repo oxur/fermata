@@ -29,9 +29,13 @@ use crate::ir::attributes::{
     TimeContent, TimeSignature, TraditionalKey,
 };
 use crate::ir::beam::{Beam, Notehead, Stem};
-use crate::ir::common::{Editorial, Font, Position, WavyLine, YesNo};
+use crate::ir::common::{
+    Editorial, Encoding, EncodingContent, Font, Identification, Position, Supports, TypedText,
+    WavyLine, YesNo,
+};
 use crate::ir::direction::{Coda, Segno};
 use crate::ir::duration::{Dot, NoteType, TimeModification};
+use crate::ir::lyric::{Elision, Extend, Lyric, LyricContent, TextElementData};
 use crate::ir::measure::Measure;
 use crate::ir::notation::{Fermata, FermataShape};
 use crate::ir::note::{
@@ -39,7 +43,11 @@ use crate::ir::note::{
 };
 use crate::ir::part::{PartList, PartListElement, PartName, ScorePart};
 use crate::ir::pitch::{Pitch, Unpitched};
-use crate::ir::score::ScorePartwise;
+use crate::ir::score::{
+    Appearance, Credit, CreditContent, CreditImage, CreditWords, Defaults, Distance, Divider,
+    LineWidth, LyricFont, LyricLanguage, NoteSize, Opus, PageLayout, PageMargins, Scaling,
+    ScorePartwise, StaffLayout, SystemDividers, SystemLayout, SystemMargins, Work,
+};
 use crate::ir::{Part, PrintStyle};
 
 /// Parse a MusicXML document from a string.
@@ -141,8 +149,7 @@ fn parse_score_partwise(
                 let name = element_name(&e);
                 match name.as_str() {
                     "work" => {
-                        // TODO: Parse work element
-                        reader.skip_element("work")?;
+                        score.work = Some(parse_work(reader)?);
                     }
                     "movement-number" => {
                         score.movement_number = Some(reader.read_text("movement-number")?);
@@ -151,16 +158,13 @@ fn parse_score_partwise(
                         score.movement_title = Some(reader.read_text("movement-title")?);
                     }
                     "identification" => {
-                        // TODO: Parse identification element
-                        reader.skip_element("identification")?;
+                        score.identification = Some(parse_identification(reader)?);
                     }
                     "defaults" => {
-                        // TODO: Parse defaults element
-                        reader.skip_element("defaults")?;
+                        score.defaults = Some(parse_defaults(reader)?);
                     }
                     "credit" => {
-                        // TODO: Parse credit element
-                        reader.skip_element("credit")?;
+                        score.credits.push(parse_credit(reader, &e)?);
                     }
                     "part-list" => {
                         score.part_list = parse_part_list(reader)?;
@@ -776,6 +780,7 @@ fn parse_note(
     let mut staff: Option<u16> = None;
     let mut beams: Vec<Beam> = Vec::new();
     let mut notations: Vec<crate::ir::notation::Notations> = Vec::new();
+    let mut lyrics: Vec<Lyric> = Vec::new();
 
     loop {
         let event = reader.next_event()?;
@@ -840,8 +845,7 @@ fn parse_note(
                         notations.push(parse_notations(reader, &e)?);
                     }
                     "lyric" => {
-                        // TODO: Parse lyrics fully in a later milestone
-                        reader.skip_element("lyric")?;
+                        lyrics.push(parse_lyric(reader, &e)?);
                     }
                     "instrument" => {
                         // TODO: Parse instrument references
@@ -948,7 +952,7 @@ fn parse_note(
         staff,
         beams,
         notations,
-        lyrics: vec![],
+        lyrics,
     })
 }
 
@@ -5321,6 +5325,1417 @@ fn parse_forward(
     })
 }
 
+// =============================================================================
+// Lyric Parsing (Phase 3 Milestone 5, Task 5.1)
+// =============================================================================
+
+/// Parse a lyric element.
+///
+/// Lyrics describe sung text associated with notes. They can include syllables,
+/// elisions, extends (melisma lines), and special markers like laughing or humming.
+fn parse_lyric(
+    reader: &mut XmlReader<'_>,
+    start: &quick_xml::events::BytesStart<'_>,
+) -> Result<Lyric, ParseError> {
+    use crate::ir::lyric::{LyricExtension, Syllabic};
+
+    let number = reader.get_optional_attr(start.attributes(), "number")?;
+    let name = reader.get_optional_attr(start.attributes(), "name")?;
+    let justify = reader
+        .get_optional_attr(start.attributes(), "justify")?
+        .map(|s| values::parse_left_center_right(&s, reader.position()))
+        .transpose()?;
+    let placement = reader
+        .get_optional_attr(start.attributes(), "placement")?
+        .map(|s| values::parse_above_below(&s, reader.position()))
+        .transpose()?;
+    let print_object = reader
+        .get_optional_attr(start.attributes(), "print-object")?
+        .map(|s| values::parse_yes_no(&s, reader.position()))
+        .transpose()?;
+
+    // Track what we're parsing
+    let mut content: Option<LyricContent> = None;
+    let mut end_line = false;
+    let mut end_paragraph = false;
+
+    // For building syllable content
+    let mut syllabic: Option<Syllabic> = None;
+    let mut text: Option<TextElementData> = None;
+    let mut extensions: Vec<LyricExtension> = Vec::new();
+    let mut extend: Option<Extend> = None;
+
+    // For building extensions (elision + syllabic? + text sequences)
+    let mut pending_elision: Option<Elision> = None;
+    let mut pending_syllabic: Option<Syllabic> = None;
+
+    loop {
+        let event = reader.next_event()?;
+        match event {
+            Event::Start(e) => {
+                let elem_name = element_name(&e);
+                match elem_name.as_str() {
+                    "syllabic" => {
+                        let s = reader.read_text("syllabic")?;
+                        let parsed = values::parse_syllabic(&s, reader.position())?;
+                        // If we have a pending elision, this syllabic is for the extension
+                        if pending_elision.is_some() {
+                            pending_syllabic = Some(parsed);
+                        } else {
+                            syllabic = Some(parsed);
+                        }
+                    }
+                    "text" => {
+                        let parsed_text = parse_text_element_data(reader, &e)?;
+                        // If we have a pending elision, this completes an extension
+                        if let Some(elision) = pending_elision.take() {
+                            extensions.push(LyricExtension {
+                                elision,
+                                syllabic: pending_syllabic.take(),
+                                text: parsed_text,
+                            });
+                        } else {
+                            text = Some(parsed_text);
+                        }
+                    }
+                    "elision" => {
+                        let elision_value =
+                            reader.read_optional_text("elision")?.unwrap_or_default();
+                        pending_elision = Some(Elision {
+                            value: elision_value,
+                            font: Font::default(),
+                            color: None,
+                        });
+                    }
+                    "extend" => {
+                        extend = Some(parse_extend_element(reader, &e)?);
+                    }
+                    "laughing" => {
+                        content = Some(LyricContent::Laughing);
+                        reader.skip_element("laughing")?;
+                    }
+                    "humming" => {
+                        content = Some(LyricContent::Humming);
+                        reader.skip_element("humming")?;
+                    }
+                    "end-line" => {
+                        end_line = true;
+                        reader.skip_element("end-line")?;
+                    }
+                    "end-paragraph" => {
+                        end_paragraph = true;
+                        reader.skip_element("end-paragraph")?;
+                    }
+                    "footnote" | "level" => {
+                        reader.skip_element(&elem_name)?;
+                    }
+                    _ => {
+                        reader.skip_element(&elem_name)?;
+                    }
+                }
+            }
+            Event::Empty(e) => {
+                let elem_name = element_name(&e);
+                match elem_name.as_str() {
+                    "extend" => {
+                        extend = Some(parse_extend_from_empty_element(&e, reader)?);
+                    }
+                    "laughing" => {
+                        content = Some(LyricContent::Laughing);
+                    }
+                    "humming" => {
+                        content = Some(LyricContent::Humming);
+                    }
+                    "end-line" => {
+                        end_line = true;
+                    }
+                    "end-paragraph" => {
+                        end_paragraph = true;
+                    }
+                    "elision" => {
+                        // Empty elision element (uses space as separator)
+                        pending_elision = Some(Elision {
+                            value: String::new(),
+                            font: Font::default(),
+                            color: None,
+                        });
+                    }
+                    _ => {}
+                }
+            }
+            Event::End(_) => break,
+            Event::Eof => {
+                return Err(ParseError::xml(
+                    "unexpected EOF in lyric",
+                    reader.position(),
+                ));
+            }
+            _ => {}
+        }
+    }
+
+    // Determine content type
+    let lyric_content = if let Some(c) = content {
+        c
+    } else if let Some(t) = text {
+        LyricContent::Syllable {
+            syllabic,
+            text: t,
+            extensions,
+            extend,
+        }
+    } else if let Some(ext) = extend {
+        LyricContent::ExtendOnly(ext)
+    } else {
+        // Empty syllable (unusual but valid)
+        LyricContent::Syllable {
+            syllabic: None,
+            text: TextElementData {
+                value: String::new(),
+                font: Font::default(),
+                color: None,
+                lang: None,
+            },
+            extensions: vec![],
+            extend: None,
+        }
+    };
+
+    Ok(Lyric {
+        number,
+        name,
+        justify,
+        placement,
+        print_object,
+        content: lyric_content,
+        end_line,
+        end_paragraph,
+    })
+}
+
+/// Parse a lyric element from an empty element (rare but possible).
+#[allow(dead_code)]
+fn parse_lyric_from_empty(
+    start: &quick_xml::events::BytesStart<'_>,
+    reader: &XmlReader<'_>,
+) -> Result<Lyric, ParseError> {
+    let number = reader.get_optional_attr(start.attributes(), "number")?;
+    let name = reader.get_optional_attr(start.attributes(), "name")?;
+    let justify = reader
+        .get_optional_attr(start.attributes(), "justify")?
+        .map(|s| values::parse_left_center_right(&s, reader.position()))
+        .transpose()?;
+    let placement = reader
+        .get_optional_attr(start.attributes(), "placement")?
+        .map(|s| values::parse_above_below(&s, reader.position()))
+        .transpose()?;
+    let print_object = reader
+        .get_optional_attr(start.attributes(), "print-object")?
+        .map(|s| values::parse_yes_no(&s, reader.position()))
+        .transpose()?;
+
+    Ok(Lyric {
+        number,
+        name,
+        justify,
+        placement,
+        print_object,
+        content: LyricContent::Syllable {
+            syllabic: None,
+            text: TextElementData {
+                value: String::new(),
+                font: Font::default(),
+                color: None,
+                lang: None,
+            },
+            extensions: vec![],
+            extend: None,
+        },
+        end_line: false,
+        end_paragraph: false,
+    })
+}
+
+/// Parse text-element-data with formatting attributes.
+fn parse_text_element_data(
+    reader: &mut XmlReader<'_>,
+    start: &quick_xml::events::BytesStart<'_>,
+) -> Result<TextElementData, ParseError> {
+    let font = parse_font_attrs(start, reader)?;
+    let color = reader.get_optional_attr(start.attributes(), "color")?;
+    let lang = reader.get_optional_attr(start.attributes(), "xml:lang")?;
+
+    let value = reader.read_text("text")?;
+
+    Ok(TextElementData {
+        value,
+        font,
+        color,
+        lang,
+    })
+}
+
+/// Parse font attributes from an element.
+fn parse_font_attrs(
+    start: &quick_xml::events::BytesStart<'_>,
+    reader: &XmlReader<'_>,
+) -> Result<Font, ParseError> {
+    let font_family = reader.get_optional_attr(start.attributes(), "font-family")?;
+    use crate::ir::common::{FontStyle, FontWeight};
+
+    let font_style = reader
+        .get_optional_attr(start.attributes(), "font-style")?
+        .and_then(|s| match s.as_str() {
+            "normal" => Some(FontStyle::Normal),
+            "italic" => Some(FontStyle::Italic),
+            _ => None,
+        });
+
+    let font_weight = reader
+        .get_optional_attr(start.attributes(), "font-weight")?
+        .and_then(|s| match s.as_str() {
+            "normal" => Some(FontWeight::Normal),
+            "bold" => Some(FontWeight::Bold),
+            _ => None,
+        });
+
+    // font-size can be a number or a CSS size keyword
+    let font_size = reader
+        .get_optional_attr(start.attributes(), "font-size")?
+        .map(|s| values::parse_font_size(&s, reader.position()))
+        .transpose()?;
+
+    Ok(Font {
+        font_family,
+        font_style,
+        font_size,
+        font_weight,
+    })
+}
+
+/// Parse an extend element (melisma line).
+fn parse_extend_element(
+    reader: &mut XmlReader<'_>,
+    start: &quick_xml::events::BytesStart<'_>,
+) -> Result<Extend, ParseError> {
+    let r#type = reader
+        .get_optional_attr(start.attributes(), "type")?
+        .map(|s| values::parse_start_stop_continue(&s, reader.position()))
+        .transpose()?;
+    let position = parse_position_attrs(start, reader)?;
+    let color = reader.get_optional_attr(start.attributes(), "color")?;
+
+    reader.skip_element("extend")?;
+
+    Ok(Extend {
+        r#type,
+        position,
+        color,
+    })
+}
+
+/// Parse an extend element from an empty element.
+fn parse_extend_from_empty_element(
+    start: &quick_xml::events::BytesStart<'_>,
+    reader: &XmlReader<'_>,
+) -> Result<Extend, ParseError> {
+    let r#type = reader
+        .get_optional_attr(start.attributes(), "type")?
+        .map(|s| values::parse_start_stop_continue(&s, reader.position()))
+        .transpose()?;
+    let position = parse_position_attrs(start, reader)?;
+    let color = reader.get_optional_attr(start.attributes(), "color")?;
+
+    Ok(Extend {
+        r#type,
+        position,
+        color,
+    })
+}
+
+// =============================================================================
+// Score Header Parsing (Phase 3 Milestone 5, Task 5.4)
+// =============================================================================
+
+/// Parse a work element containing work-number, work-title, and opus.
+fn parse_work(reader: &mut XmlReader<'_>) -> Result<Work, ParseError> {
+    let mut work_number: Option<String> = None;
+    let mut work_title: Option<String> = None;
+    let mut opus: Option<Opus> = None;
+
+    loop {
+        let event = reader.next_event()?;
+        match event {
+            Event::Start(e) => {
+                let name = element_name(&e);
+                match name.as_str() {
+                    "work-number" => {
+                        work_number = Some(reader.read_text("work-number")?);
+                    }
+                    "work-title" => {
+                        work_title = Some(reader.read_text("work-title")?);
+                    }
+                    "opus" => {
+                        opus = Some(parse_opus(reader, &e)?);
+                    }
+                    _ => {
+                        reader.skip_element(&name)?;
+                    }
+                }
+            }
+            Event::Empty(e) => {
+                let name = element_name(&e);
+                if name.as_str() == "opus" {
+                    opus = Some(parse_opus_from_empty(&e, reader)?);
+                }
+            }
+            Event::End(_) => break,
+            Event::Eof => {
+                return Err(ParseError::xml("unexpected EOF in work", reader.position()));
+            }
+            _ => {}
+        }
+    }
+
+    Ok(Work {
+        work_number,
+        work_title,
+        opus,
+    })
+}
+
+/// Parse an opus element (link to opus document).
+fn parse_opus(
+    reader: &mut XmlReader<'_>,
+    start: &quick_xml::events::BytesStart<'_>,
+) -> Result<Opus, ParseError> {
+    let href = reader.get_attr(start.attributes(), "xlink:href", "opus")?;
+    reader.skip_element("opus")?;
+    Ok(Opus { href })
+}
+
+/// Parse an opus element from empty tag.
+fn parse_opus_from_empty(
+    start: &quick_xml::events::BytesStart<'_>,
+    reader: &XmlReader<'_>,
+) -> Result<Opus, ParseError> {
+    let href = reader.get_attr(start.attributes(), "xlink:href", "opus")?;
+    Ok(Opus { href })
+}
+
+/// Parse an identification element containing creators, rights, encoding, source, relations.
+fn parse_identification(reader: &mut XmlReader<'_>) -> Result<Identification, ParseError> {
+    let mut creators: Vec<TypedText> = Vec::new();
+    let mut rights: Vec<TypedText> = Vec::new();
+    let mut encoding: Option<Encoding> = None;
+    let mut source: Option<String> = None;
+    let mut relations: Vec<TypedText> = Vec::new();
+    let mut miscellaneous: Option<crate::ir::common::Miscellaneous> = None;
+
+    loop {
+        let event = reader.next_event()?;
+        match event {
+            Event::Start(e) => {
+                let name = element_name(&e);
+                match name.as_str() {
+                    "creator" => {
+                        let r#type = reader.get_optional_attr(e.attributes(), "type")?;
+                        let value = reader.read_text("creator")?;
+                        creators.push(TypedText { r#type, value });
+                    }
+                    "rights" => {
+                        let r#type = reader.get_optional_attr(e.attributes(), "type")?;
+                        let value = reader.read_text("rights")?;
+                        rights.push(TypedText { r#type, value });
+                    }
+                    "encoding" => {
+                        encoding = Some(parse_encoding(reader)?);
+                    }
+                    "source" => {
+                        source = Some(reader.read_text("source")?);
+                    }
+                    "relation" => {
+                        let r#type = reader.get_optional_attr(e.attributes(), "type")?;
+                        let value = reader.read_text("relation")?;
+                        relations.push(TypedText { r#type, value });
+                    }
+                    "miscellaneous" => {
+                        miscellaneous = parse_miscellaneous(reader)?;
+                    }
+                    _ => {
+                        reader.skip_element(&name)?;
+                    }
+                }
+            }
+            Event::End(_) => break,
+            Event::Eof => {
+                return Err(ParseError::xml(
+                    "unexpected EOF in identification",
+                    reader.position(),
+                ));
+            }
+            _ => {}
+        }
+    }
+
+    Ok(Identification {
+        creators,
+        rights,
+        encoding,
+        source,
+        relations,
+        miscellaneous,
+    })
+}
+
+/// Parse a miscellaneous element containing miscellaneous-field elements.
+fn parse_miscellaneous(
+    reader: &mut XmlReader<'_>,
+) -> Result<Option<crate::ir::common::Miscellaneous>, ParseError> {
+    use crate::ir::common::{Miscellaneous, MiscellaneousField};
+    let mut fields: Vec<MiscellaneousField> = Vec::new();
+
+    loop {
+        let event = reader.next_event()?;
+        match event {
+            Event::Start(e) => {
+                let name = element_name(&e);
+                match name.as_str() {
+                    "miscellaneous-field" => {
+                        let field_name =
+                            reader.get_attr(e.attributes(), "name", "miscellaneous-field")?;
+                        let value = reader.read_text("miscellaneous-field")?;
+                        fields.push(MiscellaneousField {
+                            name: field_name,
+                            value,
+                        });
+                    }
+                    _ => {
+                        reader.skip_element(&name)?;
+                    }
+                }
+            }
+            Event::End(_) => break,
+            Event::Eof => {
+                return Err(ParseError::xml(
+                    "unexpected EOF in miscellaneous",
+                    reader.position(),
+                ));
+            }
+            _ => {}
+        }
+    }
+
+    if fields.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(Miscellaneous { fields }))
+    }
+}
+
+/// Parse an encoding element containing encoding-date, encoder, software, etc.
+fn parse_encoding(reader: &mut XmlReader<'_>) -> Result<Encoding, ParseError> {
+    let mut content: Vec<EncodingContent> = Vec::new();
+
+    loop {
+        let event = reader.next_event()?;
+        match event {
+            Event::Start(e) => {
+                let name = element_name(&e);
+                match name.as_str() {
+                    "encoding-date" => {
+                        let value = reader.read_text("encoding-date")?;
+                        content.push(EncodingContent::EncodingDate(value));
+                    }
+                    "encoder" => {
+                        let r#type = reader.get_optional_attr(e.attributes(), "type")?;
+                        let value = reader.read_text("encoder")?;
+                        content.push(EncodingContent::Encoder(TypedText { r#type, value }));
+                    }
+                    "software" => {
+                        let value = reader.read_text("software")?;
+                        content.push(EncodingContent::Software(value));
+                    }
+                    "encoding-description" => {
+                        let value = reader.read_text("encoding-description")?;
+                        content.push(EncodingContent::EncodingDescription(value));
+                    }
+                    "supports" => {
+                        let supports = parse_supports(reader, &e)?;
+                        content.push(EncodingContent::Supports(supports));
+                    }
+                    _ => {
+                        reader.skip_element(&name)?;
+                    }
+                }
+            }
+            Event::Empty(e) => {
+                let name = element_name(&e);
+                if name == "supports" {
+                    let supports = parse_supports_from_empty(&e, reader)?;
+                    content.push(EncodingContent::Supports(supports));
+                }
+            }
+            Event::End(_) => break,
+            Event::Eof => {
+                return Err(ParseError::xml(
+                    "unexpected EOF in encoding",
+                    reader.position(),
+                ));
+            }
+            _ => {}
+        }
+    }
+
+    Ok(Encoding { content })
+}
+
+/// Parse a supports element.
+fn parse_supports(
+    reader: &mut XmlReader<'_>,
+    start: &quick_xml::events::BytesStart<'_>,
+) -> Result<Supports, ParseError> {
+    let element = reader.get_attr(start.attributes(), "element", "supports")?;
+    let type_str = reader.get_attr(start.attributes(), "type", "supports")?;
+    let r#type = values::parse_yes_no(&type_str, reader.position())?;
+    let attribute = reader.get_optional_attr(start.attributes(), "attribute")?;
+    let value = reader.get_optional_attr(start.attributes(), "value")?;
+
+    reader.skip_element("supports")?;
+
+    Ok(Supports {
+        r#type,
+        element,
+        attribute,
+        value,
+    })
+}
+
+/// Parse a supports element from empty tag.
+fn parse_supports_from_empty(
+    start: &quick_xml::events::BytesStart<'_>,
+    reader: &XmlReader<'_>,
+) -> Result<Supports, ParseError> {
+    let element = reader.get_attr(start.attributes(), "element", "supports")?;
+    let type_str = reader.get_attr(start.attributes(), "type", "supports")?;
+    let r#type = values::parse_yes_no(&type_str, reader.position())?;
+    let attribute = reader.get_optional_attr(start.attributes(), "attribute")?;
+    let value = reader.get_optional_attr(start.attributes(), "value")?;
+
+    Ok(Supports {
+        r#type,
+        element,
+        attribute,
+        value,
+    })
+}
+
+/// Parse a credit element containing credit information for score display.
+fn parse_credit(
+    reader: &mut XmlReader<'_>,
+    start: &quick_xml::events::BytesStart<'_>,
+) -> Result<Credit, ParseError> {
+    let page = reader.get_optional_attr_as::<u32>(start.attributes(), "page")?;
+
+    let mut content: Vec<CreditContent> = Vec::new();
+
+    loop {
+        let event = reader.next_event()?;
+        match event {
+            Event::Start(e) => {
+                let name = element_name(&e);
+                match name.as_str() {
+                    "credit-type" => {
+                        let value = reader.read_text("credit-type")?;
+                        content.push(CreditContent::CreditType(value));
+                    }
+                    "credit-words" => {
+                        let cw = parse_credit_words(reader, &e)?;
+                        content.push(CreditContent::CreditWords(cw));
+                    }
+                    "credit-symbol" => {
+                        let cs = parse_credit_symbol(reader, &e)?;
+                        content.push(CreditContent::CreditSymbol(cs));
+                    }
+                    "credit-image" => {
+                        let img = parse_credit_image(reader, &e)?;
+                        content.push(CreditContent::CreditImage(img));
+                    }
+                    "link" | "bookmark" => {
+                        reader.skip_element(&name)?;
+                    }
+                    _ => {
+                        reader.skip_element(&name)?;
+                    }
+                }
+            }
+            Event::Empty(e) => {
+                let name = element_name(&e);
+                match name.as_str() {
+                    "credit-words" => {
+                        let cw = parse_credit_words_from_empty(&e, reader)?;
+                        content.push(CreditContent::CreditWords(cw));
+                    }
+                    "credit-image" => {
+                        let img = parse_credit_image_from_empty(&e, reader)?;
+                        content.push(CreditContent::CreditImage(img));
+                    }
+                    "credit-symbol" => {
+                        let cs = parse_credit_symbol_from_empty(&e, reader)?;
+                        content.push(CreditContent::CreditSymbol(cs));
+                    }
+                    _ => {}
+                }
+            }
+            Event::End(_) => break,
+            Event::Eof => {
+                return Err(ParseError::xml(
+                    "unexpected EOF in credit",
+                    reader.position(),
+                ));
+            }
+            _ => {}
+        }
+    }
+
+    Ok(Credit { page, content })
+}
+
+/// Parse credit-symbol element.
+fn parse_credit_symbol(
+    reader: &mut XmlReader<'_>,
+    start: &quick_xml::events::BytesStart<'_>,
+) -> Result<crate::ir::score::CreditSymbol, ParseError> {
+    let justify = reader
+        .get_optional_attr(start.attributes(), "justify")?
+        .map(|s| values::parse_left_center_right(&s, reader.position()))
+        .transpose()?;
+    let halign = reader
+        .get_optional_attr(start.attributes(), "halign")?
+        .map(|s| values::parse_left_center_right(&s, reader.position()))
+        .transpose()?;
+    let valign = reader
+        .get_optional_attr(start.attributes(), "valign")?
+        .map(|s| values::parse_top_middle_bottom(&s, reader.position()))
+        .transpose()?;
+    let print_style = parse_print_style_attrs(start, reader)?;
+
+    let value = reader.read_text("credit-symbol")?;
+
+    Ok(crate::ir::score::CreditSymbol {
+        value,
+        print_style,
+        justify,
+        halign,
+        valign,
+    })
+}
+
+/// Parse credit-symbol element from empty tag.
+fn parse_credit_symbol_from_empty(
+    start: &quick_xml::events::BytesStart<'_>,
+    reader: &XmlReader<'_>,
+) -> Result<crate::ir::score::CreditSymbol, ParseError> {
+    let justify = reader
+        .get_optional_attr(start.attributes(), "justify")?
+        .map(|s| values::parse_left_center_right(&s, reader.position()))
+        .transpose()?;
+    let halign = reader
+        .get_optional_attr(start.attributes(), "halign")?
+        .map(|s| values::parse_left_center_right(&s, reader.position()))
+        .transpose()?;
+    let valign = reader
+        .get_optional_attr(start.attributes(), "valign")?
+        .map(|s| values::parse_top_middle_bottom(&s, reader.position()))
+        .transpose()?;
+    let print_style = parse_print_style_attrs(start, reader)?;
+
+    Ok(crate::ir::score::CreditSymbol {
+        value: String::new(),
+        print_style,
+        justify,
+        halign,
+        valign,
+    })
+}
+
+/// Parse credit-words element.
+fn parse_credit_words(
+    reader: &mut XmlReader<'_>,
+    start: &quick_xml::events::BytesStart<'_>,
+) -> Result<CreditWords, ParseError> {
+    let justify = reader
+        .get_optional_attr(start.attributes(), "justify")?
+        .map(|s| values::parse_left_center_right(&s, reader.position()))
+        .transpose()?;
+    let halign = reader
+        .get_optional_attr(start.attributes(), "halign")?
+        .map(|s| values::parse_left_center_right(&s, reader.position()))
+        .transpose()?;
+    let valign = reader
+        .get_optional_attr(start.attributes(), "valign")?
+        .map(|s| values::parse_top_middle_bottom(&s, reader.position()))
+        .transpose()?;
+    let print_style = parse_print_style_attrs(start, reader)?;
+    let lang = reader.get_optional_attr(start.attributes(), "xml:lang")?;
+
+    let value = reader.read_text("credit-words")?;
+
+    Ok(CreditWords {
+        value,
+        print_style,
+        justify,
+        halign,
+        valign,
+        lang,
+    })
+}
+
+/// Parse credit-words element from empty tag.
+fn parse_credit_words_from_empty(
+    start: &quick_xml::events::BytesStart<'_>,
+    reader: &XmlReader<'_>,
+) -> Result<CreditWords, ParseError> {
+    let justify = reader
+        .get_optional_attr(start.attributes(), "justify")?
+        .map(|s| values::parse_left_center_right(&s, reader.position()))
+        .transpose()?;
+    let halign = reader
+        .get_optional_attr(start.attributes(), "halign")?
+        .map(|s| values::parse_left_center_right(&s, reader.position()))
+        .transpose()?;
+    let valign = reader
+        .get_optional_attr(start.attributes(), "valign")?
+        .map(|s| values::parse_top_middle_bottom(&s, reader.position()))
+        .transpose()?;
+    let print_style = parse_print_style_attrs(start, reader)?;
+    let lang = reader.get_optional_attr(start.attributes(), "xml:lang")?;
+
+    Ok(CreditWords {
+        value: String::new(),
+        print_style,
+        justify,
+        halign,
+        valign,
+        lang,
+    })
+}
+
+/// Parse credit-image element.
+fn parse_credit_image(
+    reader: &mut XmlReader<'_>,
+    start: &quick_xml::events::BytesStart<'_>,
+) -> Result<CreditImage, ParseError> {
+    let source = reader.get_attr(start.attributes(), "source", "credit-image")?;
+    let r#type = reader.get_attr(start.attributes(), "type", "credit-image")?;
+    let position = parse_position_attrs(start, reader)?;
+
+    reader.skip_element("credit-image")?;
+
+    Ok(CreditImage {
+        source,
+        r#type,
+        position,
+    })
+}
+
+/// Parse credit-image element from empty tag.
+fn parse_credit_image_from_empty(
+    start: &quick_xml::events::BytesStart<'_>,
+    reader: &XmlReader<'_>,
+) -> Result<CreditImage, ParseError> {
+    let source = reader.get_attr(start.attributes(), "source", "credit-image")?;
+    let r#type = reader.get_attr(start.attributes(), "type", "credit-image")?;
+    let position = parse_position_attrs(start, reader)?;
+
+    Ok(CreditImage {
+        source,
+        r#type,
+        position,
+    })
+}
+
+/// Parse a defaults element containing page layout, system layout, etc.
+fn parse_defaults(reader: &mut XmlReader<'_>) -> Result<Defaults, ParseError> {
+    let mut scaling: Option<Scaling> = None;
+    let mut page_layout: Option<PageLayout> = None;
+    let mut system_layout: Option<SystemLayout> = None;
+    let mut staff_layout: Vec<StaffLayout> = Vec::new();
+    let mut appearance: Option<Appearance> = None;
+    let mut music_font: Option<Font> = None;
+    let mut word_font: Option<Font> = None;
+    let mut lyric_fonts: Vec<LyricFont> = Vec::new();
+    let mut lyric_languages: Vec<LyricLanguage> = Vec::new();
+
+    loop {
+        let event = reader.next_event()?;
+        match event {
+            Event::Start(e) => {
+                let name = element_name(&e);
+                match name.as_str() {
+                    "scaling" => {
+                        scaling = Some(parse_scaling(reader)?);
+                    }
+                    "page-layout" => {
+                        page_layout = Some(parse_page_layout(reader)?);
+                    }
+                    "system-layout" => {
+                        system_layout = Some(parse_system_layout(reader)?);
+                    }
+                    "staff-layout" => {
+                        staff_layout.push(parse_staff_layout(reader, &e)?);
+                    }
+                    "appearance" => {
+                        appearance = Some(parse_appearance(reader)?);
+                    }
+                    "music-font" => {
+                        music_font = Some(parse_font_element(reader, &e)?);
+                    }
+                    "word-font" => {
+                        word_font = Some(parse_font_element(reader, &e)?);
+                    }
+                    "lyric-font" => {
+                        lyric_fonts.push(parse_lyric_font(reader, &e)?);
+                    }
+                    "lyric-language" => {
+                        lyric_languages.push(parse_lyric_language(reader, &e)?);
+                    }
+                    _ => {
+                        reader.skip_element(&name)?;
+                    }
+                }
+            }
+            Event::Empty(e) => {
+                let name = element_name(&e);
+                match name.as_str() {
+                    "music-font" => {
+                        music_font = Some(parse_font_attrs(&e, reader)?);
+                    }
+                    "word-font" => {
+                        word_font = Some(parse_font_attrs(&e, reader)?);
+                    }
+                    "lyric-font" => {
+                        lyric_fonts.push(parse_lyric_font_from_empty(&e, reader)?);
+                    }
+                    "lyric-language" => {
+                        lyric_languages.push(parse_lyric_language_from_empty(&e, reader)?);
+                    }
+                    "staff-layout" => {
+                        staff_layout.push(parse_staff_layout_from_empty(&e, reader)?);
+                    }
+                    _ => {}
+                }
+            }
+            Event::End(_) => break,
+            Event::Eof => {
+                return Err(ParseError::xml(
+                    "unexpected EOF in defaults",
+                    reader.position(),
+                ));
+            }
+            _ => {}
+        }
+    }
+
+    Ok(Defaults {
+        scaling,
+        page_layout,
+        system_layout,
+        staff_layout,
+        appearance,
+        music_font,
+        word_font,
+        lyric_fonts,
+        lyric_languages,
+    })
+}
+
+/// Parse a scaling element.
+fn parse_scaling(reader: &mut XmlReader<'_>) -> Result<Scaling, ParseError> {
+    let mut millimeters: Option<f64> = None;
+    let mut tenths: Option<f64> = None;
+
+    loop {
+        let event = reader.next_event()?;
+        match event {
+            Event::Start(e) => {
+                let name = element_name(&e);
+                match name.as_str() {
+                    "millimeters" => {
+                        millimeters = Some(reader.read_text_as("millimeters")?);
+                    }
+                    "tenths" => {
+                        tenths = Some(reader.read_text_as("tenths")?);
+                    }
+                    _ => {
+                        reader.skip_element(&name)?;
+                    }
+                }
+            }
+            Event::End(_) => break,
+            Event::Eof => {
+                return Err(ParseError::xml(
+                    "unexpected EOF in scaling",
+                    reader.position(),
+                ));
+            }
+            _ => {}
+        }
+    }
+
+    Ok(Scaling {
+        millimeters: millimeters.unwrap_or(7.2),
+        tenths: tenths.unwrap_or(40.0),
+    })
+}
+
+/// Parse a page-layout element.
+fn parse_page_layout(reader: &mut XmlReader<'_>) -> Result<PageLayout, ParseError> {
+    let mut page_height: Option<f64> = None;
+    let mut page_width: Option<f64> = None;
+    let mut page_margins: Vec<PageMargins> = Vec::new();
+
+    loop {
+        let event = reader.next_event()?;
+        match event {
+            Event::Start(e) => {
+                let name = element_name(&e);
+                match name.as_str() {
+                    "page-height" => {
+                        page_height = Some(reader.read_text_as("page-height")?);
+                    }
+                    "page-width" => {
+                        page_width = Some(reader.read_text_as("page-width")?);
+                    }
+                    "page-margins" => {
+                        page_margins.push(parse_page_margins(reader, &e)?);
+                    }
+                    _ => {
+                        reader.skip_element(&name)?;
+                    }
+                }
+            }
+            Event::End(_) => break,
+            Event::Eof => {
+                return Err(ParseError::xml(
+                    "unexpected EOF in page-layout",
+                    reader.position(),
+                ));
+            }
+            _ => {}
+        }
+    }
+
+    Ok(PageLayout {
+        page_height,
+        page_width,
+        page_margins,
+    })
+}
+
+/// Parse a page-margins element.
+fn parse_page_margins(
+    reader: &mut XmlReader<'_>,
+    start: &quick_xml::events::BytesStart<'_>,
+) -> Result<PageMargins, ParseError> {
+    let r#type = reader
+        .get_optional_attr(start.attributes(), "type")?
+        .map(|s| values::parse_margin_type(&s, reader.position()))
+        .transpose()?;
+
+    let mut left_margin: Option<f64> = None;
+    let mut right_margin: Option<f64> = None;
+    let mut top_margin: Option<f64> = None;
+    let mut bottom_margin: Option<f64> = None;
+
+    loop {
+        let event = reader.next_event()?;
+        match event {
+            Event::Start(e) => {
+                let name = element_name(&e);
+                match name.as_str() {
+                    "left-margin" => {
+                        left_margin = Some(reader.read_text_as("left-margin")?);
+                    }
+                    "right-margin" => {
+                        right_margin = Some(reader.read_text_as("right-margin")?);
+                    }
+                    "top-margin" => {
+                        top_margin = Some(reader.read_text_as("top-margin")?);
+                    }
+                    "bottom-margin" => {
+                        bottom_margin = Some(reader.read_text_as("bottom-margin")?);
+                    }
+                    _ => {
+                        reader.skip_element(&name)?;
+                    }
+                }
+            }
+            Event::End(_) => break,
+            Event::Eof => {
+                return Err(ParseError::xml(
+                    "unexpected EOF in page-margins",
+                    reader.position(),
+                ));
+            }
+            _ => {}
+        }
+    }
+
+    Ok(PageMargins {
+        r#type,
+        left: left_margin.unwrap_or(0.0),
+        right: right_margin.unwrap_or(0.0),
+        top: top_margin.unwrap_or(0.0),
+        bottom: bottom_margin.unwrap_or(0.0),
+    })
+}
+
+/// Parse a system-layout element.
+fn parse_system_layout(reader: &mut XmlReader<'_>) -> Result<SystemLayout, ParseError> {
+    let mut system_margins: Option<SystemMargins> = None;
+    let mut system_distance: Option<f64> = None;
+    let mut top_system_distance: Option<f64> = None;
+    let mut system_dividers: Option<SystemDividers> = None;
+
+    loop {
+        let event = reader.next_event()?;
+        match event {
+            Event::Start(e) => {
+                let name = element_name(&e);
+                match name.as_str() {
+                    "system-margins" => {
+                        system_margins = Some(parse_system_margins(reader)?);
+                    }
+                    "system-distance" => {
+                        system_distance = Some(reader.read_text_as("system-distance")?);
+                    }
+                    "top-system-distance" => {
+                        top_system_distance = Some(reader.read_text_as("top-system-distance")?);
+                    }
+                    "system-dividers" => {
+                        system_dividers = Some(parse_system_dividers(reader)?);
+                    }
+                    _ => {
+                        reader.skip_element(&name)?;
+                    }
+                }
+            }
+            Event::End(_) => break,
+            Event::Eof => {
+                return Err(ParseError::xml(
+                    "unexpected EOF in system-layout",
+                    reader.position(),
+                ));
+            }
+            _ => {}
+        }
+    }
+
+    Ok(SystemLayout {
+        system_margins,
+        system_distance,
+        top_system_distance,
+        system_dividers,
+    })
+}
+
+/// Parse a system-margins element.
+fn parse_system_margins(reader: &mut XmlReader<'_>) -> Result<SystemMargins, ParseError> {
+    let mut left_margin: Option<f64> = None;
+    let mut right_margin: Option<f64> = None;
+
+    loop {
+        let event = reader.next_event()?;
+        match event {
+            Event::Start(e) => {
+                let name = element_name(&e);
+                match name.as_str() {
+                    "left-margin" => {
+                        left_margin = Some(reader.read_text_as("left-margin")?);
+                    }
+                    "right-margin" => {
+                        right_margin = Some(reader.read_text_as("right-margin")?);
+                    }
+                    _ => {
+                        reader.skip_element(&name)?;
+                    }
+                }
+            }
+            Event::End(_) => break,
+            Event::Eof => {
+                return Err(ParseError::xml(
+                    "unexpected EOF in system-margins",
+                    reader.position(),
+                ));
+            }
+            _ => {}
+        }
+    }
+
+    Ok(SystemMargins {
+        left: left_margin.unwrap_or(0.0),
+        right: right_margin.unwrap_or(0.0),
+    })
+}
+
+/// Parse a system-dividers element.
+fn parse_system_dividers(reader: &mut XmlReader<'_>) -> Result<SystemDividers, ParseError> {
+    let mut left_divider: Option<Divider> = None;
+    let mut right_divider: Option<Divider> = None;
+
+    loop {
+        let event = reader.next_event()?;
+        match event {
+            Event::Start(e) => {
+                let name = element_name(&e);
+                match name.as_str() {
+                    "left-divider" => {
+                        left_divider = Some(parse_divider(reader, &e)?);
+                    }
+                    "right-divider" => {
+                        right_divider = Some(parse_divider(reader, &e)?);
+                    }
+                    _ => {
+                        reader.skip_element(&name)?;
+                    }
+                }
+            }
+            Event::Empty(e) => {
+                let name = element_name(&e);
+                match name.as_str() {
+                    "left-divider" => left_divider = Some(parse_divider_from_empty(&e, reader)?),
+                    "right-divider" => right_divider = Some(parse_divider_from_empty(&e, reader)?),
+                    _ => {}
+                }
+            }
+            Event::End(_) => break,
+            Event::Eof => {
+                return Err(ParseError::xml(
+                    "unexpected EOF in system-dividers",
+                    reader.position(),
+                ));
+            }
+            _ => {}
+        }
+    }
+
+    Ok(SystemDividers {
+        left_divider,
+        right_divider,
+    })
+}
+
+/// Parse a divider element.
+fn parse_divider(
+    reader: &mut XmlReader<'_>,
+    start: &quick_xml::events::BytesStart<'_>,
+) -> Result<Divider, ParseError> {
+    let print_object = reader
+        .get_optional_attr(start.attributes(), "print-object")?
+        .map(|s| values::parse_yes_no(&s, reader.position()))
+        .transpose()?;
+    let print_style = parse_print_style_attrs(start, reader)?;
+
+    reader.skip_element("divider")?;
+
+    Ok(Divider {
+        print_object,
+        print_style,
+    })
+}
+
+/// Parse a divider element from empty tag.
+fn parse_divider_from_empty(
+    start: &quick_xml::events::BytesStart<'_>,
+    reader: &XmlReader<'_>,
+) -> Result<Divider, ParseError> {
+    let print_object = reader
+        .get_optional_attr(start.attributes(), "print-object")?
+        .map(|s| values::parse_yes_no(&s, reader.position()))
+        .transpose()?;
+    let print_style = parse_print_style_attrs(start, reader)?;
+
+    Ok(Divider {
+        print_object,
+        print_style,
+    })
+}
+
+/// Parse a staff-layout element.
+fn parse_staff_layout(
+    reader: &mut XmlReader<'_>,
+    start: &quick_xml::events::BytesStart<'_>,
+) -> Result<StaffLayout, ParseError> {
+    let number = reader.get_optional_attr_as::<u16>(start.attributes(), "number")?;
+    let mut staff_distance: Option<f64> = None;
+
+    loop {
+        let event = reader.next_event()?;
+        match event {
+            Event::Start(e) => {
+                let name = element_name(&e);
+                match name.as_str() {
+                    "staff-distance" => {
+                        staff_distance = Some(reader.read_text_as("staff-distance")?);
+                    }
+                    _ => {
+                        reader.skip_element(&name)?;
+                    }
+                }
+            }
+            Event::End(_) => break,
+            Event::Eof => {
+                return Err(ParseError::xml(
+                    "unexpected EOF in staff-layout",
+                    reader.position(),
+                ));
+            }
+            _ => {}
+        }
+    }
+
+    Ok(StaffLayout {
+        number,
+        staff_distance,
+    })
+}
+
+/// Parse a staff-layout element from empty tag.
+fn parse_staff_layout_from_empty(
+    start: &quick_xml::events::BytesStart<'_>,
+    reader: &XmlReader<'_>,
+) -> Result<StaffLayout, ParseError> {
+    let number = reader.get_optional_attr_as::<u16>(start.attributes(), "number")?;
+
+    Ok(StaffLayout {
+        number,
+        staff_distance: None,
+    })
+}
+
+/// Parse an appearance element.
+fn parse_appearance(reader: &mut XmlReader<'_>) -> Result<Appearance, ParseError> {
+    use crate::ir::score::OtherAppearance;
+
+    let mut line_widths: Vec<LineWidth> = Vec::new();
+    let mut note_sizes: Vec<NoteSize> = Vec::new();
+    let mut distances: Vec<Distance> = Vec::new();
+    let mut other_appearances: Vec<OtherAppearance> = Vec::new();
+
+    loop {
+        let event = reader.next_event()?;
+        match event {
+            Event::Start(e) => {
+                let name = element_name(&e);
+                match name.as_str() {
+                    "line-width" => {
+                        let r#type = reader.get_attr(e.attributes(), "type", "line-width")?;
+                        let value: f64 = reader.read_text_as("line-width")?;
+                        line_widths.push(LineWidth { r#type, value });
+                    }
+                    "note-size" => {
+                        let type_str = reader.get_attr(e.attributes(), "type", "note-size")?;
+                        let r#type = values::parse_note_size_type(&type_str, reader.position())?;
+                        let value: f64 = reader.read_text_as("note-size")?;
+                        note_sizes.push(NoteSize { r#type, value });
+                    }
+                    "distance" => {
+                        let r#type = reader.get_attr(e.attributes(), "type", "distance")?;
+                        let value: f64 = reader.read_text_as("distance")?;
+                        distances.push(Distance { r#type, value });
+                    }
+                    "other-appearance" => {
+                        let r#type = reader.get_attr(e.attributes(), "type", "other-appearance")?;
+                        let value = reader.read_text("other-appearance")?;
+                        other_appearances.push(OtherAppearance { r#type, value });
+                    }
+                    _ => {
+                        reader.skip_element(&name)?;
+                    }
+                }
+            }
+            Event::End(_) => break,
+            Event::Eof => {
+                return Err(ParseError::xml(
+                    "unexpected EOF in appearance",
+                    reader.position(),
+                ));
+            }
+            _ => {}
+        }
+    }
+
+    Ok(Appearance {
+        line_widths,
+        note_sizes,
+        distances,
+        other_appearances,
+    })
+}
+
+/// Parse a font element (music-font, word-font).
+fn parse_font_element(
+    reader: &mut XmlReader<'_>,
+    start: &quick_xml::events::BytesStart<'_>,
+) -> Result<Font, ParseError> {
+    let font = parse_font_attrs(start, reader)?;
+    reader.skip_element("font")?;
+    Ok(font)
+}
+
+/// Parse a lyric-font element.
+fn parse_lyric_font(
+    reader: &mut XmlReader<'_>,
+    start: &quick_xml::events::BytesStart<'_>,
+) -> Result<LyricFont, ParseError> {
+    let number = reader.get_optional_attr(start.attributes(), "number")?;
+    let name = reader.get_optional_attr(start.attributes(), "name")?;
+    let font = parse_font_attrs(start, reader)?;
+
+    reader.skip_element("lyric-font")?;
+
+    Ok(LyricFont { number, name, font })
+}
+
+/// Parse a lyric-font element from empty tag.
+fn parse_lyric_font_from_empty(
+    start: &quick_xml::events::BytesStart<'_>,
+    reader: &XmlReader<'_>,
+) -> Result<LyricFont, ParseError> {
+    let number = reader.get_optional_attr(start.attributes(), "number")?;
+    let name = reader.get_optional_attr(start.attributes(), "name")?;
+    let font = parse_font_attrs(start, reader)?;
+
+    Ok(LyricFont { number, name, font })
+}
+
+/// Parse a lyric-language element.
+fn parse_lyric_language(
+    reader: &mut XmlReader<'_>,
+    start: &quick_xml::events::BytesStart<'_>,
+) -> Result<LyricLanguage, ParseError> {
+    let number = reader.get_optional_attr(start.attributes(), "number")?;
+    let name = reader.get_optional_attr(start.attributes(), "name")?;
+    let lang = reader.get_attr(start.attributes(), "xml:lang", "lyric-language")?;
+
+    reader.skip_element("lyric-language")?;
+
+    Ok(LyricLanguage { number, name, lang })
+}
+
+/// Parse a lyric-language element from empty tag.
+fn parse_lyric_language_from_empty(
+    start: &quick_xml::events::BytesStart<'_>,
+    reader: &XmlReader<'_>,
+) -> Result<LyricLanguage, ParseError> {
+    let number = reader.get_optional_attr(start.attributes(), "number")?;
+    let name = reader.get_optional_attr(start.attributes(), "name")?;
+    let lang = reader.get_attr(start.attributes(), "xml:lang", "lyric-language")?;
+
+    Ok(LyricLanguage { number, name, lang })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -6437,12 +7852,13 @@ mod tests {
             </score-partwise>"#;
 
         let score = parse_score(xml).unwrap();
-        assert!(score.work.is_none()); // Currently skipped
+        assert!(score.work.is_some());
+        let work = score.work.unwrap();
+        assert_eq!(work.work_title, Some("Sonata".to_string()));
     }
 
     #[test]
     fn test_parse_score_with_identification_element() {
-        // Identification element is skipped but should not cause errors
         let xml = r#"<?xml version="1.0"?>
             <score-partwise>
                 <identification>
@@ -6459,12 +7875,15 @@ mod tests {
             </score-partwise>"#;
 
         let score = parse_score(xml).unwrap();
-        assert!(score.identification.is_none()); // Currently skipped
+        assert!(score.identification.is_some());
+        let id = score.identification.unwrap();
+        assert_eq!(id.creators.len(), 1);
+        assert_eq!(id.creators[0].value, "Bach");
+        assert_eq!(id.creators[0].r#type, Some("composer".to_string()));
     }
 
     #[test]
     fn test_parse_score_with_defaults_element() {
-        // Defaults element is skipped but should not cause errors
         let xml = r#"<?xml version="1.0"?>
             <score-partwise>
                 <defaults>
@@ -6484,12 +7903,16 @@ mod tests {
             </score-partwise>"#;
 
         let score = parse_score(xml).unwrap();
-        assert!(score.defaults.is_none()); // Currently skipped
+        assert!(score.defaults.is_some());
+        let defaults = score.defaults.unwrap();
+        assert!(defaults.scaling.is_some());
+        let scaling = defaults.scaling.unwrap();
+        assert_eq!(scaling.millimeters, 7.0);
+        assert_eq!(scaling.tenths, 40.0);
     }
 
     #[test]
     fn test_parse_score_with_credit_elements() {
-        // Credit elements are skipped but should not cause errors
         let xml = r#"<?xml version="1.0"?>
             <score-partwise>
                 <credit page="1">
@@ -6506,7 +7929,8 @@ mod tests {
             </score-partwise>"#;
 
         let score = parse_score(xml).unwrap();
-        assert!(score.credits.is_empty()); // Currently skipped
+        assert_eq!(score.credits.len(), 1);
+        assert_eq!(score.credits[0].page, Some(1));
     }
 
     #[test]
@@ -8634,5 +10058,513 @@ mod tests {
                 result.err()
             );
         }
+    }
+
+    // =======================================================================
+    // Lyric Parsing Tests (Milestone 5, Task 5.1)
+    // =======================================================================
+
+    #[test]
+    fn test_parse_note_with_simple_lyric() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch>
+                                <step>C</step>
+                                <octave>4</octave>
+                            </pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <lyric number="1">
+                                <syllabic>single</syllabic>
+                                <text>love</text>
+                            </lyric>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        if let crate::ir::measure::MusicDataElement::Note(note) =
+            &score.parts[0].measures[0].content[0]
+        {
+            assert_eq!(note.lyrics.len(), 1);
+            assert_eq!(note.lyrics[0].number, Some("1".to_string()));
+            if let crate::ir::lyric::LyricContent::Syllable { syllabic, text, .. } =
+                &note.lyrics[0].content
+            {
+                assert_eq!(*syllabic, Some(crate::ir::lyric::Syllabic::Single));
+                assert_eq!(text.value, "love");
+            } else {
+                panic!("Expected Syllable content");
+            }
+        } else {
+            panic!("Expected Note");
+        }
+    }
+
+    #[test]
+    fn test_parse_note_with_multi_verse_lyrics() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch>
+                                <step>C</step>
+                                <octave>4</octave>
+                            </pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <lyric number="1">
+                                <syllabic>begin</syllabic>
+                                <text>Hap</text>
+                            </lyric>
+                            <lyric number="2">
+                                <syllabic>single</syllabic>
+                                <text>Joy</text>
+                            </lyric>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        if let crate::ir::measure::MusicDataElement::Note(note) =
+            &score.parts[0].measures[0].content[0]
+        {
+            assert_eq!(note.lyrics.len(), 2);
+            assert_eq!(note.lyrics[0].number, Some("1".to_string()));
+            assert_eq!(note.lyrics[1].number, Some("2".to_string()));
+
+            if let crate::ir::lyric::LyricContent::Syllable { syllabic, text, .. } =
+                &note.lyrics[0].content
+            {
+                assert_eq!(*syllabic, Some(crate::ir::lyric::Syllabic::Begin));
+                assert_eq!(text.value, "Hap");
+            }
+
+            if let crate::ir::lyric::LyricContent::Syllable { syllabic, text, .. } =
+                &note.lyrics[1].content
+            {
+                assert_eq!(*syllabic, Some(crate::ir::lyric::Syllabic::Single));
+                assert_eq!(text.value, "Joy");
+            }
+        } else {
+            panic!("Expected Note");
+        }
+    }
+
+    #[test]
+    fn test_parse_lyric_with_extend() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch>
+                                <step>C</step>
+                                <octave>4</octave>
+                            </pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <lyric number="1">
+                                <syllabic>end</syllabic>
+                                <text>day</text>
+                                <extend type="start"/>
+                            </lyric>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        if let crate::ir::measure::MusicDataElement::Note(note) =
+            &score.parts[0].measures[0].content[0]
+        {
+            if let crate::ir::lyric::LyricContent::Syllable { extend, .. } = &note.lyrics[0].content
+            {
+                assert!(extend.is_some());
+                assert_eq!(
+                    extend.as_ref().unwrap().r#type,
+                    Some(crate::ir::common::StartStopContinue::Start)
+                );
+            } else {
+                panic!("Expected Syllable content");
+            }
+        } else {
+            panic!("Expected Note");
+        }
+    }
+
+    #[test]
+    fn test_parse_lyric_laughing_and_humming() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch>
+                                <step>C</step>
+                                <octave>4</octave>
+                            </pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <lyric number="1">
+                                <laughing/>
+                            </lyric>
+                        </note>
+                        <note>
+                            <pitch>
+                                <step>D</step>
+                                <octave>4</octave>
+                            </pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <lyric number="1">
+                                <humming/>
+                            </lyric>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        if let crate::ir::measure::MusicDataElement::Note(note) =
+            &score.parts[0].measures[0].content[0]
+        {
+            assert_eq!(
+                note.lyrics[0].content,
+                crate::ir::lyric::LyricContent::Laughing
+            );
+        }
+        if let crate::ir::measure::MusicDataElement::Note(note) =
+            &score.parts[0].measures[0].content[1]
+        {
+            assert_eq!(
+                note.lyrics[0].content,
+                crate::ir::lyric::LyricContent::Humming
+            );
+        }
+    }
+
+    // =======================================================================
+    // Score Header Parsing Tests (Milestone 5, Task 5.4)
+    // =======================================================================
+
+    #[test]
+    fn test_parse_work_element() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <work>
+                    <work-number>Op. 27, No. 2</work-number>
+                    <work-title>Piano Sonata No. 14</work-title>
+                </work>
+                <movement-number>1</movement-number>
+                <movement-title>Adagio sostenuto</movement-title>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Piano</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1"/>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        assert!(score.work.is_some());
+        let work = score.work.as_ref().unwrap();
+        assert_eq!(work.work_number, Some("Op. 27, No. 2".to_string()));
+        assert_eq!(work.work_title, Some("Piano Sonata No. 14".to_string()));
+        assert_eq!(score.movement_number, Some("1".to_string()));
+        assert_eq!(score.movement_title, Some("Adagio sostenuto".to_string()));
+    }
+
+    #[test]
+    fn test_parse_identification_element() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <identification>
+                    <creator type="composer">Ludwig van Beethoven</creator>
+                    <creator type="lyricist">Unknown</creator>
+                    <rights>Copyright 2024</rights>
+                    <encoding>
+                        <software>Fermata</software>
+                        <encoding-date>2024-01-01</encoding-date>
+                    </encoding>
+                    <source>Manuscript</source>
+                </identification>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Piano</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1"/>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        assert!(score.identification.is_some());
+        let id = score.identification.as_ref().unwrap();
+        assert_eq!(id.creators.len(), 2);
+        assert_eq!(id.creators[0].r#type, Some("composer".to_string()));
+        assert_eq!(id.creators[0].value, "Ludwig van Beethoven");
+        assert_eq!(id.rights.len(), 1);
+        assert_eq!(id.rights[0].value, "Copyright 2024");
+        assert!(id.encoding.is_some());
+        assert_eq!(id.source, Some("Manuscript".to_string()));
+    }
+
+    #[test]
+    fn test_parse_defaults_with_scaling() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <defaults>
+                    <scaling>
+                        <millimeters>7.056</millimeters>
+                        <tenths>40</tenths>
+                    </scaling>
+                    <page-layout>
+                        <page-height>1683</page-height>
+                        <page-width>1190</page-width>
+                        <page-margins type="both">
+                            <left-margin>70</left-margin>
+                            <right-margin>70</right-margin>
+                            <top-margin>88</top-margin>
+                            <bottom-margin>88</bottom-margin>
+                        </page-margins>
+                    </page-layout>
+                </defaults>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Piano</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1"/>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        assert!(score.defaults.is_some());
+        let defaults = score.defaults.as_ref().unwrap();
+        assert!(defaults.scaling.is_some());
+        let scaling = defaults.scaling.as_ref().unwrap();
+        assert_eq!(scaling.millimeters, 7.056);
+        assert_eq!(scaling.tenths, 40.0);
+        assert!(defaults.page_layout.is_some());
+        let page_layout = defaults.page_layout.as_ref().unwrap();
+        assert_eq!(page_layout.page_height, Some(1683.0));
+        assert_eq!(page_layout.page_width, Some(1190.0));
+        assert_eq!(page_layout.page_margins.len(), 1);
+    }
+
+    #[test]
+    fn test_parse_credit_element() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <credit page="1">
+                    <credit-type>title</credit-type>
+                    <credit-words justify="center" halign="center" valign="top">Symphony No. 5</credit-words>
+                </credit>
+                <credit page="1">
+                    <credit-type>composer</credit-type>
+                    <credit-words>Ludwig van Beethoven</credit-words>
+                </credit>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Piano</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1"/>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        assert_eq!(score.credits.len(), 2);
+        assert_eq!(score.credits[0].page, Some(1));
+        assert_eq!(score.credits[0].content.len(), 2);
+        if let crate::ir::score::CreditContent::CreditType(ct) = &score.credits[0].content[0] {
+            assert_eq!(ct, "title");
+        }
+        if let crate::ir::score::CreditContent::CreditWords(cw) = &score.credits[0].content[1] {
+            assert_eq!(cw.value, "Symphony No. 5");
+        }
+    }
+
+    #[test]
+    fn test_parse_encoding_with_supports() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <identification>
+                    <encoding>
+                        <software>Fermata 1.0</software>
+                        <encoding-date>2024-01-15</encoding-date>
+                        <supports element="accidental" type="yes"/>
+                        <supports element="beam" type="yes"/>
+                        <supports element="stem" type="yes"/>
+                    </encoding>
+                </identification>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Piano</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1"/>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        assert!(score.identification.is_some());
+        let encoding = score
+            .identification
+            .as_ref()
+            .unwrap()
+            .encoding
+            .as_ref()
+            .unwrap();
+        assert!(encoding.content.len() >= 5);
+
+        // Check for supports elements
+        let mut supports_count = 0;
+        for item in &encoding.content {
+            if let crate::ir::common::EncodingContent::Supports(s) = item {
+                supports_count += 1;
+                assert_eq!(s.r#type, YesNo::Yes);
+            }
+        }
+        assert_eq!(supports_count, 3);
+    }
+
+    // =======================================================================
+    // Complex Tuplet Tests (Milestone 5, Task 5.5)
+    // =======================================================================
+
+    #[test]
+    fn test_parse_tuplet_with_time_modification() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch>
+                                <step>C</step>
+                                <octave>4</octave>
+                            </pitch>
+                            <duration>2</duration>
+                            <type>eighth</type>
+                            <time-modification>
+                                <actual-notes>3</actual-notes>
+                                <normal-notes>2</normal-notes>
+                                <normal-type>eighth</normal-type>
+                            </time-modification>
+                            <notations>
+                                <tuplet type="start" number="1" bracket="yes" show-number="actual"/>
+                            </notations>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_score(xml).unwrap();
+        if let crate::ir::measure::MusicDataElement::Note(note) =
+            &score.parts[0].measures[0].content[0]
+        {
+            // Check time modification
+            assert!(note.time_modification.is_some());
+            let tm = note.time_modification.as_ref().unwrap();
+            assert_eq!(tm.actual_notes, 3);
+            assert_eq!(tm.normal_notes, 2);
+
+            // Check tuplet notation
+            assert!(!note.notations.is_empty());
+            if let crate::ir::notation::NotationContent::Tuplet(t) = &note.notations[0].content[0] {
+                assert_eq!(t.r#type, crate::ir::common::StartStop::Start);
+                assert_eq!(t.number, Some(1));
+                assert_eq!(t.bracket, Some(YesNo::Yes));
+            } else {
+                panic!("Expected Tuplet notation");
+            }
+        } else {
+            panic!("Expected Note");
+        }
+    }
+
+    // =======================================================================
+    // Error Message Tests (Milestone 5, Task 5.5)
+    // =======================================================================
+
+    #[test]
+    fn test_parse_error_missing_required_element() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part id="P1">
+                    <measure number="1"/>
+                </part>
+            </score-partwise>"#;
+
+        let result = parse_score(xml);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        // Error should mention missing part-list
+        let err_str = format!("{:?}", err);
+        assert!(err_str.contains("part-list") || err_str.contains("missing"));
+    }
+
+    #[test]
+    fn test_parse_error_invalid_attribute_value() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch>
+                                <step>X</step>
+                                <octave>4</octave>
+                            </pitch>
+                            <duration>4</duration>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+        let result = parse_score(xml);
+        assert!(result.is_err());
     }
 }

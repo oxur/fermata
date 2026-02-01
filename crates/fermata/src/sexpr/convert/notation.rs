@@ -2791,7 +2791,10 @@ impl FromSexpr for Notations {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ir::common::{AccidentalValue, YesNo};
+    use crate::ir::common::{
+        AboveBelow, AccidentalValue, LineType, OverUnder, StartStop, StartStopContinue, UpDown,
+        YesNo,
+    };
     use crate::sexpr::print_sexpr;
 
     #[test]

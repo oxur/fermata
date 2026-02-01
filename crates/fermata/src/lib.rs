@@ -32,6 +32,7 @@
 #![warn(rustdoc::missing_crate_level_docs)]
 
 pub mod ir;
+pub mod lang;
 pub mod musicxml;
 pub mod sexpr;
 

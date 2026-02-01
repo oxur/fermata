@@ -322,6 +322,8 @@ pub enum Articulation {
     Staccato,
     /// Staccatissimo (very short)
     Staccatissimo,
+    /// Spiccato (bounced bow stroke)
+    Spiccato,
     /// Accent
     Accent,
     /// Strong accent (marcato)

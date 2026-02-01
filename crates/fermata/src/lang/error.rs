@@ -65,11 +65,12 @@ pub enum CompileError {
     InvalidDuration(String),
 
     /// Invalid note specification
-    #[error("Invalid note: {reason}")]
-    InvalidNote {
-        /// Description of why the note is invalid
-        reason: String,
-    },
+    #[error("Invalid note: {0}")]
+    InvalidNote(String),
+
+    /// Invalid rest specification
+    #[error("Invalid rest: {0}")]
+    InvalidRest(String),
 
     /// Invalid chord specification
     #[error("Invalid chord: {reason}")]
@@ -176,10 +177,14 @@ mod tests {
 
     #[test]
     fn test_compile_error_invalid_note_display() {
-        let err = CompileError::InvalidNote {
-            reason: "missing pitch".to_string(),
-        };
+        let err = CompileError::InvalidNote("missing pitch".to_string());
         assert!(err.to_string().contains("missing pitch"));
+    }
+
+    #[test]
+    fn test_compile_error_invalid_rest_display() {
+        let err = CompileError::InvalidRest("missing duration".to_string());
+        assert!(err.to_string().contains("missing duration"));
     }
 
     #[test]

@@ -9719,3 +9719,1026 @@ fn test_parse_time_interchangeable() {
         }
     }
 }
+
+// =============================================================================
+// Self-closing Element Tests (_from_empty functions)
+// =============================================================================
+
+// Helper for minimal score XML
+fn minimal_xml(content: &str) -> String {
+    format!(
+        r#"<?xml version="1.0"?>
+        <score-partwise>
+            <part-list>
+                <score-part id="P1"><part-name>Test</part-name></score-part>
+            </part-list>
+            <part id="P1">
+                <measure number="1">{}</measure>
+            </part>
+        </score-partwise>"#,
+        content
+    )
+}
+
+// === Note Self-closing Elements ===
+
+#[test]
+fn test_parse_rest_self_closing() {
+    let xml = minimal_xml("<note><rest/><duration>4</duration><type>whole</type></note>");
+    let score = parse_score(&xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        if let NoteContent::Regular { full_note, .. } = &note.content {
+            assert!(matches!(full_note.content, PitchRestUnpitched::Rest(_)));
+        } else {
+            panic!("Expected Regular note content");
+        }
+    } else {
+        panic!("Expected Note element");
+    }
+}
+
+#[test]
+fn test_parse_grace_self_closing() {
+    let xml = minimal_xml(
+        r#"<note>
+            <grace/>
+            <pitch><step>C</step><octave>4</octave></pitch>
+            <type>eighth</type>
+        </note>"#,
+    );
+    let score = parse_score(&xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        assert!(matches!(note.content, NoteContent::Grace { .. }));
+    } else {
+        panic!("Expected Note element");
+    }
+}
+
+#[test]
+fn test_parse_grace_with_slash_self_closing() {
+    let xml = minimal_xml(
+        r#"<note>
+            <grace slash="yes"/>
+            <pitch><step>C</step><octave>4</octave></pitch>
+            <type>eighth</type>
+        </note>"#,
+    );
+    let score = parse_score(&xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        if let NoteContent::Grace { grace, .. } = &note.content {
+            assert_eq!(grace.slash, Some(crate::ir::common::YesNo::Yes));
+        } else {
+            panic!("Expected Grace note content");
+        }
+    } else {
+        panic!("Expected Note element");
+    }
+}
+
+#[test]
+fn test_parse_tie_self_closing() {
+    let xml = minimal_xml(
+        r#"<note>
+            <pitch><step>C</step><octave>4</octave></pitch>
+            <duration>4</duration>
+            <tie type="start"/>
+            <type>quarter</type>
+        </note>"#,
+    );
+    let score = parse_score(&xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        if let NoteContent::Regular { ties, .. } = &note.content {
+            assert!(!ties.is_empty());
+            assert_eq!(ties[0].r#type, crate::ir::common::StartStop::Start);
+        } else {
+            panic!("Expected Regular note content");
+        }
+    } else {
+        panic!("Expected Note element");
+    }
+}
+
+#[test]
+fn test_parse_dot_self_closing() {
+    let xml = minimal_xml(
+        r#"<note>
+            <pitch><step>C</step><octave>4</octave></pitch>
+            <duration>6</duration>
+            <type>half</type>
+            <dot/>
+        </note>"#,
+    );
+    let score = parse_score(&xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        assert_eq!(note.dots.len(), 1);
+    } else {
+        panic!("Expected Note element");
+    }
+}
+
+#[test]
+fn test_parse_multiple_dots_self_closing() {
+    let xml = minimal_xml(
+        r#"<note>
+            <pitch><step>C</step><octave>4</octave></pitch>
+            <duration>7</duration>
+            <type>half</type>
+            <dot/>
+            <dot/>
+        </note>"#,
+    );
+    let score = parse_score(&xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        assert_eq!(note.dots.len(), 2);
+    } else {
+        panic!("Expected Note element");
+    }
+}
+
+// === Direction Self-closing Elements ===
+
+#[test]
+fn test_parse_wedge_self_closing() {
+    let xml = minimal_xml(
+        r#"<direction>
+            <direction-type>
+                <wedge type="crescendo"/>
+            </direction-type>
+        </direction>"#,
+    );
+    let score = parse_score(&xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Direction(dir) =
+        &score.parts[0].measures[0].content[0]
+    {
+        assert!(!dir.direction_types.is_empty());
+    } else {
+        panic!("Expected Direction element");
+    }
+}
+
+#[test]
+fn test_parse_pedal_self_closing() {
+    let xml = minimal_xml(
+        r#"<direction>
+            <direction-type>
+                <pedal type="start"/>
+            </direction-type>
+        </direction>"#,
+    );
+    let score = parse_score(&xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Direction(dir) =
+        &score.parts[0].measures[0].content[0]
+    {
+        assert!(!dir.direction_types.is_empty());
+    } else {
+        panic!("Expected Direction element");
+    }
+}
+
+#[test]
+fn test_parse_octave_shift_self_closing() {
+    let xml = minimal_xml(
+        r#"<direction>
+            <direction-type>
+                <octave-shift type="up" size="8"/>
+            </direction-type>
+        </direction>"#,
+    );
+    let score = parse_score(&xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Direction(dir) =
+        &score.parts[0].measures[0].content[0]
+    {
+        assert!(!dir.direction_types.is_empty());
+    } else {
+        panic!("Expected Direction element");
+    }
+}
+
+#[test]
+fn test_parse_dashes_self_closing() {
+    let xml = minimal_xml(
+        r#"<direction>
+            <direction-type>
+                <dashes type="start" number="1"/>
+            </direction-type>
+        </direction>"#,
+    );
+    let score = parse_score(&xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Direction(dir) =
+        &score.parts[0].measures[0].content[0]
+    {
+        assert!(!dir.direction_types.is_empty());
+    } else {
+        panic!("Expected Direction element");
+    }
+}
+
+#[test]
+fn test_parse_bracket_self_closing() {
+    let xml = minimal_xml(
+        r#"<direction>
+            <direction-type>
+                <bracket type="start" number="1" line-end="down"/>
+            </direction-type>
+        </direction>"#,
+    );
+    let score = parse_score(&xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Direction(dir) =
+        &score.parts[0].measures[0].content[0]
+    {
+        assert!(!dir.direction_types.is_empty());
+    } else {
+        panic!("Expected Direction element");
+    }
+}
+
+#[test]
+fn test_parse_direction_segno_self_closing() {
+    let xml = minimal_xml(
+        r#"<direction>
+            <direction-type>
+                <segno/>
+            </direction-type>
+        </direction>"#,
+    );
+    let score = parse_score(&xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Direction(dir) =
+        &score.parts[0].measures[0].content[0]
+    {
+        assert!(!dir.direction_types.is_empty());
+    } else {
+        panic!("Expected Direction element");
+    }
+}
+
+#[test]
+fn test_parse_direction_coda_self_closing() {
+    let xml = minimal_xml(
+        r#"<direction>
+            <direction-type>
+                <coda/>
+            </direction-type>
+        </direction>"#,
+    );
+    let score = parse_score(&xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Direction(dir) =
+        &score.parts[0].measures[0].content[0]
+    {
+        assert!(!dir.direction_types.is_empty());
+    } else {
+        panic!("Expected Direction element");
+    }
+}
+
+// === Notation Self-closing Elements ===
+
+#[test]
+fn test_parse_tied_self_closing() {
+    let xml = minimal_xml(
+        r#"<note>
+            <pitch><step>C</step><octave>4</octave></pitch>
+            <duration>4</duration>
+            <type>quarter</type>
+            <notations>
+                <tied type="start"/>
+            </notations>
+        </note>"#,
+    );
+    let score = parse_score(&xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        assert!(!note.notations.is_empty());
+    } else {
+        panic!("Expected Note element");
+    }
+}
+
+#[test]
+fn test_parse_slur_self_closing() {
+    let xml = minimal_xml(
+        r#"<note>
+            <pitch><step>C</step><octave>4</octave></pitch>
+            <duration>4</duration>
+            <type>quarter</type>
+            <notations>
+                <slur type="start" number="1"/>
+            </notations>
+        </note>"#,
+    );
+    let score = parse_score(&xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        assert!(!note.notations.is_empty());
+    } else {
+        panic!("Expected Note element");
+    }
+}
+
+#[test]
+fn test_parse_tuplet_self_closing() {
+    let xml = minimal_xml(
+        r#"<note>
+            <pitch><step>C</step><octave>4</octave></pitch>
+            <duration>2</duration>
+            <type>eighth</type>
+            <time-modification>
+                <actual-notes>3</actual-notes>
+                <normal-notes>2</normal-notes>
+            </time-modification>
+            <notations>
+                <tuplet type="start"/>
+            </notations>
+        </note>"#,
+    );
+    let score = parse_score(&xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        assert!(!note.notations.is_empty());
+    } else {
+        panic!("Expected Note element");
+    }
+}
+
+#[test]
+fn test_parse_fermata_self_closing() {
+    let xml = minimal_xml(
+        r#"<note>
+            <pitch><step>C</step><octave>4</octave></pitch>
+            <duration>4</duration>
+            <type>quarter</type>
+            <notations>
+                <fermata/>
+            </notations>
+        </note>"#,
+    );
+    let score = parse_score(&xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        assert!(!note.notations.is_empty());
+    } else {
+        panic!("Expected Note element");
+    }
+}
+
+#[test]
+fn test_parse_arpeggiate_self_closing() {
+    let xml = minimal_xml(
+        r#"<note>
+            <pitch><step>C</step><octave>4</octave></pitch>
+            <duration>4</duration>
+            <type>quarter</type>
+            <notations>
+                <arpeggiate/>
+            </notations>
+        </note>"#,
+    );
+    let score = parse_score(&xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        assert!(!note.notations.is_empty());
+    } else {
+        panic!("Expected Note element");
+    }
+}
+
+#[test]
+fn test_parse_arpeggiate_with_direction() {
+    let xml = minimal_xml(
+        r#"<note>
+            <pitch><step>C</step><octave>4</octave></pitch>
+            <duration>4</duration>
+            <type>quarter</type>
+            <notations>
+                <arpeggiate direction="up"/>
+            </notations>
+        </note>"#,
+    );
+    let score = parse_score(&xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        assert!(!note.notations.is_empty());
+    } else {
+        panic!("Expected Note element");
+    }
+}
+
+#[test]
+fn test_parse_non_arpeggiate_self_closing() {
+    let xml = minimal_xml(
+        r#"<note>
+            <pitch><step>C</step><octave>4</octave></pitch>
+            <duration>4</duration>
+            <type>quarter</type>
+            <notations>
+                <non-arpeggiate type="bottom"/>
+            </notations>
+        </note>"#,
+    );
+    let score = parse_score(&xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        assert!(!note.notations.is_empty());
+    } else {
+        panic!("Expected Note element");
+    }
+}
+
+// === Articulation Self-closing Elements ===
+
+#[test]
+fn test_parse_staccato_self_closing() {
+    let xml = minimal_xml(
+        r#"<note>
+            <pitch><step>C</step><octave>4</octave></pitch>
+            <duration>4</duration>
+            <type>quarter</type>
+            <notations>
+                <articulations>
+                    <staccato/>
+                </articulations>
+            </notations>
+        </note>"#,
+    );
+    let score = parse_score(&xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        assert!(!note.notations.is_empty());
+    } else {
+        panic!("Expected Note element");
+    }
+}
+
+#[test]
+fn test_parse_accent_self_closing() {
+    let xml = minimal_xml(
+        r#"<note>
+            <pitch><step>C</step><octave>4</octave></pitch>
+            <duration>4</duration>
+            <type>quarter</type>
+            <notations>
+                <articulations>
+                    <accent/>
+                </articulations>
+            </notations>
+        </note>"#,
+    );
+    let score = parse_score(&xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        assert!(!note.notations.is_empty());
+    } else {
+        panic!("Expected Note element");
+    }
+}
+
+#[test]
+fn test_parse_tenuto_self_closing() {
+    let xml = minimal_xml(
+        r#"<note>
+            <pitch><step>C</step><octave>4</octave></pitch>
+            <duration>4</duration>
+            <type>quarter</type>
+            <notations>
+                <articulations>
+                    <tenuto/>
+                </articulations>
+            </notations>
+        </note>"#,
+    );
+    let score = parse_score(&xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        assert!(!note.notations.is_empty());
+    } else {
+        panic!("Expected Note element");
+    }
+}
+
+#[test]
+fn test_parse_staccatissimo_self_closing() {
+    let xml = minimal_xml(
+        r#"<note>
+            <pitch><step>C</step><octave>4</octave></pitch>
+            <duration>4</duration>
+            <type>quarter</type>
+            <notations>
+                <articulations>
+                    <staccatissimo/>
+                </articulations>
+            </notations>
+        </note>"#,
+    );
+    let score = parse_score(&xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        assert!(!note.notations.is_empty());
+    } else {
+        panic!("Expected Note element");
+    }
+}
+
+// === Ornament Self-closing Elements ===
+
+#[test]
+fn test_parse_trill_mark_self_closing() {
+    let xml = minimal_xml(
+        r#"<note>
+            <pitch><step>C</step><octave>4</octave></pitch>
+            <duration>4</duration>
+            <type>quarter</type>
+            <notations>
+                <ornaments>
+                    <trill-mark/>
+                </ornaments>
+            </notations>
+        </note>"#,
+    );
+    let score = parse_score(&xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        assert!(!note.notations.is_empty());
+    } else {
+        panic!("Expected Note element");
+    }
+}
+
+#[test]
+fn test_parse_turn_self_closing() {
+    let xml = minimal_xml(
+        r#"<note>
+            <pitch><step>C</step><octave>4</octave></pitch>
+            <duration>4</duration>
+            <type>quarter</type>
+            <notations>
+                <ornaments>
+                    <turn/>
+                </ornaments>
+            </notations>
+        </note>"#,
+    );
+    let score = parse_score(&xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        assert!(!note.notations.is_empty());
+    } else {
+        panic!("Expected Note element");
+    }
+}
+
+#[test]
+fn test_parse_mordent_self_closing() {
+    let xml = minimal_xml(
+        r#"<note>
+            <pitch><step>C</step><octave>4</octave></pitch>
+            <duration>4</duration>
+            <type>quarter</type>
+            <notations>
+                <ornaments>
+                    <mordent/>
+                </ornaments>
+            </notations>
+        </note>"#,
+    );
+    let score = parse_score(&xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        assert!(!note.notations.is_empty());
+    } else {
+        panic!("Expected Note element");
+    }
+}
+
+#[test]
+fn test_parse_inverted_mordent_self_closing() {
+    let xml = minimal_xml(
+        r#"<note>
+            <pitch><step>C</step><octave>4</octave></pitch>
+            <duration>4</duration>
+            <type>quarter</type>
+            <notations>
+                <ornaments>
+                    <inverted-mordent/>
+                </ornaments>
+            </notations>
+        </note>"#,
+    );
+    let score = parse_score(&xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        assert!(!note.notations.is_empty());
+    } else {
+        panic!("Expected Note element");
+    }
+}
+
+// === Technical Self-closing Elements ===
+
+#[test]
+fn test_parse_up_bow_self_closing() {
+    let xml = minimal_xml(
+        r#"<note>
+            <pitch><step>C</step><octave>4</octave></pitch>
+            <duration>4</duration>
+            <type>quarter</type>
+            <notations>
+                <technical>
+                    <up-bow/>
+                </technical>
+            </notations>
+        </note>"#,
+    );
+    let score = parse_score(&xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        assert!(!note.notations.is_empty());
+    } else {
+        panic!("Expected Note element");
+    }
+}
+
+#[test]
+fn test_parse_down_bow_self_closing() {
+    let xml = minimal_xml(
+        r#"<note>
+            <pitch><step>C</step><octave>4</octave></pitch>
+            <duration>4</duration>
+            <type>quarter</type>
+            <notations>
+                <technical>
+                    <down-bow/>
+                </technical>
+            </notations>
+        </note>"#,
+    );
+    let score = parse_score(&xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        assert!(!note.notations.is_empty());
+    } else {
+        panic!("Expected Note element");
+    }
+}
+
+#[test]
+fn test_parse_open_string_self_closing() {
+    let xml = minimal_xml(
+        r#"<note>
+            <pitch><step>C</step><octave>4</octave></pitch>
+            <duration>4</duration>
+            <type>quarter</type>
+            <notations>
+                <technical>
+                    <open-string/>
+                </technical>
+            </notations>
+        </note>"#,
+    );
+    let score = parse_score(&xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        assert!(!note.notations.is_empty());
+    } else {
+        panic!("Expected Note element");
+    }
+}
+
+#[test]
+fn test_parse_snap_pizzicato_self_closing() {
+    let xml = minimal_xml(
+        r#"<note>
+            <pitch><step>C</step><octave>4</octave></pitch>
+            <duration>4</duration>
+            <type>quarter</type>
+            <notations>
+                <technical>
+                    <snap-pizzicato/>
+                </technical>
+            </notations>
+        </note>"#,
+    );
+    let score = parse_score(&xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        assert!(!note.notations.is_empty());
+    } else {
+        panic!("Expected Note element");
+    }
+}
+
+// === Barline Self-closing Elements ===
+
+#[test]
+fn test_parse_barline_repeat_self_closing() {
+    let xml = minimal_xml(
+        r#"<barline location="left">
+            <bar-style>heavy-light</bar-style>
+            <repeat direction="forward"/>
+        </barline>"#,
+    );
+    let score = parse_score(&xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Barline(barline) =
+        &score.parts[0].measures[0].content[0]
+    {
+        assert!(barline.repeat.is_some());
+    } else {
+        panic!("Expected Barline element");
+    }
+}
+
+#[test]
+fn test_parse_barline_ending_self_closing() {
+    let xml = minimal_xml(
+        r#"<barline location="left">
+            <ending number="1" type="start"/>
+        </barline>"#,
+    );
+    let score = parse_score(&xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Barline(barline) =
+        &score.parts[0].measures[0].content[0]
+    {
+        assert!(barline.ending.is_some());
+    } else {
+        panic!("Expected Barline element");
+    }
+}
+
+#[test]
+fn test_parse_barline_segno_self_closing() {
+    let xml = minimal_xml(
+        r#"<barline>
+            <segno/>
+        </barline>"#,
+    );
+    let score = parse_score(&xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Barline(barline) =
+        &score.parts[0].measures[0].content[0]
+    {
+        assert!(barline.segno.is_some());
+    } else {
+        panic!("Expected Barline element");
+    }
+}
+
+#[test]
+fn test_parse_barline_coda_self_closing() {
+    let xml = minimal_xml(
+        r#"<barline>
+            <coda/>
+        </barline>"#,
+    );
+    let score = parse_score(&xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Barline(barline) =
+        &score.parts[0].measures[0].content[0]
+    {
+        assert!(barline.coda.is_some());
+    } else {
+        panic!("Expected Barline element");
+    }
+}
+
+#[test]
+fn test_parse_barline_fermata_self_closing() {
+    let xml = minimal_xml(
+        r#"<barline>
+            <bar-style>light-heavy</bar-style>
+            <fermata/>
+        </barline>"#,
+    );
+    let score = parse_score(&xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Barline(barline) =
+        &score.parts[0].measures[0].content[0]
+    {
+        assert!(!barline.fermatas.is_empty());
+    } else {
+        panic!("Expected Barline element");
+    }
+}
+
+// === Defaults and Layout Elements ===
+
+#[test]
+fn test_parse_defaults_scaling_element() {
+    let xml = r#"<?xml version="1.0"?>
+        <score-partwise>
+            <defaults>
+                <scaling>
+                    <millimeters>7.2319</millimeters>
+                    <tenths>40</tenths>
+                </scaling>
+            </defaults>
+            <part-list>
+                <score-part id="P1"><part-name>Test</part-name></score-part>
+            </part-list>
+            <part id="P1"><measure number="1"/></part>
+        </score-partwise>"#;
+    let score = parse_score(xml).unwrap();
+    assert!(score.defaults.is_some());
+    if let Some(defaults) = &score.defaults {
+        assert!(defaults.scaling.is_some());
+    }
+}
+
+#[test]
+fn test_parse_defaults_with_page_layout() {
+    let xml = r#"<?xml version="1.0"?>
+        <score-partwise>
+            <defaults>
+                <page-layout>
+                    <page-height>1584</page-height>
+                    <page-width>1224</page-width>
+                </page-layout>
+            </defaults>
+            <part-list>
+                <score-part id="P1"><part-name>Test</part-name></score-part>
+            </part-list>
+            <part id="P1"><measure number="1"/></part>
+        </score-partwise>"#;
+    let score = parse_score(xml).unwrap();
+    assert!(score.defaults.is_some());
+    if let Some(defaults) = &score.defaults {
+        assert!(defaults.page_layout.is_some());
+    }
+}
+
+#[test]
+fn test_parse_defaults_with_page_margins() {
+    let xml = r#"<?xml version="1.0"?>
+        <score-partwise>
+            <defaults>
+                <page-layout>
+                    <page-height>1584</page-height>
+                    <page-width>1224</page-width>
+                    <page-margins type="both">
+                        <left-margin>70</left-margin>
+                        <right-margin>70</right-margin>
+                        <top-margin>88</top-margin>
+                        <bottom-margin>88</bottom-margin>
+                    </page-margins>
+                </page-layout>
+            </defaults>
+            <part-list>
+                <score-part id="P1"><part-name>Test</part-name></score-part>
+            </part-list>
+            <part id="P1"><measure number="1"/></part>
+        </score-partwise>"#;
+    let score = parse_score(xml).unwrap();
+    assert!(score.defaults.is_some());
+    if let Some(defaults) = &score.defaults {
+        if let Some(page_layout) = &defaults.page_layout {
+            assert!(!page_layout.page_margins.is_empty());
+        }
+    }
+}
+
+#[test]
+fn test_parse_defaults_system_layout_with_margins() {
+    let xml = r#"<?xml version="1.0"?>
+        <score-partwise>
+            <defaults>
+                <system-layout>
+                    <system-margins>
+                        <left-margin>70</left-margin>
+                        <right-margin>70</right-margin>
+                    </system-margins>
+                    <system-distance>121</system-distance>
+                    <top-system-distance>70</top-system-distance>
+                </system-layout>
+            </defaults>
+            <part-list>
+                <score-part id="P1"><part-name>Test</part-name></score-part>
+            </part-list>
+            <part id="P1"><measure number="1"/></part>
+        </score-partwise>"#;
+    let score = parse_score(xml).unwrap();
+    assert!(score.defaults.is_some());
+    if let Some(defaults) = &score.defaults {
+        assert!(defaults.system_layout.is_some());
+    }
+}
+
+// === Credit Elements ===
+
+#[test]
+fn test_parse_credit_with_words() {
+    let xml = r#"<?xml version="1.0"?>
+        <score-partwise>
+            <credit page="1">
+                <credit-words default-x="595" default-y="1553" font-size="24" justify="center">Title</credit-words>
+            </credit>
+            <part-list>
+                <score-part id="P1"><part-name>Test</part-name></score-part>
+            </part-list>
+            <part id="P1"><measure number="1"/></part>
+        </score-partwise>"#;
+    let score = parse_score(xml).unwrap();
+    assert!(!score.credits.is_empty());
+}
+
+#[test]
+fn test_parse_multiple_credits() {
+    let xml = r#"<?xml version="1.0"?>
+        <score-partwise>
+            <credit page="1">
+                <credit-words>Title</credit-words>
+            </credit>
+            <credit page="1">
+                <credit-words>Composer</credit-words>
+            </credit>
+            <part-list>
+                <score-part id="P1"><part-name>Test</part-name></score-part>
+            </part-list>
+            <part id="P1"><measure number="1"/></part>
+        </score-partwise>"#;
+    let score = parse_score(xml).unwrap();
+    assert_eq!(score.credits.len(), 2);
+}
+
+// === Dynamics Self-closing ===
+
+#[test]
+fn test_parse_dynamics_pp_self_closing() {
+    let xml = minimal_xml(
+        r#"<direction>
+            <direction-type>
+                <dynamics><pp/></dynamics>
+            </direction-type>
+        </direction>"#,
+    );
+    let score = parse_score(&xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Direction(dir) =
+        &score.parts[0].measures[0].content[0]
+    {
+        assert!(!dir.direction_types.is_empty());
+    } else {
+        panic!("Expected Direction element");
+    }
+}
+
+#[test]
+fn test_parse_dynamics_ff_self_closing() {
+    let xml = minimal_xml(
+        r#"<direction>
+            <direction-type>
+                <dynamics><ff/></dynamics>
+            </direction-type>
+        </direction>"#,
+    );
+    let score = parse_score(&xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Direction(dir) =
+        &score.parts[0].measures[0].content[0]
+    {
+        assert!(!dir.direction_types.is_empty());
+    } else {
+        panic!("Expected Direction element");
+    }
+}
+
+#[test]
+fn test_parse_dynamics_sfz_self_closing() {
+    let xml = minimal_xml(
+        r#"<direction>
+            <direction-type>
+                <dynamics><sfz/></dynamics>
+            </direction-type>
+        </direction>"#,
+    );
+    let score = parse_score(&xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Direction(dir) =
+        &score.parts[0].measures[0].content[0]
+    {
+        assert!(!dir.direction_types.is_empty());
+    } else {
+        panic!("Expected Direction element");
+    }
+}
+
+// === Lyric extend Self-closing ===
+
+#[test]
+fn test_parse_lyric_extend_self_closing() {
+    let xml = minimal_xml(
+        r#"<note>
+            <pitch><step>C</step><octave>4</octave></pitch>
+            <duration>4</duration>
+            <type>quarter</type>
+            <lyric number="1">
+                <syllabic>single</syllabic>
+                <text>la</text>
+                <extend/>
+            </lyric>
+        </note>"#,
+    );
+    let score = parse_score(&xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        assert!(!note.lyrics.is_empty());
+    } else {
+        panic!("Expected Note element");
+    }
+}

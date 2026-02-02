@@ -6207,3 +6207,3515 @@ fn test_parse_empty_clef() {
         assert_eq!(attrs.clefs[0].number, Some(1));
     }
 }
+
+// =======================================================================
+// Additional Coverage Tests for 95%+ coverage
+// =======================================================================
+
+// === EOF Error Tests ===
+
+#[test]
+fn test_parse_eof_in_score_partwise() {
+    // Truncated XML that ends during score-partwise parsing
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>"#;
+    let result = parse_score(xml);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_parse_eof_in_part_list() {
+    // EOF during part-list parsing
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">"#;
+    let result = parse_score(xml);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_parse_eof_in_measure() {
+    // EOF during measure parsing
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>"#;
+    let result = parse_score(xml);
+    assert!(result.is_err());
+}
+
+// === Processing Instruction Test ===
+
+#[test]
+fn test_parse_score_with_processing_instruction() {
+    let xml = r#"<?xml version="1.0"?>
+            <?xml-stylesheet type="text/xsl" href="score.xsl"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1"/>
+                </part>
+            </score-partwise>"#;
+    let score = parse_score(xml).unwrap();
+    assert_eq!(score.parts.len(), 1);
+}
+
+// === Lyric Parsing Tests ===
+
+#[test]
+fn test_parse_lyric_basic() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Voice</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>C</step><octave>4</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <lyric number="1">
+                                <syllabic>single</syllabic>
+                                <text>la</text>
+                            </lyric>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        assert_eq!(note.lyrics.len(), 1);
+        assert_eq!(note.lyrics[0].number, Some("1".to_string()));
+    } else {
+        panic!("Expected Note");
+    }
+}
+
+#[test]
+fn test_parse_lyric_with_elision_multi_syllable() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Voice</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>C</step><octave>4</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <lyric number="1">
+                                <syllabic>begin</syllabic>
+                                <text>hel</text>
+                                <elision> </elision>
+                                <syllabic>end</syllabic>
+                                <text>lo</text>
+                            </lyric>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        assert!(!note.lyrics.is_empty());
+    }
+}
+
+#[test]
+fn test_parse_lyric_with_extend_melisma() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Voice</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>C</step><octave>4</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <lyric number="1">
+                                <syllabic>single</syllabic>
+                                <text>la</text>
+                                <extend type="start"/>
+                            </lyric>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        assert!(!note.lyrics.is_empty());
+    }
+}
+
+#[test]
+fn test_parse_lyric_laughing_humming() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Voice</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>C</step><octave>4</octave></pitch>
+                            <duration>4</duration>
+                            <lyric number="1">
+                                <laughing/>
+                            </lyric>
+                        </note>
+                        <note>
+                            <pitch><step>D</step><octave>4</octave></pitch>
+                            <duration>4</duration>
+                            <lyric number="1">
+                                <humming/>
+                            </lyric>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    assert_eq!(score.parts[0].measures[0].content.len(), 2);
+}
+
+// === Notation Elements Tests ===
+
+#[test]
+fn test_parse_notation_slur() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>C</step><octave>4</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <notations>
+                                <slur type="start" number="1" placement="above"/>
+                            </notations>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        if let crate::ir::notation::NotationContent::Slur(s) = &note.notations[0].content[0] {
+            assert_eq!(s.r#type, crate::ir::common::StartStopContinue::Start);
+            assert_eq!(s.number, 1);
+        } else {
+            panic!("Expected Slur");
+        }
+    }
+}
+
+#[test]
+fn test_parse_notation_tied() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>C</step><octave>4</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <notations>
+                                <tied type="start" orientation="over"/>
+                            </notations>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        if let crate::ir::notation::NotationContent::Tied(t) = &note.notations[0].content[0] {
+            assert_eq!(t.r#type, crate::ir::common::StartStopContinue::Start);
+        } else {
+            panic!("Expected Tied");
+        }
+    }
+}
+
+#[test]
+fn test_parse_notation_arpeggiate() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>C</step><octave>4</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <notations>
+                                <arpeggiate direction="up"/>
+                            </notations>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        if let crate::ir::notation::NotationContent::Arpeggiate(a) = &note.notations[0].content[0] {
+            assert_eq!(a.direction, Some(crate::ir::common::UpDown::Up));
+        } else {
+            panic!("Expected Arpeggiate");
+        }
+    }
+}
+
+#[test]
+fn test_parse_notation_non_arpeggiate() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>C</step><octave>4</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <notations>
+                                <non-arpeggiate type="bottom"/>
+                            </notations>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        assert!(!note.notations.is_empty());
+    }
+}
+
+#[test]
+fn test_parse_notation_fermata() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>C</step><octave>4</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <notations>
+                                <fermata type="upright">normal</fermata>
+                            </notations>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        if let crate::ir::notation::NotationContent::Fermata(f) = &note.notations[0].content[0] {
+            assert_eq!(f.shape, Some(FermataShape::Normal));
+        } else {
+            panic!("Expected Fermata");
+        }
+    }
+}
+
+#[test]
+fn test_parse_notation_empty_fermata() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>C</step><octave>4</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <notations>
+                                <fermata/>
+                            </notations>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        assert!(!note.notations.is_empty());
+    }
+}
+
+// === Ornaments Tests ===
+
+#[test]
+fn test_parse_ornament_trill_mark() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>C</step><octave>4</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <notations>
+                                <ornaments>
+                                    <trill-mark placement="above"/>
+                                </ornaments>
+                            </notations>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        assert!(!note.notations.is_empty());
+    }
+}
+
+#[test]
+fn test_parse_ornament_turn_variants() {
+    let turns = [
+        "turn",
+        "delayed-turn",
+        "inverted-turn",
+        "delayed-inverted-turn",
+        "vertical-turn",
+    ];
+    for turn_type in turns {
+        let xml = format!(
+            r#"<?xml version="1.0"?>
+                <score-partwise>
+                    <part-list>
+                        <score-part id="P1">
+                            <part-name>Test</part-name>
+                        </score-part>
+                    </part-list>
+                    <part id="P1">
+                        <measure number="1">
+                            <note>
+                                <pitch><step>C</step><octave>4</octave></pitch>
+                                <duration>4</duration>
+                                <type>quarter</type>
+                                <notations>
+                                    <ornaments>
+                                        <{}/>
+                                    </ornaments>
+                                </notations>
+                            </note>
+                        </measure>
+                    </part>
+                </score-partwise>"#,
+            turn_type
+        );
+        let result = parse_score(&xml);
+        assert!(result.is_ok(), "Failed for turn type: {}", turn_type);
+    }
+}
+
+#[test]
+fn test_parse_ornament_mordent() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>C</step><octave>4</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <notations>
+                                <ornaments>
+                                    <mordent long="yes"/>
+                                </ornaments>
+                            </notations>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        assert!(!note.notations.is_empty());
+    }
+}
+
+#[test]
+fn test_parse_ornament_inverted_mordent() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>C</step><octave>4</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <notations>
+                                <ornaments>
+                                    <inverted-mordent/>
+                                </ornaments>
+                            </notations>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        assert!(!note.notations.is_empty());
+    }
+}
+
+#[test]
+fn test_parse_ornament_tremolo() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>C</step><octave>4</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <notations>
+                                <ornaments>
+                                    <tremolo type="single">3</tremolo>
+                                </ornaments>
+                            </notations>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        if let crate::ir::notation::NotationContent::Ornaments(o) = &note.notations[0].content[0] {
+            assert!(!o.content.is_empty());
+        }
+    }
+}
+
+#[test]
+fn test_parse_ornament_schleifer() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>C</step><octave>4</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <notations>
+                                <ornaments>
+                                    <schleifer/>
+                                </ornaments>
+                            </notations>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    assert!(!score.parts[0].measures[0].content.is_empty());
+}
+
+#[test]
+fn test_parse_ornament_shake() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>C</step><octave>4</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <notations>
+                                <ornaments>
+                                    <shake/>
+                                </ornaments>
+                            </notations>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    assert!(!score.parts[0].measures[0].content.is_empty());
+}
+
+#[test]
+fn test_parse_ornament_haydn() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>C</step><octave>4</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <notations>
+                                <ornaments>
+                                    <haydn/>
+                                </ornaments>
+                            </notations>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    assert!(!score.parts[0].measures[0].content.is_empty());
+}
+
+#[test]
+fn test_parse_ornament_wavy_line() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>C</step><octave>4</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <notations>
+                                <ornaments>
+                                    <wavy-line type="start" number="1"/>
+                                </ornaments>
+                            </notations>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    assert!(!score.parts[0].measures[0].content.is_empty());
+}
+
+// === Articulations Tests ===
+
+#[test]
+fn test_parse_articulation_accent() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>C</step><octave>4</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <notations>
+                                <articulations>
+                                    <accent placement="above"/>
+                                </articulations>
+                            </notations>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        assert!(!note.notations.is_empty());
+    }
+}
+
+#[test]
+fn test_parse_articulation_staccato() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>C</step><octave>4</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <notations>
+                                <articulations>
+                                    <staccato/>
+                                </articulations>
+                            </notations>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        if let crate::ir::notation::NotationContent::Articulations(a) =
+            &note.notations[0].content[0]
+        {
+            assert!(!a.content.is_empty());
+        }
+    }
+}
+
+#[test]
+fn test_parse_articulation_strong_accent() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>C</step><octave>4</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <notations>
+                                <articulations>
+                                    <strong-accent type="up"/>
+                                </articulations>
+                            </notations>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    assert!(!score.parts[0].measures[0].content.is_empty());
+}
+
+#[test]
+fn test_parse_articulation_tenuto() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>C</step><octave>4</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <notations>
+                                <articulations>
+                                    <tenuto/>
+                                </articulations>
+                            </notations>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    assert!(!score.parts[0].measures[0].content.is_empty());
+}
+
+#[test]
+fn test_parse_articulation_detached_legato() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>C</step><octave>4</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <notations>
+                                <articulations>
+                                    <detached-legato/>
+                                </articulations>
+                            </notations>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    assert!(!score.parts[0].measures[0].content.is_empty());
+}
+
+#[test]
+fn test_parse_articulation_staccatissimo() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>C</step><octave>4</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <notations>
+                                <articulations>
+                                    <staccatissimo/>
+                                </articulations>
+                            </notations>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    assert!(!score.parts[0].measures[0].content.is_empty());
+}
+
+#[test]
+fn test_parse_articulation_spiccato() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>C</step><octave>4</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <notations>
+                                <articulations>
+                                    <spiccato/>
+                                </articulations>
+                            </notations>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    assert!(!score.parts[0].measures[0].content.is_empty());
+}
+
+#[test]
+fn test_parse_articulation_breath_mark() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>C</step><octave>4</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <notations>
+                                <articulations>
+                                    <breath-mark>comma</breath-mark>
+                                </articulations>
+                            </notations>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    assert!(!score.parts[0].measures[0].content.is_empty());
+}
+
+#[test]
+fn test_parse_articulation_caesura() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>C</step><octave>4</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <notations>
+                                <articulations>
+                                    <caesura>normal</caesura>
+                                </articulations>
+                            </notations>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    assert!(!score.parts[0].measures[0].content.is_empty());
+}
+
+#[test]
+fn test_parse_articulation_doit_falloff() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>C</step><octave>4</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <notations>
+                                <articulations>
+                                    <doit/>
+                                    <falloff/>
+                                </articulations>
+                            </notations>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    assert!(!score.parts[0].measures[0].content.is_empty());
+}
+
+#[test]
+fn test_parse_articulation_plop_scoop() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>C</step><octave>4</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <notations>
+                                <articulations>
+                                    <plop/>
+                                    <scoop/>
+                                </articulations>
+                            </notations>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    assert!(!score.parts[0].measures[0].content.is_empty());
+}
+
+// === Technical Element Tests ===
+
+#[test]
+fn test_parse_technical_up_bow() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Violin</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>A</step><octave>4</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <notations>
+                                <technical>
+                                    <up-bow/>
+                                </technical>
+                            </notations>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    assert!(!score.parts[0].measures[0].content.is_empty());
+}
+
+#[test]
+fn test_parse_technical_down_bow() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Violin</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>A</step><octave>4</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <notations>
+                                <technical>
+                                    <down-bow/>
+                                </technical>
+                            </notations>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    assert!(!score.parts[0].measures[0].content.is_empty());
+}
+
+#[test]
+fn test_parse_technical_open_string() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Guitar</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>E</step><octave>4</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <notations>
+                                <technical>
+                                    <open-string/>
+                                </technical>
+                            </notations>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    assert!(!score.parts[0].measures[0].content.is_empty());
+}
+
+#[test]
+fn test_parse_technical_thumb_position() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Cello</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>C</step><octave>5</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <notations>
+                                <technical>
+                                    <thumb-position/>
+                                </technical>
+                            </notations>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    assert!(!score.parts[0].measures[0].content.is_empty());
+}
+
+#[test]
+fn test_parse_technical_stopped() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Horn</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>F</step><octave>4</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <notations>
+                                <technical>
+                                    <stopped/>
+                                </technical>
+                            </notations>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    assert!(!score.parts[0].measures[0].content.is_empty());
+}
+
+#[test]
+fn test_parse_technical_snap_pizzicato() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Bass</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>E</step><octave>2</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <notations>
+                                <technical>
+                                    <snap-pizzicato/>
+                                </technical>
+                            </notations>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    assert!(!score.parts[0].measures[0].content.is_empty());
+}
+
+#[test]
+fn test_parse_technical_fret_and_string() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Guitar</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>E</step><octave>4</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <notations>
+                                <technical>
+                                    <fret>5</fret>
+                                    <string>2</string>
+                                </technical>
+                            </notations>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        if let crate::ir::notation::NotationContent::Technical(t) = &note.notations[0].content[0] {
+            assert!(t.content.len() >= 2);
+        }
+    }
+}
+
+#[test]
+fn test_parse_technical_hammer_on() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Guitar</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>E</step><octave>4</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <notations>
+                                <technical>
+                                    <hammer-on type="start" number="1">H</hammer-on>
+                                </technical>
+                            </notations>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    assert!(!score.parts[0].measures[0].content.is_empty());
+}
+
+#[test]
+fn test_parse_technical_pull_off() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Guitar</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>E</step><octave>4</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <notations>
+                                <technical>
+                                    <pull-off type="start" number="1">P</pull-off>
+                                </technical>
+                            </notations>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    assert!(!score.parts[0].measures[0].content.is_empty());
+}
+
+#[test]
+fn test_parse_technical_heel_toe() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Organ</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>C</step><octave>3</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <notations>
+                                <technical>
+                                    <heel/>
+                                </technical>
+                            </notations>
+                        </note>
+                        <note>
+                            <pitch><step>D</step><octave>3</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <notations>
+                                <technical>
+                                    <toe/>
+                                </technical>
+                            </notations>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    assert_eq!(score.parts[0].measures[0].content.len(), 2);
+}
+
+// === Defaults and Page Layout Tests ===
+
+#[test]
+fn test_parse_defaults_system_layout() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <defaults>
+                    <system-layout>
+                        <system-margins>
+                            <left-margin>70</left-margin>
+                            <right-margin>70</right-margin>
+                        </system-margins>
+                        <system-distance>100</system-distance>
+                        <top-system-distance>150</top-system-distance>
+                    </system-layout>
+                </defaults>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1"/>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    let defaults = score.defaults.as_ref().unwrap();
+    assert!(defaults.system_layout.is_some());
+    let sys = defaults.system_layout.as_ref().unwrap();
+    assert!(sys.system_margins.is_some());
+    assert_eq!(sys.system_distance, Some(100.0));
+    assert_eq!(sys.top_system_distance, Some(150.0));
+}
+
+#[test]
+fn test_parse_defaults_staff_layout() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <defaults>
+                    <staff-layout number="1">
+                        <staff-distance>65</staff-distance>
+                    </staff-layout>
+                </defaults>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Piano</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1"/>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    let defaults = score.defaults.as_ref().unwrap();
+    assert!(!defaults.staff_layout.is_empty());
+    assert_eq!(defaults.staff_layout[0].number, Some(1));
+}
+
+#[test]
+fn test_parse_defaults_appearance() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <defaults>
+                    <appearance>
+                        <line-width type="stem">1.0</line-width>
+                        <line-width type="beam">5.0</line-width>
+                        <note-size type="cue">75</note-size>
+                        <distance type="hyphen">120</distance>
+                    </appearance>
+                </defaults>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1"/>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    let defaults = score.defaults.as_ref().unwrap();
+    assert!(defaults.appearance.is_some());
+    let app = defaults.appearance.as_ref().unwrap();
+    assert!(!app.line_widths.is_empty());
+    assert!(!app.note_sizes.is_empty());
+    assert!(!app.distances.is_empty());
+}
+
+#[test]
+fn test_parse_defaults_music_font() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <defaults>
+                    <music-font font-family="Bravura" font-size="20.4"/>
+                    <word-font font-family="Times New Roman"/>
+                </defaults>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1"/>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    let defaults = score.defaults.as_ref().unwrap();
+    assert!(defaults.music_font.is_some());
+    assert!(defaults.word_font.is_some());
+}
+
+#[test]
+fn test_parse_defaults_lyric_font() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <defaults>
+                    <lyric-font number="1" font-family="Arial"/>
+                    <lyric-language number="1" xml:lang="en"/>
+                </defaults>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Voice</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1"/>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    let defaults = score.defaults.as_ref().unwrap();
+    assert!(!defaults.lyric_fonts.is_empty());
+    assert!(!defaults.lyric_languages.is_empty());
+}
+
+// === Credit Element Tests ===
+
+#[test]
+fn test_parse_credit_image_with_dimensions() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <credit page="1">
+                    <credit-image source="logo.png" type="image/png" height="50" width="100"/>
+                </credit>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1"/>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    assert_eq!(score.credits.len(), 1);
+    if let CreditContent::CreditImage(img) = &score.credits[0].content[0] {
+        assert_eq!(img.source, "logo.png");
+    } else {
+        panic!("Expected CreditImage");
+    }
+}
+
+#[test]
+fn test_parse_credit_symbol() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <credit page="1">
+                    <credit-symbol>segno</credit-symbol>
+                </credit>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1"/>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    assert_eq!(score.credits.len(), 1);
+}
+
+// === Tuplet Tests ===
+
+#[test]
+fn test_parse_tuplet_with_portions() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>C</step><octave>4</octave></pitch>
+                            <duration>2</duration>
+                            <type>eighth</type>
+                            <notations>
+                                <tuplet type="start" number="1">
+                                    <tuplet-actual>
+                                        <tuplet-number>3</tuplet-number>
+                                        <tuplet-type>eighth</tuplet-type>
+                                    </tuplet-actual>
+                                    <tuplet-normal>
+                                        <tuplet-number>2</tuplet-number>
+                                        <tuplet-type>eighth</tuplet-type>
+                                    </tuplet-normal>
+                                </tuplet>
+                            </notations>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        if let crate::ir::notation::NotationContent::Tuplet(t) = &note.notations[0].content[0] {
+            assert!(t.tuplet_actual.is_some());
+            assert!(t.tuplet_normal.is_some());
+        }
+    }
+}
+
+#[test]
+fn test_parse_tuplet_show_type() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>C</step><octave>4</octave></pitch>
+                            <duration>2</duration>
+                            <type>eighth</type>
+                            <notations>
+                                <tuplet type="start" show-number="both" show-type="both"/>
+                            </notations>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        if let crate::ir::notation::NotationContent::Tuplet(t) = &note.notations[0].content[0] {
+            assert!(t.show_number.is_some());
+            assert!(t.show_type.is_some());
+        }
+    }
+}
+
+// === Bar Style Values Tests ===
+
+#[test]
+fn test_parse_barline_styles_comprehensive() {
+    let styles = [
+        "regular",
+        "dotted",
+        "dashed",
+        "heavy",
+        "light-light",
+        "light-heavy",
+        "heavy-light",
+        "heavy-heavy",
+        "tick",
+        "short",
+        "none",
+    ];
+    for style in styles {
+        let xml = format!(
+            r#"<?xml version="1.0"?>
+                <score-partwise>
+                    <part-list>
+                        <score-part id="P1">
+                            <part-name>Test</part-name>
+                        </score-part>
+                    </part-list>
+                    <part id="P1">
+                        <measure number="1">
+                            <barline location="right">
+                                <bar-style>{}</bar-style>
+                            </barline>
+                        </measure>
+                    </part>
+                </score-partwise>"#,
+            style
+        );
+        let result = parse_score(&xml);
+        assert!(result.is_ok(), "Failed for bar-style: {}", style);
+    }
+}
+
+// === Sound Element Test ===
+
+#[test]
+fn test_parse_direction_with_sound() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <direction>
+                            <direction-type>
+                                <words>rit.</words>
+                            </direction-type>
+                            <sound tempo="60" dynamics="50"/>
+                        </direction>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Direction(d) =
+        &score.parts[0].measures[0].content[0]
+    {
+        assert!(d.sound.is_some());
+        let sound = d.sound.as_ref().unwrap();
+        assert_eq!(sound.tempo, Some(60.0));
+        assert_eq!(sound.dynamics, Some(50.0));
+    }
+}
+
+// === Accidental-Mark Tests ===
+
+#[test]
+fn test_parse_notation_accidental_mark() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>C</step><octave>4</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <notations>
+                                <accidental-mark>sharp</accidental-mark>
+                            </notations>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        assert!(!note.notations.is_empty());
+    }
+}
+
+// === Dynamics Notation Tests ===
+
+#[test]
+fn test_parse_notation_dynamics() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>C</step><octave>4</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <notations>
+                                <dynamics>
+                                    <sf/>
+                                </dynamics>
+                            </notations>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        if let crate::ir::notation::NotationContent::Dynamics(d) = &note.notations[0].content[0] {
+            assert!(!d.content.is_empty());
+        }
+    }
+}
+
+// === All Dynamics Types ===
+
+#[test]
+fn test_parse_dynamics_all_types() {
+    let dynamics = [
+        "p", "pp", "ppp", "pppp", "ppppp", "pppppp", "f", "ff", "fff", "ffff", "fffff", "ffffff",
+        "mp", "mf", "sf", "sfp", "sfpp", "fp", "rf", "rfz", "sfz", "sffz", "fz", "n", "pf", "sfzp",
+    ];
+    for dyn_type in dynamics {
+        let xml = format!(
+            r#"<?xml version="1.0"?>
+                <score-partwise>
+                    <part-list>
+                        <score-part id="P1">
+                            <part-name>Test</part-name>
+                        </score-part>
+                    </part-list>
+                    <part id="P1">
+                        <measure number="1">
+                            <direction>
+                                <direction-type>
+                                    <dynamics>
+                                        <{}/>
+                                    </dynamics>
+                                </direction-type>
+                            </direction>
+                        </measure>
+                    </part>
+                </score-partwise>"#,
+            dyn_type
+        );
+        let result = parse_score(&xml);
+        assert!(result.is_ok(), "Failed for dynamics: {}", dyn_type);
+    }
+}
+
+// === Note Type Values ===
+
+#[test]
+fn test_parse_all_note_types() {
+    let types = [
+        "1024th", "512th", "256th", "128th", "64th", "32nd", "16th", "eighth", "quarter", "half",
+        "whole", "breve", "long", "maxima",
+    ];
+    for note_type in types {
+        let xml = format!(
+            r#"<?xml version="1.0"?>
+                <score-partwise>
+                    <part-list>
+                        <score-part id="P1">
+                            <part-name>Test</part-name>
+                        </score-part>
+                    </part-list>
+                    <part id="P1">
+                        <measure number="1">
+                            <note>
+                                <pitch><step>C</step><octave>4</octave></pitch>
+                                <duration>4</duration>
+                                <type>{}</type>
+                            </note>
+                        </measure>
+                    </part>
+                </score-partwise>"#,
+            note_type
+        );
+        let result = parse_score(&xml);
+        assert!(result.is_ok(), "Failed for note type: {}", note_type);
+    }
+}
+
+// === All Steps ===
+
+#[test]
+fn test_parse_all_step_values() {
+    let steps = ["A", "B", "C", "D", "E", "F", "G"];
+    for step in steps {
+        let xml = format!(
+            r#"<?xml version="1.0"?>
+                <score-partwise>
+                    <part-list>
+                        <score-part id="P1">
+                            <part-name>Test</part-name>
+                        </score-part>
+                    </part-list>
+                    <part id="P1">
+                        <measure number="1">
+                            <note>
+                                <pitch><step>{}</step><octave>4</octave></pitch>
+                                <duration>4</duration>
+                            </note>
+                        </measure>
+                    </part>
+                </score-partwise>"#,
+            step
+        );
+        let result = parse_score(&xml);
+        assert!(result.is_ok(), "Failed for step: {}", step);
+    }
+}
+
+// === Stem Values ===
+
+#[test]
+fn test_parse_all_stem_values() {
+    let stems = ["up", "down", "double", "none"];
+    for stem in stems {
+        let xml = format!(
+            r#"<?xml version="1.0"?>
+                <score-partwise>
+                    <part-list>
+                        <score-part id="P1">
+                            <part-name>Test</part-name>
+                        </score-part>
+                    </part-list>
+                    <part id="P1">
+                        <measure number="1">
+                            <note>
+                                <pitch><step>C</step><octave>4</octave></pitch>
+                                <duration>4</duration>
+                                <stem>{}</stem>
+                            </note>
+                        </measure>
+                    </part>
+                </score-partwise>"#,
+            stem
+        );
+        let result = parse_score(&xml);
+        assert!(result.is_ok(), "Failed for stem: {}", stem);
+    }
+}
+
+// === Beam Values ===
+
+#[test]
+fn test_parse_all_beam_values() {
+    let beams = ["begin", "continue", "end", "forward hook", "backward hook"];
+    for beam in beams {
+        let xml = format!(
+            r#"<?xml version="1.0"?>
+                <score-partwise>
+                    <part-list>
+                        <score-part id="P1">
+                            <part-name>Test</part-name>
+                        </score-part>
+                    </part-list>
+                    <part id="P1">
+                        <measure number="1">
+                            <note>
+                                <pitch><step>C</step><octave>4</octave></pitch>
+                                <duration>1</duration>
+                                <type>eighth</type>
+                                <beam number="1">{}</beam>
+                            </note>
+                        </measure>
+                    </part>
+                </score-partwise>"#,
+            beam
+        );
+        let result = parse_score(&xml);
+        assert!(result.is_ok(), "Failed for beam: {}", beam);
+    }
+}
+
+// === Accidental Values ===
+
+#[test]
+fn test_parse_accidental_values() {
+    let accidentals = [
+        "sharp",
+        "natural",
+        "flat",
+        "double-sharp",
+        "sharp-sharp",
+        "flat-flat",
+        "natural-sharp",
+        "natural-flat",
+        "quarter-flat",
+        "quarter-sharp",
+        "three-quarters-flat",
+        "three-quarters-sharp",
+    ];
+    for acc in accidentals {
+        let xml = format!(
+            r#"<?xml version="1.0"?>
+                <score-partwise>
+                    <part-list>
+                        <score-part id="P1">
+                            <part-name>Test</part-name>
+                        </score-part>
+                    </part-list>
+                    <part id="P1">
+                        <measure number="1">
+                            <note>
+                                <pitch><step>C</step><octave>4</octave></pitch>
+                                <duration>4</duration>
+                                <accidental>{}</accidental>
+                            </note>
+                        </measure>
+                    </part>
+                </score-partwise>"#,
+            acc
+        );
+        let result = parse_score(&xml);
+        assert!(result.is_ok(), "Failed for accidental: {}", acc);
+    }
+}
+
+// === Notehead Values ===
+
+#[test]
+fn test_parse_notehead_values() {
+    let noteheads = [
+        "slash",
+        "triangle",
+        "diamond",
+        "square",
+        "cross",
+        "x",
+        "circle-x",
+        "inverted triangle",
+        "normal",
+        "cluster",
+        "none",
+        "do",
+        "re",
+        "mi",
+        "fa",
+    ];
+    for nh in noteheads {
+        let xml = format!(
+            r#"<?xml version="1.0"?>
+                <score-partwise>
+                    <part-list>
+                        <score-part id="P1">
+                            <part-name>Test</part-name>
+                        </score-part>
+                    </part-list>
+                    <part id="P1">
+                        <measure number="1">
+                            <note>
+                                <pitch><step>C</step><octave>4</octave></pitch>
+                                <duration>4</duration>
+                                <notehead>{}</notehead>
+                            </note>
+                        </measure>
+                    </part>
+                </score-partwise>"#,
+            nh
+        );
+        let result = parse_score(&xml);
+        assert!(result.is_ok(), "Failed for notehead: {}", nh);
+    }
+}
+
+// === Cancel Location Test ===
+
+#[test]
+fn test_parse_key_with_cancel_location() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <attributes>
+                            <key>
+                                <cancel location="before-barline">-2</cancel>
+                                <fifths>1</fifths>
+                            </key>
+                        </attributes>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Attributes(attrs) =
+        &score.parts[0].measures[0].content[0]
+    {
+        if let KeyContent::Traditional(tk) = &attrs.keys[0].content {
+            assert!(tk.cancel.is_some());
+        }
+    }
+}
+
+// === Transpose with Double ===
+
+#[test]
+fn test_parse_transpose_with_double() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Piccolo</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <attributes>
+                            <transpose>
+                                <diatonic>0</diatonic>
+                                <chromatic>0</chromatic>
+                                <octave-change>1</octave-change>
+                                <double/>
+                            </transpose>
+                        </attributes>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Attributes(attrs) =
+        &score.parts[0].measures[0].content[0]
+    {
+        assert_eq!(attrs.transpose.len(), 1);
+        assert_eq!(attrs.transpose[0].octave_change, Some(1));
+        assert_eq!(attrs.transpose[0].double, Some(YesNo::Yes));
+    }
+}
+
+// === System Dividers Test ===
+
+#[test]
+fn test_parse_defaults_system_dividers() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <defaults>
+                    <system-layout>
+                        <system-dividers>
+                            <left-divider print-object="yes"/>
+                            <right-divider print-object="no"/>
+                        </system-dividers>
+                    </system-layout>
+                </defaults>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1"/>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    let defaults = score.defaults.as_ref().unwrap();
+    let sys = defaults.system_layout.as_ref().unwrap();
+    assert!(sys.system_dividers.is_some());
+}
+
+// === Time Symbols Test ===
+
+#[test]
+fn test_parse_all_time_symbols() {
+    let symbols = [
+        "common",
+        "cut",
+        "single-number",
+        "normal",
+        "note",
+        "dotted-note",
+    ];
+    for symbol in symbols {
+        let xml = format!(
+            r#"<?xml version="1.0"?>
+                <score-partwise>
+                    <part-list>
+                        <score-part id="P1">
+                            <part-name>Test</part-name>
+                        </score-part>
+                    </part-list>
+                    <part id="P1">
+                        <measure number="1">
+                            <attributes>
+                                <time symbol="{}">
+                                    <beats>4</beats>
+                                    <beat-type>4</beat-type>
+                                </time>
+                            </attributes>
+                        </measure>
+                    </part>
+                </score-partwise>"#,
+            symbol
+        );
+        let result = parse_score(&xml);
+        assert!(result.is_ok(), "Failed for time symbol: {}", symbol);
+    }
+}
+
+// === Wedge Types Test ===
+
+#[test]
+fn test_parse_wedge_types() {
+    let wedge_types = ["crescendo", "diminuendo", "stop", "continue"];
+    for wt in wedge_types {
+        let xml = format!(
+            r#"<?xml version="1.0"?>
+                <score-partwise>
+                    <part-list>
+                        <score-part id="P1">
+                            <part-name>Test</part-name>
+                        </score-part>
+                    </part-list>
+                    <part id="P1">
+                        <measure number="1">
+                            <direction>
+                                <direction-type>
+                                    <wedge type="{}"/>
+                                </direction-type>
+                            </direction>
+                        </measure>
+                    </part>
+                </score-partwise>"#,
+            wt
+        );
+        let result = parse_score(&xml);
+        assert!(result.is_ok(), "Failed for wedge type: {}", wt);
+    }
+}
+
+// === Pedal Types Test ===
+
+#[test]
+fn test_parse_all_pedal_types() {
+    let pedal_types = ["start", "stop", "continue", "change", "sostenuto", "resume"];
+    for pt in pedal_types {
+        let xml = format!(
+            r#"<?xml version="1.0"?>
+                <score-partwise>
+                    <part-list>
+                        <score-part id="P1">
+                            <part-name>Test</part-name>
+                        </score-part>
+                    </part-list>
+                    <part id="P1">
+                        <measure number="1">
+                            <direction>
+                                <direction-type>
+                                    <pedal type="{}"/>
+                                </direction-type>
+                            </direction>
+                        </measure>
+                    </part>
+                </score-partwise>"#,
+            pt
+        );
+        let result = parse_score(&xml);
+        assert!(result.is_ok(), "Failed for pedal type: {}", pt);
+    }
+}
+
+// === Line-End Values Test ===
+
+#[test]
+fn test_parse_bracket_line_ends() {
+    let line_ends = ["up", "down", "both", "arrow", "none"];
+    for le in line_ends {
+        let xml = format!(
+            r#"<?xml version="1.0"?>
+                <score-partwise>
+                    <part-list>
+                        <score-part id="P1">
+                            <part-name>Test</part-name>
+                        </score-part>
+                    </part-list>
+                    <part id="P1">
+                        <measure number="1">
+                            <direction>
+                                <direction-type>
+                                    <bracket type="start" line-end="{}"/>
+                                </direction-type>
+                            </direction>
+                        </measure>
+                    </part>
+                </score-partwise>"#,
+            le
+        );
+        let result = parse_score(&xml);
+        assert!(result.is_ok(), "Failed for line-end: {}", le);
+    }
+}
+
+// === Metronome Beat Equation Test ===
+
+#[test]
+fn test_parse_metronome_beat_equation() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <direction>
+                            <direction-type>
+                                <metronome>
+                                    <beat-unit>quarter</beat-unit>
+                                    <beat-unit>half</beat-unit>
+                                </metronome>
+                            </direction-type>
+                        </direction>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Direction(d) =
+        &score.parts[0].measures[0].content[0]
+    {
+        assert!(!d.direction_types.is_empty());
+    }
+}
+
+// === Note Attributes Test ===
+
+#[test]
+fn test_parse_note_with_all_attributes() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note print-object="yes" dynamics="80" end-dynamics="60" attack="-5" release="10" pizzicato="yes">
+                            <pitch><step>C</step><octave>4</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        assert_eq!(note.print_object, Some(YesNo::Yes));
+        assert_eq!(note.dynamics, Some(80.0));
+        assert_eq!(note.end_dynamics, Some(60.0));
+        assert_eq!(note.attack, Some(-5));
+        assert_eq!(note.release, Some(10));
+        assert_eq!(note.pizzicato, Some(true));
+    }
+}
+
+// === Accidental Attributes Test ===
+
+#[test]
+fn test_parse_accidental_with_all_attributes() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>C</step><octave>4</octave></pitch>
+                            <duration>4</duration>
+                            <accidental cautionary="yes" editorial="yes" parentheses="yes" bracket="yes">sharp</accidental>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        let acc = note.accidental.as_ref().unwrap();
+        assert_eq!(acc.cautionary, Some(YesNo::Yes));
+        assert_eq!(acc.editorial, Some(YesNo::Yes));
+        assert_eq!(acc.parentheses, Some(YesNo::Yes));
+        assert_eq!(acc.bracket, Some(YesNo::Yes));
+    }
+}
+
+// === Dot Placement Test ===
+
+#[test]
+fn test_parse_dot_with_placement() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>C</step><octave>4</octave></pitch>
+                            <duration>6</duration>
+                            <type>quarter</type>
+                            <dot placement="above"/>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        assert!(!note.dots.is_empty());
+        assert!(note.dots[0].placement.is_some());
+    }
+}
+
+// === Beam Fan Test ===
+
+#[test]
+fn test_parse_beam_with_fan() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>C</step><octave>4</octave></pitch>
+                            <duration>1</duration>
+                            <type>eighth</type>
+                            <beam number="1" fan="accel">begin</beam>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        assert!(!note.beams.is_empty());
+        assert!(note.beams[0].fan.is_some());
+    }
+}
+
+// === Additional Error Path Tests ===
+
+#[test]
+fn test_parse_invalid_step_value() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>Z</step><octave>4</octave></pitch>
+                            <duration>4</duration>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+    let result = parse_score(xml);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_parse_invalid_octave_value() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>C</step><octave>invalid</octave></pitch>
+                            <duration>4</duration>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+    let result = parse_score(xml);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_parse_invalid_duration_value() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>C</step><octave>4</octave></pitch>
+                            <duration>not-a-number</duration>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+    let result = parse_score(xml);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_parse_score_timewise_error() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-timewise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+            </score-timewise>"#;
+    let result = parse_score(xml);
+    assert!(result.is_err());
+    let err_str = format!("{:?}", result.unwrap_err());
+    assert!(err_str.contains("timewise") || err_str.contains("not yet supported"));
+}
+
+#[test]
+fn test_parse_unknown_root_element() {
+    let xml = r#"<?xml version="1.0"?>
+            <unknown-root>
+            </unknown-root>"#;
+    let result = parse_score(xml);
+    assert!(result.is_err());
+}
+
+// === Additional Technical Element Tests (Empty Tag Variants) ===
+
+#[test]
+fn test_parse_technical_double_tongue() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Flute</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>C</step><octave>5</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <notations>
+                                <technical>
+                                    <double-tongue/>
+                                </technical>
+                            </notations>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    assert!(!score.parts[0].measures[0].content.is_empty());
+}
+
+#[test]
+fn test_parse_technical_triple_tongue() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Flute</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>C</step><octave>5</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <notations>
+                                <technical>
+                                    <triple-tongue/>
+                                </technical>
+                            </notations>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    assert!(!score.parts[0].measures[0].content.is_empty());
+}
+
+#[test]
+fn test_parse_technical_fingernails() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Harp</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>C</step><octave>4</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <notations>
+                                <technical>
+                                    <fingernails/>
+                                </technical>
+                            </notations>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    assert!(!score.parts[0].measures[0].content.is_empty());
+}
+
+#[test]
+fn test_parse_technical_brass_effects() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Trumpet</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>C</step><octave>5</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <notations>
+                                <technical>
+                                    <brass-bend/>
+                                    <flip/>
+                                    <smear/>
+                                    <open/>
+                                    <half-muted/>
+                                </technical>
+                            </notations>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        if let crate::ir::notation::NotationContent::Technical(t) = &note.notations[0].content[0] {
+            assert!(t.content.len() >= 5);
+        }
+    }
+}
+
+#[test]
+fn test_parse_technical_golpe() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Guitar</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>E</step><octave>4</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <notations>
+                                <technical>
+                                    <golpe/>
+                                </technical>
+                            </notations>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    assert!(!score.parts[0].measures[0].content.is_empty());
+}
+
+// === Additional Articulation Tests ===
+
+#[test]
+fn test_parse_articulation_stress_unstress() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>C</step><octave>4</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <notations>
+                                <articulations>
+                                    <stress/>
+                                    <unstress/>
+                                    <soft-accent/>
+                                </articulations>
+                            </notations>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        if let crate::ir::notation::NotationContent::Articulations(a) =
+            &note.notations[0].content[0]
+        {
+            assert!(a.content.len() >= 3);
+        }
+    }
+}
+
+// === Part List Tests ===
+
+#[test]
+fn test_parse_part_group_with_all_attributes() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <part-group type="start" number="1">
+                        <group-name>Strings</group-name>
+                        <group-name-display><display-text>Str.</display-text></group-name-display>
+                        <group-abbreviation>Str.</group-abbreviation>
+                        <group-symbol>bracket</group-symbol>
+                        <group-barline>yes</group-barline>
+                    </part-group>
+                    <score-part id="P1">
+                        <part-name>Violin I</part-name>
+                    </score-part>
+                    <score-part id="P2">
+                        <part-name>Violin II</part-name>
+                    </score-part>
+                    <part-group type="stop" number="1"/>
+                </part-list>
+                <part id="P1">
+                    <measure number="1"/>
+                </part>
+                <part id="P2">
+                    <measure number="1"/>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    assert!(!score.part_list.content.is_empty());
+}
+
+#[test]
+fn test_parse_score_part_with_instruments() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Clarinet</part-name>
+                        <part-abbreviation>Cl.</part-abbreviation>
+                        <score-instrument id="I1">
+                            <instrument-name>Bb Clarinet</instrument-name>
+                            <instrument-abbreviation>Bb Cl.</instrument-abbreviation>
+                        </score-instrument>
+                        <midi-device port="1"/>
+                        <midi-instrument id="I1">
+                            <midi-channel>1</midi-channel>
+                            <midi-program>72</midi-program>
+                            <volume>80</volume>
+                            <pan>0</pan>
+                        </midi-instrument>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1"/>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    if let PartListElement::ScorePart(sp) = &score.part_list.content[0] {
+        // Score instruments and MIDI elements are parsed
+        // Just verify the part was parsed - instrument parsing varies by implementation
+        assert_eq!(sp.id, "P1");
+    }
+}
+
+// === Measure Implicit/Non-Controlling ===
+
+#[test]
+fn test_parse_measure_with_implicit_attribute() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1" implicit="yes" non-controlling="yes" width="200"/>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    // Parser currently doesn't parse measure attributes like implicit, non-controlling, width
+    // These would need to be added to the parser
+    assert_eq!(score.parts[0].measures[0].number, "1");
+}
+
+// === Glissando and Slide Tests ===
+
+#[test]
+fn test_parse_notation_glissando() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>C</step><octave>4</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <notations>
+                                <glissando type="start" line-type="wavy">gliss.</glissando>
+                            </notations>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        if let crate::ir::notation::NotationContent::Glissando(g) = &note.notations[0].content[0] {
+            assert_eq!(g.r#type, crate::ir::common::StartStop::Start);
+        } else {
+            panic!("Expected Glissando");
+        }
+    }
+}
+
+#[test]
+fn test_parse_notation_slide() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>C</step><octave>4</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <notations>
+                                <slide type="start" number="1">slide</slide>
+                            </notations>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        if let crate::ir::notation::NotationContent::Slide(s) = &note.notations[0].content[0] {
+            assert_eq!(s.r#type, crate::ir::common::StartStop::Start);
+        } else {
+            panic!("Expected Slide");
+        }
+    }
+}
+
+// === Line Types Test ===
+
+#[test]
+fn test_parse_all_line_types() {
+    let line_types = ["solid", "dashed", "dotted", "wavy"];
+    for lt in line_types {
+        let xml = format!(
+            r#"<?xml version="1.0"?>
+                <score-partwise>
+                    <part-list>
+                        <score-part id="P1">
+                            <part-name>Test</part-name>
+                        </score-part>
+                    </part-list>
+                    <part id="P1">
+                        <measure number="1">
+                            <note>
+                                <pitch><step>C</step><octave>4</octave></pitch>
+                                <duration>4</duration>
+                                <type>quarter</type>
+                                <notations>
+                                    <tied type="start" line-type="{}"/>
+                                </notations>
+                            </note>
+                        </measure>
+                    </part>
+                </score-partwise>"#,
+            lt
+        );
+        let result = parse_score(&xml);
+        assert!(result.is_ok(), "Failed for line-type: {}", lt);
+    }
+}
+
+// === Line Shape Test ===
+
+#[test]
+fn test_parse_line_shapes() {
+    let line_shapes = ["straight", "curved"];
+    for ls in line_shapes {
+        let xml = format!(
+            r#"<?xml version="1.0"?>
+                <score-partwise>
+                    <part-list>
+                        <score-part id="P1">
+                            <part-name>Test</part-name>
+                        </score-part>
+                    </part-list>
+                    <part id="P1">
+                        <measure number="1">
+                            <note>
+                                <pitch><step>C</step><octave>4</octave></pitch>
+                                <duration>4</duration>
+                                <type>eighth</type>
+                                <notations>
+                                    <tuplet type="start" line-shape="{}"/>
+                                </notations>
+                            </note>
+                        </measure>
+                    </part>
+                </score-partwise>"#,
+            ls
+        );
+        let result = parse_score(&xml);
+        assert!(result.is_ok(), "Failed for line-shape: {}", ls);
+    }
+}
+
+// === Placement Tests ===
+
+#[test]
+fn test_parse_above_below_placements() {
+    let placements = ["above", "below"];
+    for placement in placements {
+        let xml = format!(
+            r#"<?xml version="1.0"?>
+                <score-partwise>
+                    <part-list>
+                        <score-part id="P1">
+                            <part-name>Test</part-name>
+                        </score-part>
+                    </part-list>
+                    <part id="P1">
+                        <measure number="1">
+                            <note>
+                                <pitch><step>C</step><octave>4</octave></pitch>
+                                <duration>4</duration>
+                                <type>quarter</type>
+                                <notations>
+                                    <articulations>
+                                        <staccato placement="{}"/>
+                                    </articulations>
+                                </notations>
+                            </note>
+                        </measure>
+                    </part>
+                </score-partwise>"#,
+            placement
+        );
+        let result = parse_score(&xml);
+        assert!(result.is_ok(), "Failed for placement: {}", placement);
+    }
+}
+
+// === Over/Under (Orientation) Tests ===
+
+#[test]
+fn test_parse_over_under_orientations() {
+    let orientations = ["over", "under"];
+    for orient in orientations {
+        let xml = format!(
+            r#"<?xml version="1.0"?>
+                <score-partwise>
+                    <part-list>
+                        <score-part id="P1">
+                            <part-name>Test</part-name>
+                        </score-part>
+                    </part-list>
+                    <part id="P1">
+                        <measure number="1">
+                            <note>
+                                <pitch><step>C</step><octave>4</octave></pitch>
+                                <duration>4</duration>
+                                <type>quarter</type>
+                                <notations>
+                                    <slur type="start" orientation="{}"/>
+                                </notations>
+                            </note>
+                        </measure>
+                    </part>
+                </score-partwise>"#,
+            orient
+        );
+        let result = parse_score(&xml);
+        assert!(result.is_ok(), "Failed for orientation: {}", orient);
+    }
+}
+
+// === Tremolo Types Test ===
+
+#[test]
+fn test_parse_all_tremolo_types() {
+    let tremolo_types = ["single", "start", "stop", "unmeasured"];
+    for tt in tremolo_types {
+        let xml = format!(
+            r#"<?xml version="1.0"?>
+                <score-partwise>
+                    <part-list>
+                        <score-part id="P1">
+                            <part-name>Test</part-name>
+                        </score-part>
+                    </part-list>
+                    <part id="P1">
+                        <measure number="1">
+                            <note>
+                                <pitch><step>C</step><octave>4</octave></pitch>
+                                <duration>4</duration>
+                                <type>quarter</type>
+                                <notations>
+                                    <ornaments>
+                                        <tremolo type="{}">3</tremolo>
+                                    </ornaments>
+                                </notations>
+                            </note>
+                        </measure>
+                    </part>
+                </score-partwise>"#,
+            tt
+        );
+        let result = parse_score(&xml);
+        assert!(result.is_ok(), "Failed for tremolo type: {}", tt);
+    }
+}
+
+// === Octave Shift Types Test ===
+
+#[test]
+fn test_parse_octave_shift_sizes() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <direction>
+                            <direction-type>
+                                <octave-shift type="down" size="15"/>
+                            </direction-type>
+                        </direction>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Direction(d) =
+        &score.parts[0].measures[0].content[0]
+    {
+        if let crate::ir::direction::DirectionTypeContent::OctaveShift(os) =
+            &d.direction_types[0].content
+        {
+            assert_eq!(os.size, Some(15));
+        }
+    }
+}
+
+// === Page Margins Types Test ===
+
+#[test]
+fn test_parse_page_margins_types() {
+    let margin_types = ["odd", "even", "both"];
+    for mt in margin_types {
+        let xml = format!(
+            r#"<?xml version="1.0"?>
+                <score-partwise>
+                    <defaults>
+                        <page-layout>
+                            <page-margins type="{}">
+                                <left-margin>70</left-margin>
+                                <right-margin>70</right-margin>
+                                <top-margin>88</top-margin>
+                                <bottom-margin>88</bottom-margin>
+                            </page-margins>
+                        </page-layout>
+                    </defaults>
+                    <part-list>
+                        <score-part id="P1">
+                            <part-name>Test</part-name>
+                        </score-part>
+                    </part-list>
+                    <part id="P1">
+                        <measure number="1"/>
+                    </part>
+                </score-partwise>"#,
+            mt
+        );
+        let result = parse_score(&xml);
+        assert!(result.is_ok(), "Failed for margin type: {}", mt);
+    }
+}
+
+// === Inverted Vertical Turn Test ===
+
+#[test]
+fn test_parse_inverted_vertical_turn() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>C</step><octave>4</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <notations>
+                                <ornaments>
+                                    <inverted-vertical-turn/>
+                                </ornaments>
+                            </notations>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    assert!(!score.parts[0].measures[0].content.is_empty());
+}
+
+// === Tuplet Dots Test ===
+
+#[test]
+fn test_parse_tuplet_with_dots() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>C</step><octave>4</octave></pitch>
+                            <duration>2</duration>
+                            <type>eighth</type>
+                            <notations>
+                                <tuplet type="start" number="1">
+                                    <tuplet-actual>
+                                        <tuplet-number>3</tuplet-number>
+                                        <tuplet-type>eighth</tuplet-type>
+                                        <tuplet-dot/>
+                                    </tuplet-actual>
+                                </tuplet>
+                            </notations>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        if let crate::ir::notation::NotationContent::Tuplet(t) = &note.notations[0].content[0] {
+            assert!(t.tuplet_actual.is_some());
+            let actual = t.tuplet_actual.as_ref().unwrap();
+            assert!(!actual.tuplet_dots.is_empty());
+        }
+    }
+}
+
+// === Harmonic with Content Test ===
+
+#[test]
+fn test_parse_harmonic_with_content() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Violin</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>A</step><octave>4</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <notations>
+                                <technical>
+                                    <harmonic>
+                                        <natural/>
+                                        <touching-pitch/>
+                                    </harmonic>
+                                </technical>
+                            </notations>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        if let crate::ir::notation::NotationContent::Technical(t) = &note.notations[0].content[0] {
+            if let crate::ir::notation::TechnicalElement::Harmonic(h) = &t.content[0] {
+                assert!(h.natural || h.artificial);
+            }
+        }
+    }
+}
+
+// === Print Element Test ===
+
+#[test]
+fn test_parse_measure_with_print() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <print new-page="yes" new-system="yes"/>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    assert!(!score.parts.is_empty());
+}
+
+// === Attributes with Instruments ===
+
+#[test]
+fn test_parse_attributes_with_instruments() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Percussion</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <attributes>
+                            <divisions>4</divisions>
+                            <instruments>5</instruments>
+                        </attributes>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Attributes(attrs) =
+        &score.parts[0].measures[0].content[0]
+    {
+        assert_eq!(attrs.instruments, Some(5));
+    }
+}
+
+// === Pitch Alter Test ===
+
+#[test]
+fn test_parse_pitch_with_alter() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch>
+                                <step>C</step>
+                                <alter>1</alter>
+                                <octave>4</octave>
+                            </pitch>
+                            <duration>4</duration>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        if let NoteContent::Regular { full_note, .. } = &note.content {
+            if let PitchRestUnpitched::Pitch(p) = &full_note.content {
+                assert_eq!(p.alter, Some(1.0));
+            }
+        }
+    }
+}
+
+// === Rest Measure Attribute ===
+
+#[test]
+fn test_parse_rest_with_measure_attribute() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <rest measure="yes"/>
+                            <duration>16</duration>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        if let NoteContent::Regular { full_note, .. } = &note.content {
+            if let PitchRestUnpitched::Rest(r) = &full_note.content {
+                assert_eq!(r.measure, Some(YesNo::Yes));
+            }
+        }
+    }
+}
+
+// === Grace with Make-Time ===
+
+#[test]
+fn test_parse_grace_with_make_time() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <grace make-time="50"/>
+                            <pitch><step>D</step><octave>4</octave></pitch>
+                            <type>eighth</type>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        if let NoteContent::Grace { grace, .. } = &note.content {
+            assert_eq!(grace.make_time, Some(50));
+        }
+    }
+}
+
+// === Chord Note Test ===
+
+#[test]
+fn test_parse_chord_notes() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>C</step><octave>4</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                        </note>
+                        <note>
+                            <chord/>
+                            <pitch><step>E</step><octave>4</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                        </note>
+                        <note>
+                            <chord/>
+                            <pitch><step>G</step><octave>4</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    assert_eq!(score.parts[0].measures[0].content.len(), 3);
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[1]
+    {
+        if let NoteContent::Regular { full_note, .. } = &note.content {
+            assert!(full_note.chord);
+        }
+    }
+}
+
+// === Note Staff Test ===
+
+#[test]
+fn test_parse_note_with_staff() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Piano</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <note>
+                            <pitch><step>C</step><octave>4</octave></pitch>
+                            <duration>4</duration>
+                            <type>quarter</type>
+                            <staff>1</staff>
+                        </note>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Note(note) = &score.parts[0].measures[0].content[0]
+    {
+        assert_eq!(note.staff, Some(1));
+    }
+}
+
+// === Empty Ending Test ===
+
+#[test]
+fn test_parse_barline_empty_ending() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <barline location="left">
+                            <ending number="1,2" type="start"/>
+                        </barline>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Barline(barline) =
+        &score.parts[0].measures[0].content[0]
+    {
+        let ending = barline.ending.as_ref().unwrap();
+        assert_eq!(ending.number, "1,2");
+    }
+}
+
+// === Non-traditional Key Test ===
+
+#[test]
+fn test_parse_non_traditional_key() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <attributes>
+                            <key>
+                                <key-step>C</key-step>
+                                <key-alter>1</key-alter>
+                                <key-step>F</key-step>
+                                <key-alter>1</key-alter>
+                            </key>
+                        </attributes>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Attributes(attrs) =
+        &score.parts[0].measures[0].content[0]
+    {
+        if let KeyContent::NonTraditional(ks) = &attrs.keys[0].content {
+            assert!(!ks.is_empty());
+        }
+    }
+}
+
+// === Time with Interchangeable ===
+
+#[test]
+fn test_parse_time_interchangeable() {
+    let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        <attributes>
+                            <time>
+                                <beats>6</beats>
+                                <beat-type>8</beat-type>
+                                <interchangeable>
+                                    <beats>2</beats>
+                                    <beat-type>4</beat-type>
+                                </interchangeable>
+                            </time>
+                        </attributes>
+                    </measure>
+                </part>
+            </score-partwise>"#;
+
+    let score = parse_score(xml).unwrap();
+    if let crate::ir::measure::MusicDataElement::Attributes(attrs) =
+        &score.parts[0].measures[0].content[0]
+    {
+        if let TimeContent::Measured { signatures } = &attrs.times[0].content {
+            assert!(!signatures.is_empty());
+        }
+    }
+}

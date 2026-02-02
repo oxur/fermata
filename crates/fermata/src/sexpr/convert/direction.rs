@@ -2080,27 +2080,237 @@ impl FromSexpr for Direction {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ir::common::{AboveBelow, YesNo};
+    use crate::ir::common::{AboveBelow, Font, LeftCenterRight, LineType, StartStop, YesNo};
     use crate::ir::duration::NoteTypeValue;
+    use crate::ir::pitch::Step;
     use crate::sexpr::print_sexpr;
 
-    // === DynamicElement Tests ===
+    // ========================================================================
+    // WedgeType Tests
+    // ========================================================================
 
     #[test]
-    fn test_dynamic_element_round_trip() {
-        for elem in [
+    fn test_wedge_type_crescendo_round_trip() {
+        let wt = WedgeType::Crescendo;
+        let sexpr = wt.to_sexpr();
+        let parsed = WedgeType::from_sexpr(&sexpr).unwrap();
+        assert_eq!(wt, parsed);
+    }
+
+    #[test]
+    fn test_wedge_type_diminuendo_round_trip() {
+        let wt = WedgeType::Diminuendo;
+        let sexpr = wt.to_sexpr();
+        let parsed = WedgeType::from_sexpr(&sexpr).unwrap();
+        assert_eq!(wt, parsed);
+    }
+
+    #[test]
+    fn test_wedge_type_decrescendo_alias() {
+        // "decrescendo" should be parsed as Diminuendo
+        let sexpr = Sexpr::symbol("decrescendo");
+        let parsed = WedgeType::from_sexpr(&sexpr).unwrap();
+        assert_eq!(WedgeType::Diminuendo, parsed);
+    }
+
+    #[test]
+    fn test_wedge_type_stop_round_trip() {
+        let wt = WedgeType::Stop;
+        let sexpr = wt.to_sexpr();
+        let parsed = WedgeType::from_sexpr(&sexpr).unwrap();
+        assert_eq!(wt, parsed);
+    }
+
+    #[test]
+    fn test_wedge_type_continue_round_trip() {
+        let wt = WedgeType::Continue;
+        let sexpr = wt.to_sexpr();
+        let parsed = WedgeType::from_sexpr(&sexpr).unwrap();
+        assert_eq!(wt, parsed);
+    }
+
+    #[test]
+    fn test_wedge_type_invalid() {
+        let sexpr = Sexpr::symbol("invalid");
+        let result = WedgeType::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
+
+    // ========================================================================
+    // PedalType Tests
+    // ========================================================================
+
+    #[test]
+    fn test_pedal_type_all_variants_round_trip() {
+        let variants = [
+            PedalType::Start,
+            PedalType::Stop,
+            PedalType::Sostenuto,
+            PedalType::Change,
+            PedalType::Continue,
+            PedalType::Discontinue,
+            PedalType::Resume,
+        ];
+        for pt in variants {
+            let sexpr = pt.to_sexpr();
+            let parsed = PedalType::from_sexpr(&sexpr).unwrap();
+            assert_eq!(pt, parsed);
+        }
+    }
+
+    #[test]
+    fn test_pedal_type_invalid() {
+        let sexpr = Sexpr::symbol("invalid");
+        let result = PedalType::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
+
+    // ========================================================================
+    // LineEnd Tests
+    // ========================================================================
+
+    #[test]
+    fn test_line_end_all_variants_round_trip() {
+        let variants = [
+            LineEnd::Up,
+            LineEnd::Down,
+            LineEnd::Both,
+            LineEnd::Arrow,
+            LineEnd::None,
+        ];
+        for le in variants {
+            let sexpr = le.to_sexpr();
+            let parsed = LineEnd::from_sexpr(&sexpr).unwrap();
+            assert_eq!(le, parsed);
+        }
+    }
+
+    #[test]
+    fn test_line_end_invalid() {
+        let sexpr = Sexpr::symbol("invalid");
+        let result = LineEnd::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
+
+    // ========================================================================
+    // OnOff Tests
+    // ========================================================================
+
+    #[test]
+    fn test_on_off_on_round_trip() {
+        let oo = OnOff::On;
+        let sexpr = oo.to_sexpr();
+        let parsed = OnOff::from_sexpr(&sexpr).unwrap();
+        assert_eq!(oo, parsed);
+    }
+
+    #[test]
+    fn test_on_off_off_round_trip() {
+        let oo = OnOff::Off;
+        let sexpr = oo.to_sexpr();
+        let parsed = OnOff::from_sexpr(&sexpr).unwrap();
+        assert_eq!(oo, parsed);
+    }
+
+    #[test]
+    fn test_on_off_invalid() {
+        let sexpr = Sexpr::symbol("invalid");
+        let result = OnOff::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
+
+    // ========================================================================
+    // UpDownStopContinue Tests
+    // ========================================================================
+
+    #[test]
+    fn test_up_down_stop_continue_all_variants_round_trip() {
+        let variants = [
+            UpDownStopContinue::Up,
+            UpDownStopContinue::Down,
+            UpDownStopContinue::Stop,
+            UpDownStopContinue::Continue,
+        ];
+        for udsc in variants {
+            let sexpr = udsc.to_sexpr();
+            let parsed = UpDownStopContinue::from_sexpr(&sexpr).unwrap();
+            assert_eq!(udsc, parsed);
+        }
+    }
+
+    #[test]
+    fn test_up_down_stop_continue_invalid() {
+        let sexpr = Sexpr::symbol("invalid");
+        let result = UpDownStopContinue::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
+
+    // ========================================================================
+    // StaffDivideSymbol Tests
+    // ========================================================================
+
+    #[test]
+    fn test_staff_divide_symbol_all_variants_round_trip() {
+        let variants = [
+            StaffDivideSymbol::Down,
+            StaffDivideSymbol::Up,
+            StaffDivideSymbol::UpDown,
+        ];
+        for sds in variants {
+            let sexpr = sds.to_sexpr();
+            let parsed = StaffDivideSymbol::from_sexpr(&sexpr).unwrap();
+            assert_eq!(sds, parsed);
+        }
+    }
+
+    #[test]
+    fn test_staff_divide_symbol_invalid() {
+        let sexpr = Sexpr::symbol("invalid");
+        let result = StaffDivideSymbol::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
+
+    // ========================================================================
+    // PrincipalVoiceSymbol Tests
+    // ========================================================================
+
+    #[test]
+    fn test_principal_voice_symbol_all_variants_round_trip() {
+        let variants = [
+            PrincipalVoiceSymbol::Hauptstimme,
+            PrincipalVoiceSymbol::Nebenstimme,
+            PrincipalVoiceSymbol::Plain,
+            PrincipalVoiceSymbol::None,
+        ];
+        for pvs in variants {
+            let sexpr = pvs.to_sexpr();
+            let parsed = PrincipalVoiceSymbol::from_sexpr(&sexpr).unwrap();
+            assert_eq!(pvs, parsed);
+        }
+    }
+
+    #[test]
+    fn test_principal_voice_symbol_invalid() {
+        let sexpr = Sexpr::symbol("invalid");
+        let result = PrincipalVoiceSymbol::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
+
+    // ========================================================================
+    // DynamicElement Tests - All Variants
+    // ========================================================================
+
+    #[test]
+    fn test_dynamic_element_all_piano_variants() {
+        let variants = [
             DynamicElement::P,
             DynamicElement::PP,
             DynamicElement::PPP,
-            DynamicElement::F,
-            DynamicElement::FF,
-            DynamicElement::FFF,
-            DynamicElement::MF,
-            DynamicElement::MP,
-            DynamicElement::SF,
-            DynamicElement::SFZ,
-            DynamicElement::FP,
-        ] {
+            DynamicElement::PPPP,
+            DynamicElement::PPPPP,
+            DynamicElement::PPPPPP,
+        ];
+        for elem in variants {
             let sexpr = elem.to_sexpr();
             let parsed = DynamicElement::from_sexpr(&sexpr).unwrap();
             assert_eq!(elem, parsed);
@@ -2108,61 +2318,579 @@ mod tests {
     }
 
     #[test]
-    fn test_dynamic_element_other() {
-        let elem = DynamicElement::OtherDynamics("custom".to_string());
+    fn test_dynamic_element_all_forte_variants() {
+        let variants = [
+            DynamicElement::F,
+            DynamicElement::FF,
+            DynamicElement::FFF,
+            DynamicElement::FFFF,
+            DynamicElement::FFFFF,
+            DynamicElement::FFFFFF,
+        ];
+        for elem in variants {
+            let sexpr = elem.to_sexpr();
+            let parsed = DynamicElement::from_sexpr(&sexpr).unwrap();
+            assert_eq!(elem, parsed);
+        }
+    }
+
+    #[test]
+    fn test_dynamic_element_mezzo_variants() {
+        let variants = [DynamicElement::MP, DynamicElement::MF];
+        for elem in variants {
+            let sexpr = elem.to_sexpr();
+            let parsed = DynamicElement::from_sexpr(&sexpr).unwrap();
+            assert_eq!(elem, parsed);
+        }
+    }
+
+    #[test]
+    fn test_dynamic_element_sforzando_variants() {
+        let variants = [
+            DynamicElement::SF,
+            DynamicElement::SFP,
+            DynamicElement::SFPP,
+            DynamicElement::SFZ,
+            DynamicElement::SFFZ,
+            DynamicElement::SFZP,
+        ];
+        for elem in variants {
+            let sexpr = elem.to_sexpr();
+            let parsed = DynamicElement::from_sexpr(&sexpr).unwrap();
+            assert_eq!(elem, parsed);
+        }
+    }
+
+    #[test]
+    fn test_dynamic_element_other_variants() {
+        let variants = [
+            DynamicElement::FP,
+            DynamicElement::RF,
+            DynamicElement::RFZ,
+            DynamicElement::FZ,
+            DynamicElement::N,
+            DynamicElement::PF,
+        ];
+        for elem in variants {
+            let sexpr = elem.to_sexpr();
+            let parsed = DynamicElement::from_sexpr(&sexpr).unwrap();
+            assert_eq!(elem, parsed);
+        }
+    }
+
+    #[test]
+    fn test_dynamic_element_other_dynamics_round_trip() {
+        let elem = DynamicElement::OtherDynamics("custom-dynamic".to_string());
         let sexpr = elem.to_sexpr();
         let parsed = DynamicElement::from_sexpr(&sexpr).unwrap();
         assert_eq!(elem, parsed);
     }
 
-    // === Dynamics Tests ===
-
     #[test]
-    fn test_dynamics_forte() {
-        let dynamics = Dynamics {
-            content: vec![DynamicElement::F],
-            print_style: PrintStyle::default(),
-            placement: Some(AboveBelow::Below),
-        };
-
-        let sexpr = dynamics.to_sexpr();
-        let text = print_sexpr(&sexpr);
-        assert!(text.contains("dynamics"));
-        assert!(text.contains(":placement below"));
-
-        let parsed = Dynamics::from_sexpr(&sexpr).unwrap();
-        assert_eq!(dynamics.content, parsed.content);
-        assert_eq!(dynamics.placement, parsed.placement);
+    fn test_dynamic_element_invalid_symbol() {
+        let sexpr = Sexpr::symbol("invalid-dynamic");
+        let result = DynamicElement::from_sexpr(&sexpr);
+        assert!(result.is_err());
     }
 
-    // === Wedge Tests ===
+    #[test]
+    fn test_dynamic_element_not_a_list_or_symbol() {
+        let sexpr = Sexpr::Integer(42);
+        let result = DynamicElement::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
+
+    // ========================================================================
+    // Dynamics Tests
+    // ========================================================================
 
     #[test]
-    fn test_wedge_crescendo() {
+    fn test_dynamics_empty_content() {
+        let dynamics = Dynamics {
+            content: vec![],
+            print_style: PrintStyle::default(),
+            placement: None,
+        };
+        let sexpr = dynamics.to_sexpr();
+        let parsed = Dynamics::from_sexpr(&sexpr).unwrap();
+        assert_eq!(dynamics.content, parsed.content);
+    }
+
+    #[test]
+    fn test_dynamics_with_position() {
+        let dynamics = Dynamics {
+            content: vec![DynamicElement::F],
+            print_style: PrintStyle {
+                position: Position {
+                    default_x: Some(10.0),
+                    default_y: Some(20.0),
+                    relative_x: None,
+                    relative_y: None,
+                },
+                font: Default::default(),
+                color: Some("#FF0000".to_string()),
+            },
+            placement: Some(AboveBelow::Below),
+        };
+        let sexpr = dynamics.to_sexpr();
+        let text = print_sexpr(&sexpr);
+        assert!(text.contains("position"));
+        assert!(text.contains("color"));
+        let parsed = Dynamics::from_sexpr(&sexpr).unwrap();
+        assert_eq!(dynamics.print_style.color, parsed.print_style.color);
+    }
+
+    #[test]
+    fn test_dynamics_not_a_list() {
+        let sexpr = Sexpr::symbol("dynamics");
+        let result = Dynamics::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_dynamics_wrong_head() {
+        let sexpr = ListBuilder::new("wrong").build();
+        let result = Dynamics::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
+
+    // ========================================================================
+    // Wedge Tests
+    // ========================================================================
+
+    #[test]
+    fn test_wedge_crescendo_full() {
         let wedge = Wedge {
             r#type: WedgeType::Crescendo,
             number: Some(1),
             spread: Some(15.0),
+            niente: Some(YesNo::Yes),
+            line_type: Some(LineType::Dashed),
+            position: Position {
+                default_x: Some(5.0),
+                default_y: None,
+                relative_x: None,
+                relative_y: Some(-10.0),
+            },
+            color: Some("#000000".to_string()),
+        };
+        let sexpr = wedge.to_sexpr();
+        let parsed = Wedge::from_sexpr(&sexpr).unwrap();
+        assert_eq!(wedge.r#type, parsed.r#type);
+        assert_eq!(wedge.number, parsed.number);
+        assert_eq!(wedge.spread, parsed.spread);
+        assert_eq!(wedge.niente, parsed.niente);
+        assert_eq!(wedge.line_type, parsed.line_type);
+        assert_eq!(wedge.color, parsed.color);
+    }
+
+    #[test]
+    fn test_wedge_diminuendo_minimal() {
+        let wedge = Wedge {
+            r#type: WedgeType::Diminuendo,
+            number: None,
+            spread: None,
             niente: None,
             line_type: None,
             position: Position::default(),
             color: None,
         };
-
         let sexpr = wedge.to_sexpr();
-        let text = print_sexpr(&sexpr);
-        assert!(text.contains("wedge"));
-        assert!(text.contains("crescendo"));
-
         let parsed = Wedge::from_sexpr(&sexpr).unwrap();
         assert_eq!(wedge.r#type, parsed.r#type);
-        assert_eq!(wedge.number, parsed.number);
     }
 
-    // === Metronome Tests ===
+    #[test]
+    fn test_wedge_not_a_list() {
+        let sexpr = Sexpr::symbol("wedge");
+        let result = Wedge::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
 
     #[test]
-    fn test_metronome_per_minute() {
+    fn test_wedge_wrong_head() {
+        let sexpr = ListBuilder::new("wrong")
+            .kwarg("type", &WedgeType::Crescendo)
+            .build();
+        let result = Wedge::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
+
+    // ========================================================================
+    // Dashes Tests
+    // ========================================================================
+
+    #[test]
+    fn test_dashes_round_trip() {
+        use crate::ir::common::StartStopContinue;
+        let dashes = Dashes {
+            r#type: StartStopContinue::Start,
+            number: Some(1),
+            position: Position {
+                default_x: Some(5.0),
+                default_y: Some(10.0),
+                relative_x: None,
+                relative_y: None,
+            },
+            color: Some("#333333".to_string()),
+        };
+        let sexpr = dashes.to_sexpr();
+        let parsed = Dashes::from_sexpr(&sexpr).unwrap();
+        assert_eq!(dashes.r#type, parsed.r#type);
+        assert_eq!(dashes.number, parsed.number);
+        assert_eq!(dashes.color, parsed.color);
+    }
+
+    #[test]
+    fn test_dashes_minimal() {
+        use crate::ir::common::StartStopContinue;
+        let dashes = Dashes {
+            r#type: StartStopContinue::Stop,
+            number: None,
+            position: Position::default(),
+            color: None,
+        };
+        let sexpr = dashes.to_sexpr();
+        let parsed = Dashes::from_sexpr(&sexpr).unwrap();
+        assert_eq!(dashes.r#type, parsed.r#type);
+    }
+
+    #[test]
+    fn test_dashes_not_a_list() {
+        let sexpr = Sexpr::symbol("dashes");
+        let result = Dashes::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
+
+    // ========================================================================
+    // Bracket Tests
+    // ========================================================================
+
+    #[test]
+    fn test_bracket_round_trip() {
+        use crate::ir::common::StartStopContinue;
+        let bracket = Bracket {
+            r#type: StartStopContinue::Start,
+            number: Some(1),
+            line_end: LineEnd::Up,
+            end_length: Some(10.0),
+            line_type: Some(LineType::Solid),
+            position: Position {
+                default_x: Some(5.0),
+                default_y: None,
+                relative_x: Some(2.0),
+                relative_y: None,
+            },
+            color: Some("#444444".to_string()),
+        };
+        let sexpr = bracket.to_sexpr();
+        let parsed = Bracket::from_sexpr(&sexpr).unwrap();
+        assert_eq!(bracket.r#type, parsed.r#type);
+        assert_eq!(bracket.line_end, parsed.line_end);
+        assert_eq!(bracket.end_length, parsed.end_length);
+        assert_eq!(bracket.line_type, parsed.line_type);
+        assert_eq!(bracket.color, parsed.color);
+    }
+
+    #[test]
+    fn test_bracket_not_a_list() {
+        let sexpr = Sexpr::symbol("bracket");
+        let result = Bracket::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
+
+    // ========================================================================
+    // Pedal Tests
+    // ========================================================================
+
+    #[test]
+    fn test_pedal_all_types() {
+        let types = [
+            PedalType::Start,
+            PedalType::Stop,
+            PedalType::Sostenuto,
+            PedalType::Change,
+            PedalType::Continue,
+            PedalType::Discontinue,
+            PedalType::Resume,
+        ];
+        for pt in types {
+            let pedal = Pedal {
+                r#type: pt,
+                number: Some(1),
+                line: Some(YesNo::Yes),
+                sign: Some(YesNo::No),
+                abbreviated: Some(YesNo::Yes),
+                print_style: PrintStyle::default(),
+            };
+            let sexpr = pedal.to_sexpr();
+            let parsed = Pedal::from_sexpr(&sexpr).unwrap();
+            assert_eq!(pedal.r#type, parsed.r#type);
+        }
+    }
+
+    #[test]
+    fn test_pedal_with_position_and_color() {
+        let pedal = Pedal {
+            r#type: PedalType::Start,
+            number: None,
+            line: None,
+            sign: None,
+            abbreviated: None,
+            print_style: PrintStyle {
+                position: Position {
+                    default_x: Some(10.0),
+                    default_y: Some(20.0),
+                    relative_x: None,
+                    relative_y: None,
+                },
+                font: Default::default(),
+                color: Some("#555555".to_string()),
+            },
+        };
+        let sexpr = pedal.to_sexpr();
+        let text = print_sexpr(&sexpr);
+        assert!(text.contains("position"));
+        assert!(text.contains("color"));
+        let parsed = Pedal::from_sexpr(&sexpr).unwrap();
+        assert_eq!(pedal.print_style.color, parsed.print_style.color);
+    }
+
+    #[test]
+    fn test_pedal_not_a_list() {
+        let sexpr = Sexpr::symbol("pedal");
+        let result = Pedal::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
+
+    // ========================================================================
+    // PerMinute Tests
+    // ========================================================================
+
+    #[test]
+    fn test_per_minute_minimal() {
+        let pm = PerMinute {
+            value: "120".to_string(),
+            font: Font::default(),
+        };
+        let sexpr = pm.to_sexpr();
+        let parsed = PerMinute::from_sexpr(&sexpr).unwrap();
+        assert_eq!(pm.value, parsed.value);
+    }
+
+    #[test]
+    fn test_per_minute_with_font() {
+        let pm = PerMinute {
+            value: "120-132".to_string(),
+            font: Font {
+                font_family: Some("Times".to_string()),
+                font_style: None,
+                font_size: None,
+                font_weight: None,
+            },
+        };
+        let sexpr = pm.to_sexpr();
+        let text = print_sexpr(&sexpr);
+        assert!(text.contains("font"));
+        let parsed = PerMinute::from_sexpr(&sexpr).unwrap();
+        assert_eq!(pm.value, parsed.value);
+    }
+
+    #[test]
+    fn test_per_minute_not_a_list() {
+        let sexpr = Sexpr::symbol("per-minute");
+        let result = PerMinute::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
+
+    // ========================================================================
+    // MetronomeNote Tests
+    // ========================================================================
+
+    #[test]
+    fn test_metronome_note_round_trip() {
+        let mn = MetronomeNote {
+            note_type: NoteTypeValue::Quarter,
+            dots: 1,
+            tuplet: None,
+        };
+        let sexpr = mn.to_sexpr();
+        let parsed = MetronomeNote::from_sexpr(&sexpr).unwrap();
+        assert_eq!(mn.note_type, parsed.note_type);
+        assert_eq!(mn.dots, parsed.dots);
+    }
+
+    #[test]
+    fn test_metronome_note_with_tuplet() {
+        let mn = MetronomeNote {
+            note_type: NoteTypeValue::Eighth,
+            dots: 0,
+            tuplet: Some(MetronomeTuplet {
+                r#type: StartStop::Start,
+                actual_notes: 3,
+                normal_notes: 2,
+            }),
+        };
+        let sexpr = mn.to_sexpr();
+        let parsed = MetronomeNote::from_sexpr(&sexpr).unwrap();
+        assert_eq!(mn.tuplet.as_ref().unwrap().actual_notes, 3);
+        assert_eq!(parsed.tuplet.as_ref().unwrap().actual_notes, 3);
+    }
+
+    #[test]
+    fn test_metronome_note_not_a_list() {
+        let sexpr = Sexpr::symbol("metronome-note");
+        let result = MetronomeNote::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
+
+    // ========================================================================
+    // MetronomeTuplet Tests
+    // ========================================================================
+
+    #[test]
+    fn test_metronome_tuplet_round_trip() {
+        let mt = MetronomeTuplet {
+            r#type: StartStop::Start,
+            actual_notes: 3,
+            normal_notes: 2,
+        };
+        let sexpr = mt.to_sexpr();
+        let parsed = MetronomeTuplet::from_sexpr(&sexpr).unwrap();
+        assert_eq!(mt.r#type, parsed.r#type);
+        assert_eq!(mt.actual_notes, parsed.actual_notes);
+        assert_eq!(mt.normal_notes, parsed.normal_notes);
+    }
+
+    #[test]
+    fn test_metronome_tuplet_not_a_list() {
+        let sexpr = Sexpr::symbol("metronome-tuplet");
+        let result = MetronomeTuplet::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
+
+    // ========================================================================
+    // MetronomeContent Tests
+    // ========================================================================
+
+    #[test]
+    fn test_metronome_content_per_minute() {
+        let mc = MetronomeContent::PerMinute {
+            beat_unit: NoteTypeValue::Quarter,
+            beat_unit_dots: 0,
+            per_minute: PerMinute {
+                value: "120".to_string(),
+                font: Font::default(),
+            },
+        };
+        let sexpr = mc.to_sexpr();
+        let parsed = MetronomeContent::from_sexpr(&sexpr).unwrap();
+        if let MetronomeContent::PerMinute { beat_unit, .. } = parsed {
+            assert_eq!(beat_unit, NoteTypeValue::Quarter);
+        } else {
+            panic!("Expected PerMinute variant");
+        }
+    }
+
+    #[test]
+    fn test_metronome_content_beat_equation() {
+        let mc = MetronomeContent::BeatEquation {
+            left_unit: NoteTypeValue::Half,
+            left_dots: 1,
+            right_unit: NoteTypeValue::Quarter,
+            right_dots: 0,
+        };
+        let sexpr = mc.to_sexpr();
+        let parsed = MetronomeContent::from_sexpr(&sexpr).unwrap();
+        if let MetronomeContent::BeatEquation {
+            left_unit,
+            right_unit,
+            ..
+        } = parsed
+        {
+            assert_eq!(left_unit, NoteTypeValue::Half);
+            assert_eq!(right_unit, NoteTypeValue::Quarter);
+        } else {
+            panic!("Expected BeatEquation variant");
+        }
+    }
+
+    #[test]
+    fn test_metronome_content_metric_modulation() {
+        let mc = MetronomeContent::MetricModulation {
+            metric_relation: vec![MetricRelation {
+                left: MetronomeNote {
+                    note_type: NoteTypeValue::Quarter,
+                    dots: 0,
+                    tuplet: None,
+                },
+                right: MetronomeNote {
+                    note_type: NoteTypeValue::Half,
+                    dots: 0,
+                    tuplet: None,
+                },
+            }],
+        };
+        let sexpr = mc.to_sexpr();
+        let parsed = MetronomeContent::from_sexpr(&sexpr).unwrap();
+        if let MetronomeContent::MetricModulation { metric_relation } = parsed {
+            assert_eq!(metric_relation.len(), 1);
+        } else {
+            panic!("Expected MetricModulation variant");
+        }
+    }
+
+    #[test]
+    fn test_metronome_content_not_a_list() {
+        let sexpr = Sexpr::symbol("per-minute-content");
+        let result = MetronomeContent::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_metronome_content_invalid_variant() {
+        let sexpr = ListBuilder::new("invalid-variant").build();
+        let result = MetronomeContent::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
+
+    // ========================================================================
+    // MetricRelation Tests
+    // ========================================================================
+
+    #[test]
+    fn test_metric_relation_round_trip() {
+        let mr = MetricRelation {
+            left: MetronomeNote {
+                note_type: NoteTypeValue::Quarter,
+                dots: 0,
+                tuplet: None,
+            },
+            right: MetronomeNote {
+                note_type: NoteTypeValue::Half,
+                dots: 1,
+                tuplet: None,
+            },
+        };
+        let sexpr = mr.to_sexpr();
+        let parsed = MetricRelation::from_sexpr(&sexpr).unwrap();
+        assert_eq!(mr.left.note_type, parsed.left.note_type);
+        assert_eq!(mr.right.dots, parsed.right.dots);
+    }
+
+    #[test]
+    fn test_metric_relation_not_a_list() {
+        let sexpr = Sexpr::symbol("metric-relation");
+        let result = MetricRelation::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
+
+    // ========================================================================
+    // Metronome Tests
+    // ========================================================================
+
+    #[test]
+    fn test_metronome_per_minute_round_trip() {
         let metronome = Metronome {
             content: MetronomeContent::PerMinute {
                 beat_unit: NoteTypeValue::Quarter,
@@ -2175,63 +2903,1528 @@ mod tests {
             parentheses: Some(YesNo::Yes),
             print_style: PrintStyle::default(),
         };
-
         let sexpr = metronome.to_sexpr();
-        let text = print_sexpr(&sexpr);
-        assert!(text.contains("metronome"));
-        assert!(text.contains("quarter"));
-        assert!(text.contains("120"));
-
         let parsed = Metronome::from_sexpr(&sexpr).unwrap();
         assert_eq!(metronome.parentheses, parsed.parentheses);
     }
 
-    // === Words Tests ===
+    #[test]
+    fn test_metronome_with_position() {
+        let metronome = Metronome {
+            content: MetronomeContent::PerMinute {
+                beat_unit: NoteTypeValue::Half,
+                beat_unit_dots: 1,
+                per_minute: PerMinute {
+                    value: "60".to_string(),
+                    font: Default::default(),
+                },
+            },
+            parentheses: None,
+            print_style: PrintStyle {
+                position: Position {
+                    default_x: Some(10.0),
+                    default_y: Some(20.0),
+                    relative_x: None,
+                    relative_y: None,
+                },
+                font: Default::default(),
+                color: None,
+            },
+        };
+        let sexpr = metronome.to_sexpr();
+        let text = print_sexpr(&sexpr);
+        assert!(text.contains("position"));
+        let parsed = Metronome::from_sexpr(&sexpr).unwrap();
+        assert_eq!(
+            metronome.print_style.position.default_x,
+            parsed.print_style.position.default_x
+        );
+    }
 
     #[test]
-    fn test_words_round_trip() {
-        use crate::ir::common::LeftCenterRight;
+    fn test_metronome_not_a_list() {
+        let sexpr = Sexpr::symbol("metronome");
+        let result = Metronome::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
 
+    // ========================================================================
+    // Words Tests
+    // ========================================================================
+
+    #[test]
+    fn test_words_full() {
         let words = Words {
             value: "dolce".to_string(),
-            print_style: PrintStyle::default(),
-            justify: Some(LeftCenterRight::Left),
+            print_style: PrintStyle {
+                position: Position {
+                    default_x: Some(5.0),
+                    default_y: Some(10.0),
+                    relative_x: None,
+                    relative_y: None,
+                },
+                font: Default::default(),
+                color: Some("#666666".to_string()),
+            },
+            justify: Some(LeftCenterRight::Center),
             lang: Some("it".to_string()),
         };
-
         let sexpr = words.to_sexpr();
-        let text = print_sexpr(&sexpr);
-        assert!(text.contains("dolce"));
-
         let parsed = Words::from_sexpr(&sexpr).unwrap();
         assert_eq!(words.value, parsed.value);
         assert_eq!(words.justify, parsed.justify);
         assert_eq!(words.lang, parsed.lang);
+        assert_eq!(words.print_style.color, parsed.print_style.color);
     }
 
-    // === Pedal Tests ===
+    #[test]
+    fn test_words_minimal() {
+        let words = Words {
+            value: "cresc.".to_string(),
+            print_style: PrintStyle::default(),
+            justify: None,
+            lang: None,
+        };
+        let sexpr = words.to_sexpr();
+        let parsed = Words::from_sexpr(&sexpr).unwrap();
+        assert_eq!(words.value, parsed.value);
+    }
 
     #[test]
-    fn test_pedal_start() {
-        let pedal = Pedal {
-            r#type: PedalType::Start,
+    fn test_words_not_a_list() {
+        let sexpr = Sexpr::symbol("words");
+        let result = Words::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
+
+    // ========================================================================
+    // FormattedSymbol Tests
+    // ========================================================================
+
+    #[test]
+    fn test_formatted_symbol_round_trip() {
+        let fs = FormattedSymbol {
+            value: "segno".to_string(),
+            print_style: PrintStyle {
+                position: Position {
+                    default_x: Some(5.0),
+                    default_y: None,
+                    relative_x: None,
+                    relative_y: Some(10.0),
+                },
+                font: Default::default(),
+                color: Some("#777777".to_string()),
+            },
+            justify: Some(LeftCenterRight::Right),
+        };
+        let sexpr = fs.to_sexpr();
+        let parsed = FormattedSymbol::from_sexpr(&sexpr).unwrap();
+        assert_eq!(fs.value, parsed.value);
+        assert_eq!(fs.justify, parsed.justify);
+        assert_eq!(fs.print_style.color, parsed.print_style.color);
+    }
+
+    #[test]
+    fn test_formatted_symbol_minimal() {
+        let fs = FormattedSymbol {
+            value: "coda".to_string(),
+            print_style: PrintStyle::default(),
+            justify: None,
+        };
+        let sexpr = fs.to_sexpr();
+        let parsed = FormattedSymbol::from_sexpr(&sexpr).unwrap();
+        assert_eq!(fs.value, parsed.value);
+    }
+
+    #[test]
+    fn test_formatted_symbol_not_a_list() {
+        let sexpr = Sexpr::symbol("formatted-symbol");
+        let result = FormattedSymbol::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
+
+    // ========================================================================
+    // Segno Tests
+    // ========================================================================
+
+    #[test]
+    fn test_segno_with_all_fields() {
+        let segno = Segno {
+            print_style: PrintStyle {
+                position: Position {
+                    default_x: Some(10.0),
+                    default_y: Some(20.0),
+                    relative_x: None,
+                    relative_y: None,
+                },
+                font: Default::default(),
+                color: Some("#888888".to_string()),
+            },
+            smufl: Some("segno".to_string()),
+        };
+        let sexpr = segno.to_sexpr();
+        let parsed = Segno::from_sexpr(&sexpr).unwrap();
+        assert_eq!(segno.smufl, parsed.smufl);
+        assert_eq!(segno.print_style.color, parsed.print_style.color);
+    }
+
+    #[test]
+    fn test_segno_minimal() {
+        let segno = Segno {
+            print_style: PrintStyle::default(),
+            smufl: None,
+        };
+        let sexpr = segno.to_sexpr();
+        let parsed = Segno::from_sexpr(&sexpr).unwrap();
+        assert!(parsed.smufl.is_none());
+    }
+
+    #[test]
+    fn test_segno_not_a_list() {
+        let sexpr = Sexpr::symbol("segno");
+        let result = Segno::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
+
+    // ========================================================================
+    // Coda Tests
+    // ========================================================================
+
+    #[test]
+    fn test_coda_with_all_fields() {
+        let coda = Coda {
+            print_style: PrintStyle {
+                position: Position {
+                    default_x: Some(15.0),
+                    default_y: Some(25.0),
+                    relative_x: None,
+                    relative_y: None,
+                },
+                font: Default::default(),
+                color: Some("#999999".to_string()),
+            },
+            smufl: Some("coda".to_string()),
+        };
+        let sexpr = coda.to_sexpr();
+        let parsed = Coda::from_sexpr(&sexpr).unwrap();
+        assert_eq!(coda.smufl, parsed.smufl);
+        assert_eq!(coda.print_style.color, parsed.print_style.color);
+    }
+
+    #[test]
+    fn test_coda_minimal() {
+        let coda = Coda {
+            print_style: PrintStyle::default(),
+            smufl: None,
+        };
+        let sexpr = coda.to_sexpr();
+        let parsed = Coda::from_sexpr(&sexpr).unwrap();
+        assert!(parsed.smufl.is_none());
+    }
+
+    #[test]
+    fn test_coda_not_a_list() {
+        let sexpr = Sexpr::symbol("coda");
+        let result = Coda::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
+
+    // ========================================================================
+    // OctaveShift Tests
+    // ========================================================================
+
+    #[test]
+    fn test_octave_shift_all_types() {
+        let types = [
+            UpDownStopContinue::Up,
+            UpDownStopContinue::Down,
+            UpDownStopContinue::Stop,
+            UpDownStopContinue::Continue,
+        ];
+        for t in types {
+            let os = OctaveShift {
+                r#type: t,
+                number: Some(1),
+                size: Some(8),
+                position: Position::default(),
+            };
+            let sexpr = os.to_sexpr();
+            let parsed = OctaveShift::from_sexpr(&sexpr).unwrap();
+            assert_eq!(os.r#type, parsed.r#type);
+        }
+    }
+
+    #[test]
+    fn test_octave_shift_with_position() {
+        let os = OctaveShift {
+            r#type: UpDownStopContinue::Up,
             number: None,
-            line: Some(YesNo::Yes),
-            sign: Some(YesNo::No),
-            abbreviated: None,
+            size: Some(15),
+            position: Position {
+                default_x: Some(5.0),
+                default_y: Some(10.0),
+                relative_x: None,
+                relative_y: None,
+            },
+        };
+        let sexpr = os.to_sexpr();
+        let text = print_sexpr(&sexpr);
+        assert!(text.contains("position"));
+        let parsed = OctaveShift::from_sexpr(&sexpr).unwrap();
+        assert_eq!(os.size, parsed.size);
+    }
+
+    #[test]
+    fn test_octave_shift_not_a_list() {
+        let sexpr = Sexpr::symbol("octave-shift");
+        let result = OctaveShift::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
+
+    // ========================================================================
+    // Offset Tests
+    // ========================================================================
+
+    #[test]
+    fn test_offset_round_trip() {
+        let offset = Offset {
+            value: 10,
+            sound: Some(YesNo::Yes),
+        };
+        let sexpr = offset.to_sexpr();
+        let parsed = Offset::from_sexpr(&sexpr).unwrap();
+        assert_eq!(offset.value, parsed.value);
+        assert_eq!(offset.sound, parsed.sound);
+    }
+
+    #[test]
+    fn test_offset_minimal() {
+        let offset = Offset {
+            value: -5,
+            sound: None,
+        };
+        let sexpr = offset.to_sexpr();
+        let parsed = Offset::from_sexpr(&sexpr).unwrap();
+        assert_eq!(offset.value, parsed.value);
+        assert!(parsed.sound.is_none());
+    }
+
+    #[test]
+    fn test_offset_not_a_list() {
+        let sexpr = Sexpr::symbol("offset");
+        let result = Offset::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
+
+    // ========================================================================
+    // Sound Tests
+    // ========================================================================
+
+    #[test]
+    fn test_sound_all_fields() {
+        let sound = Sound {
+            tempo: Some(120.0),
+            dynamics: Some(80.0),
+            dacapo: Some(YesNo::Yes),
+            segno: Some("segno1".to_string()),
+            dalsegno: Some("dalsegno1".to_string()),
+            coda: Some("coda1".to_string()),
+            tocoda: Some("tocoda1".to_string()),
+            divisions: Some(4),
+            forward_repeat: Some(YesNo::Yes),
+            fine: Some("fine".to_string()),
+            time_only: Some("1".to_string()),
+            pizzicato: Some(YesNo::Yes),
+        };
+        let sexpr = sound.to_sexpr();
+        let parsed = Sound::from_sexpr(&sexpr).unwrap();
+        assert_eq!(sound.tempo, parsed.tempo);
+        assert_eq!(sound.dynamics, parsed.dynamics);
+        assert_eq!(sound.dacapo, parsed.dacapo);
+        assert_eq!(sound.segno, parsed.segno);
+        assert_eq!(sound.dalsegno, parsed.dalsegno);
+        assert_eq!(sound.coda, parsed.coda);
+        assert_eq!(sound.tocoda, parsed.tocoda);
+        assert_eq!(sound.divisions, parsed.divisions);
+        assert_eq!(sound.forward_repeat, parsed.forward_repeat);
+        assert_eq!(sound.fine, parsed.fine);
+        assert_eq!(sound.time_only, parsed.time_only);
+        assert_eq!(sound.pizzicato, parsed.pizzicato);
+    }
+
+    #[test]
+    fn test_sound_empty() {
+        let sound = Sound::default();
+        let sexpr = sound.to_sexpr();
+        let parsed = Sound::from_sexpr(&sexpr).unwrap();
+        assert!(parsed.tempo.is_none());
+        assert!(parsed.dynamics.is_none());
+    }
+
+    #[test]
+    fn test_sound_not_a_list() {
+        let sexpr = Sexpr::symbol("sound");
+        let result = Sound::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
+
+    // ========================================================================
+    // EmptyPrintStyle Tests
+    // ========================================================================
+
+    #[test]
+    fn test_empty_print_style_with_position() {
+        let eps = EmptyPrintStyle {
+            print_style: PrintStyle {
+                position: Position {
+                    default_x: Some(5.0),
+                    default_y: Some(10.0),
+                    relative_x: None,
+                    relative_y: None,
+                },
+                font: Default::default(),
+                color: None,
+            },
+        };
+        let sexpr = eps.to_sexpr();
+        let text = print_sexpr(&sexpr);
+        assert!(text.contains("position"));
+        let parsed = EmptyPrintStyle::from_sexpr(&sexpr).unwrap();
+        assert_eq!(
+            eps.print_style.position.default_x,
+            parsed.print_style.position.default_x
+        );
+    }
+
+    #[test]
+    fn test_empty_print_style_default() {
+        let eps = EmptyPrintStyle::default();
+        let sexpr = eps.to_sexpr();
+        let parsed = EmptyPrintStyle::from_sexpr(&sexpr).unwrap();
+        assert!(parsed.print_style.position.default_x.is_none());
+    }
+
+    #[test]
+    fn test_empty_print_style_not_a_list() {
+        let sexpr = Sexpr::symbol("empty-print-style");
+        let result = EmptyPrintStyle::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
+
+    // ========================================================================
+    // HarpPedals and PedalTuning Tests
+    // ========================================================================
+
+    #[test]
+    fn test_pedal_tuning_round_trip() {
+        let pt = PedalTuning {
+            pedal_step: Step::D,
+            pedal_alter: 1.0,
+        };
+        let sexpr = pt.to_sexpr();
+        let parsed = PedalTuning::from_sexpr(&sexpr).unwrap();
+        assert_eq!(pt.pedal_step, parsed.pedal_step);
+        assert_eq!(pt.pedal_alter, parsed.pedal_alter);
+    }
+
+    #[test]
+    fn test_pedal_tuning_not_a_list() {
+        let sexpr = Sexpr::symbol("pedal-tuning");
+        let result = PedalTuning::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_harp_pedals_round_trip() {
+        let hp = HarpPedals {
+            pedal_tuning: vec![
+                PedalTuning {
+                    pedal_step: Step::D,
+                    pedal_alter: 0.0,
+                },
+                PedalTuning {
+                    pedal_step: Step::C,
+                    pedal_alter: 1.0,
+                },
+            ],
+        };
+        let sexpr = hp.to_sexpr();
+        let parsed = HarpPedals::from_sexpr(&sexpr).unwrap();
+        assert_eq!(hp.pedal_tuning.len(), parsed.pedal_tuning.len());
+    }
+
+    #[test]
+    fn test_harp_pedals_empty() {
+        let hp = HarpPedals {
+            pedal_tuning: vec![],
+        };
+        let sexpr = hp.to_sexpr();
+        let parsed = HarpPedals::from_sexpr(&sexpr).unwrap();
+        assert!(parsed.pedal_tuning.is_empty());
+    }
+
+    #[test]
+    fn test_harp_pedals_not_a_list() {
+        let sexpr = Sexpr::symbol("harp-pedals");
+        let result = HarpPedals::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
+
+    // ========================================================================
+    // StringMute Tests
+    // ========================================================================
+
+    #[test]
+    fn test_string_mute_on() {
+        let sm = StringMute { r#type: OnOff::On };
+        let sexpr = sm.to_sexpr();
+        let parsed = StringMute::from_sexpr(&sexpr).unwrap();
+        assert_eq!(sm.r#type, parsed.r#type);
+    }
+
+    #[test]
+    fn test_string_mute_off() {
+        let sm = StringMute { r#type: OnOff::Off };
+        let sexpr = sm.to_sexpr();
+        let parsed = StringMute::from_sexpr(&sexpr).unwrap();
+        assert_eq!(sm.r#type, parsed.r#type);
+    }
+
+    #[test]
+    fn test_string_mute_not_a_list() {
+        let sexpr = Sexpr::symbol("string-mute");
+        let result = StringMute::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
+
+    // ========================================================================
+    // Scordatura and Accord Tests
+    // ========================================================================
+
+    #[test]
+    fn test_accord_round_trip() {
+        let accord = Accord {
+            string: 6,
+            tuning_step: Step::D,
+            tuning_alter: Some(-1.0),
+            tuning_octave: 2,
+        };
+        let sexpr = accord.to_sexpr();
+        let parsed = Accord::from_sexpr(&sexpr).unwrap();
+        assert_eq!(accord.string, parsed.string);
+        assert_eq!(accord.tuning_step, parsed.tuning_step);
+        assert_eq!(accord.tuning_alter, parsed.tuning_alter);
+        assert_eq!(accord.tuning_octave, parsed.tuning_octave);
+    }
+
+    #[test]
+    fn test_accord_no_alter() {
+        let accord = Accord {
+            string: 1,
+            tuning_step: Step::E,
+            tuning_alter: None,
+            tuning_octave: 4,
+        };
+        let sexpr = accord.to_sexpr();
+        let parsed = Accord::from_sexpr(&sexpr).unwrap();
+        assert!(parsed.tuning_alter.is_none());
+    }
+
+    #[test]
+    fn test_accord_not_a_list() {
+        let sexpr = Sexpr::symbol("accord");
+        let result = Accord::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_scordatura_round_trip() {
+        let scordatura = Scordatura {
+            accord: vec![
+                Accord {
+                    string: 6,
+                    tuning_step: Step::D,
+                    tuning_alter: None,
+                    tuning_octave: 2,
+                },
+                Accord {
+                    string: 1,
+                    tuning_step: Step::E,
+                    tuning_alter: None,
+                    tuning_octave: 4,
+                },
+            ],
+        };
+        let sexpr = scordatura.to_sexpr();
+        let parsed = Scordatura::from_sexpr(&sexpr).unwrap();
+        assert_eq!(scordatura.accord.len(), parsed.accord.len());
+    }
+
+    #[test]
+    fn test_scordatura_empty() {
+        let scordatura = Scordatura::default();
+        let sexpr = scordatura.to_sexpr();
+        let parsed = Scordatura::from_sexpr(&sexpr).unwrap();
+        assert!(parsed.accord.is_empty());
+    }
+
+    #[test]
+    fn test_scordatura_not_a_list() {
+        let sexpr = Sexpr::symbol("scordatura");
+        let result = Scordatura::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
+
+    // ========================================================================
+    // Image Tests
+    // ========================================================================
+
+    #[test]
+    fn test_image_round_trip() {
+        let image = Image {
+            source: "image.png".to_string(),
+            r#type: "image/png".to_string(),
+            position: Position {
+                default_x: Some(10.0),
+                default_y: Some(20.0),
+                relative_x: None,
+                relative_y: None,
+            },
+        };
+        let sexpr = image.to_sexpr();
+        let parsed = Image::from_sexpr(&sexpr).unwrap();
+        assert_eq!(image.source, parsed.source);
+        assert_eq!(image.r#type, parsed.r#type);
+    }
+
+    #[test]
+    fn test_image_no_position() {
+        let image = Image {
+            source: "test.jpg".to_string(),
+            r#type: "image/jpeg".to_string(),
+            position: Position::default(),
+        };
+        let sexpr = image.to_sexpr();
+        let parsed = Image::from_sexpr(&sexpr).unwrap();
+        assert_eq!(image.source, parsed.source);
+    }
+
+    #[test]
+    fn test_image_not_a_list() {
+        let sexpr = Sexpr::symbol("image");
+        let result = Image::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
+
+    // ========================================================================
+    // PrincipalVoice Tests
+    // ========================================================================
+
+    #[test]
+    fn test_principal_voice_all_symbols() {
+        let symbols = [
+            PrincipalVoiceSymbol::Hauptstimme,
+            PrincipalVoiceSymbol::Nebenstimme,
+            PrincipalVoiceSymbol::Plain,
+            PrincipalVoiceSymbol::None,
+        ];
+        for symbol in symbols {
+            let pv = PrincipalVoice {
+                r#type: StartStop::Start,
+                symbol,
+            };
+            let sexpr = pv.to_sexpr();
+            let parsed = PrincipalVoice::from_sexpr(&sexpr).unwrap();
+            assert_eq!(pv.r#type, parsed.r#type);
+            assert_eq!(pv.symbol, parsed.symbol);
+        }
+    }
+
+    #[test]
+    fn test_principal_voice_not_a_list() {
+        let sexpr = Sexpr::symbol("principal-voice");
+        let result = PrincipalVoice::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
+
+    // ========================================================================
+    // AccordionRegistration Tests
+    // ========================================================================
+
+    #[test]
+    fn test_accordion_registration_full() {
+        let ar = AccordionRegistration {
+            accordion_high: true,
+            accordion_middle: Some(2),
+            accordion_low: true,
+        };
+        let sexpr = ar.to_sexpr();
+        let parsed = AccordionRegistration::from_sexpr(&sexpr).unwrap();
+        assert_eq!(ar.accordion_high, parsed.accordion_high);
+        assert_eq!(ar.accordion_middle, parsed.accordion_middle);
+        assert_eq!(ar.accordion_low, parsed.accordion_low);
+    }
+
+    #[test]
+    fn test_accordion_registration_default() {
+        let ar = AccordionRegistration::default();
+        let sexpr = ar.to_sexpr();
+        let parsed = AccordionRegistration::from_sexpr(&sexpr).unwrap();
+        assert!(!parsed.accordion_high);
+        assert!(parsed.accordion_middle.is_none());
+        assert!(!parsed.accordion_low);
+    }
+
+    #[test]
+    fn test_accordion_registration_not_a_list() {
+        let sexpr = Sexpr::symbol("accordion-registration");
+        let result = AccordionRegistration::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
+
+    // ========================================================================
+    // StaffDivide Tests
+    // ========================================================================
+
+    #[test]
+    fn test_staff_divide_all_types() {
+        let types = [
+            StaffDivideSymbol::Down,
+            StaffDivideSymbol::Up,
+            StaffDivideSymbol::UpDown,
+        ];
+        for t in types {
+            let sd = StaffDivide { r#type: t };
+            let sexpr = sd.to_sexpr();
+            let parsed = StaffDivide::from_sexpr(&sexpr).unwrap();
+            assert_eq!(sd.r#type, parsed.r#type);
+        }
+    }
+
+    #[test]
+    fn test_staff_divide_not_a_list() {
+        let sexpr = Sexpr::symbol("staff-divide");
+        let result = StaffDivide::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
+
+    // ========================================================================
+    // OtherDirection Tests
+    // ========================================================================
+
+    #[test]
+    fn test_other_direction_full() {
+        let od = OtherDirection {
+            value: "custom-direction".to_string(),
+            print_object: Some(YesNo::Yes),
+            print_style: PrintStyle {
+                position: Position {
+                    default_x: Some(5.0),
+                    default_y: Some(10.0),
+                    relative_x: None,
+                    relative_y: None,
+                },
+                font: Default::default(),
+                color: None,
+            },
+        };
+        let sexpr = od.to_sexpr();
+        let parsed = OtherDirection::from_sexpr(&sexpr).unwrap();
+        assert_eq!(od.value, parsed.value);
+        assert_eq!(od.print_object, parsed.print_object);
+    }
+
+    #[test]
+    fn test_other_direction_minimal() {
+        let od = OtherDirection {
+            value: "simple".to_string(),
+            print_object: None,
             print_style: PrintStyle::default(),
         };
-
-        let sexpr = pedal.to_sexpr();
-        let parsed = Pedal::from_sexpr(&sexpr).unwrap();
-        assert_eq!(pedal.r#type, parsed.r#type);
-        assert_eq!(pedal.line, parsed.line);
+        let sexpr = od.to_sexpr();
+        let parsed = OtherDirection::from_sexpr(&sexpr).unwrap();
+        assert_eq!(od.value, parsed.value);
     }
 
-    // === Direction Tests ===
+    #[test]
+    fn test_other_direction_not_a_list() {
+        let sexpr = Sexpr::symbol("other-direction");
+        let result = OtherDirection::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
+
+    // ========================================================================
+    // Percussion Types Tests
+    // ========================================================================
 
     #[test]
-    fn test_direction_with_dynamics() {
+    fn test_glass_round_trip() {
+        let g = Glass {
+            value: "wind-chimes".to_string(),
+        };
+        let sexpr = g.to_sexpr();
+        let parsed = Glass::from_sexpr(&sexpr).unwrap();
+        assert_eq!(g.value, parsed.value);
+    }
+
+    #[test]
+    fn test_glass_not_a_list() {
+        let sexpr = Sexpr::symbol("glass");
+        let result = Glass::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_metal_round_trip() {
+        let m = Metal {
+            value: "triangle".to_string(),
+        };
+        let sexpr = m.to_sexpr();
+        let parsed = Metal::from_sexpr(&sexpr).unwrap();
+        assert_eq!(m.value, parsed.value);
+    }
+
+    #[test]
+    fn test_metal_not_a_list() {
+        let sexpr = Sexpr::symbol("metal");
+        let result = Metal::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_wood_round_trip() {
+        let w = Wood {
+            value: "claves".to_string(),
+        };
+        let sexpr = w.to_sexpr();
+        let parsed = Wood::from_sexpr(&sexpr).unwrap();
+        assert_eq!(w.value, parsed.value);
+    }
+
+    #[test]
+    fn test_wood_not_a_list() {
+        let sexpr = Sexpr::symbol("wood");
+        let result = Wood::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_pitched_round_trip() {
+        let p = Pitched {
+            value: "vibraphone".to_string(),
+        };
+        let sexpr = p.to_sexpr();
+        let parsed = Pitched::from_sexpr(&sexpr).unwrap();
+        assert_eq!(p.value, parsed.value);
+    }
+
+    #[test]
+    fn test_pitched_not_a_list() {
+        let sexpr = Sexpr::symbol("pitched");
+        let result = Pitched::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_membrane_round_trip() {
+        let m = Membrane {
+            value: "snare-drum".to_string(),
+        };
+        let sexpr = m.to_sexpr();
+        let parsed = Membrane::from_sexpr(&sexpr).unwrap();
+        assert_eq!(m.value, parsed.value);
+    }
+
+    #[test]
+    fn test_membrane_not_a_list() {
+        let sexpr = Sexpr::symbol("membrane");
+        let result = Membrane::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_effect_round_trip() {
+        let e = Effect {
+            value: "siren".to_string(),
+        };
+        let sexpr = e.to_sexpr();
+        let parsed = Effect::from_sexpr(&sexpr).unwrap();
+        assert_eq!(e.value, parsed.value);
+    }
+
+    #[test]
+    fn test_effect_not_a_list() {
+        let sexpr = Sexpr::symbol("effect");
+        let result = Effect::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_beater_round_trip() {
+        let b = Beater {
+            value: "soft".to_string(),
+        };
+        let sexpr = b.to_sexpr();
+        let parsed = Beater::from_sexpr(&sexpr).unwrap();
+        assert_eq!(b.value, parsed.value);
+    }
+
+    #[test]
+    fn test_beater_not_a_list() {
+        let sexpr = Sexpr::symbol("beater");
+        let result = Beater::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_stick_round_trip() {
+        let s = Stick {
+            value: "yarn".to_string(),
+        };
+        let sexpr = s.to_sexpr();
+        let parsed = Stick::from_sexpr(&sexpr).unwrap();
+        assert_eq!(s.value, parsed.value);
+    }
+
+    #[test]
+    fn test_stick_not_a_list() {
+        let sexpr = Sexpr::symbol("stick");
+        let result = Stick::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_stick_location_round_trip() {
+        let sl = StickLocation {
+            value: "center".to_string(),
+        };
+        let sexpr = sl.to_sexpr();
+        let parsed = StickLocation::from_sexpr(&sexpr).unwrap();
+        assert_eq!(sl.value, parsed.value);
+    }
+
+    #[test]
+    fn test_stick_location_not_a_list() {
+        let sexpr = Sexpr::symbol("stick-location");
+        let result = StickLocation::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
+
+    // ========================================================================
+    // PercussionContent Tests
+    // ========================================================================
+
+    #[test]
+    fn test_percussion_content_glass() {
+        let pc = PercussionContent::Glass(Glass {
+            value: "wind-chimes".to_string(),
+        });
+        let sexpr = pc.to_sexpr();
+        let parsed = PercussionContent::from_sexpr(&sexpr).unwrap();
+        if let PercussionContent::Glass(g) = parsed {
+            assert_eq!(g.value, "wind-chimes");
+        } else {
+            panic!("Expected Glass variant");
+        }
+    }
+
+    #[test]
+    fn test_percussion_content_metal() {
+        let pc = PercussionContent::Metal(Metal {
+            value: "triangle".to_string(),
+        });
+        let sexpr = pc.to_sexpr();
+        let parsed = PercussionContent::from_sexpr(&sexpr).unwrap();
+        if let PercussionContent::Metal(m) = parsed {
+            assert_eq!(m.value, "triangle");
+        } else {
+            panic!("Expected Metal variant");
+        }
+    }
+
+    #[test]
+    fn test_percussion_content_wood() {
+        let pc = PercussionContent::Wood(Wood {
+            value: "claves".to_string(),
+        });
+        let sexpr = pc.to_sexpr();
+        let parsed = PercussionContent::from_sexpr(&sexpr).unwrap();
+        if let PercussionContent::Wood(w) = parsed {
+            assert_eq!(w.value, "claves");
+        } else {
+            panic!("Expected Wood variant");
+        }
+    }
+
+    #[test]
+    fn test_percussion_content_pitched() {
+        let pc = PercussionContent::Pitched(Pitched {
+            value: "marimba".to_string(),
+        });
+        let sexpr = pc.to_sexpr();
+        let parsed = PercussionContent::from_sexpr(&sexpr).unwrap();
+        if let PercussionContent::Pitched(p) = parsed {
+            assert_eq!(p.value, "marimba");
+        } else {
+            panic!("Expected Pitched variant");
+        }
+    }
+
+    #[test]
+    fn test_percussion_content_membrane() {
+        let pc = PercussionContent::Membrane(Membrane {
+            value: "bass-drum".to_string(),
+        });
+        let sexpr = pc.to_sexpr();
+        let parsed = PercussionContent::from_sexpr(&sexpr).unwrap();
+        if let PercussionContent::Membrane(m) = parsed {
+            assert_eq!(m.value, "bass-drum");
+        } else {
+            panic!("Expected Membrane variant");
+        }
+    }
+
+    #[test]
+    fn test_percussion_content_effect() {
+        let pc = PercussionContent::Effect(Effect {
+            value: "siren".to_string(),
+        });
+        let sexpr = pc.to_sexpr();
+        let parsed = PercussionContent::from_sexpr(&sexpr).unwrap();
+        if let PercussionContent::Effect(e) = parsed {
+            assert_eq!(e.value, "siren");
+        } else {
+            panic!("Expected Effect variant");
+        }
+    }
+
+    #[test]
+    fn test_percussion_content_timpani() {
+        let pc = PercussionContent::Timpani;
+        let sexpr = pc.to_sexpr();
+        let parsed = PercussionContent::from_sexpr(&sexpr).unwrap();
+        assert!(matches!(parsed, PercussionContent::Timpani));
+    }
+
+    #[test]
+    fn test_percussion_content_beater() {
+        let pc = PercussionContent::Beater(Beater {
+            value: "hard".to_string(),
+        });
+        let sexpr = pc.to_sexpr();
+        let parsed = PercussionContent::from_sexpr(&sexpr).unwrap();
+        if let PercussionContent::Beater(b) = parsed {
+            assert_eq!(b.value, "hard");
+        } else {
+            panic!("Expected Beater variant");
+        }
+    }
+
+    #[test]
+    fn test_percussion_content_stick() {
+        let pc = PercussionContent::Stick(Stick {
+            value: "felt".to_string(),
+        });
+        let sexpr = pc.to_sexpr();
+        let parsed = PercussionContent::from_sexpr(&sexpr).unwrap();
+        if let PercussionContent::Stick(s) = parsed {
+            assert_eq!(s.value, "felt");
+        } else {
+            panic!("Expected Stick variant");
+        }
+    }
+
+    #[test]
+    fn test_percussion_content_stick_location() {
+        let pc = PercussionContent::StickLocation(StickLocation {
+            value: "rim".to_string(),
+        });
+        let sexpr = pc.to_sexpr();
+        let parsed = PercussionContent::from_sexpr(&sexpr).unwrap();
+        if let PercussionContent::StickLocation(sl) = parsed {
+            assert_eq!(sl.value, "rim");
+        } else {
+            panic!("Expected StickLocation variant");
+        }
+    }
+
+    #[test]
+    fn test_percussion_content_other() {
+        let pc = PercussionContent::OtherPercussion("custom".to_string());
+        let sexpr = pc.to_sexpr();
+        let parsed = PercussionContent::from_sexpr(&sexpr).unwrap();
+        if let PercussionContent::OtherPercussion(s) = parsed {
+            assert_eq!(s, "custom");
+        } else {
+            panic!("Expected OtherPercussion variant");
+        }
+    }
+
+    #[test]
+    fn test_percussion_content_not_a_list() {
+        let sexpr = Sexpr::symbol("glass");
+        let result = PercussionContent::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_percussion_content_invalid_variant() {
+        let sexpr = ListBuilder::new("invalid-percussion").build();
+        let result = PercussionContent::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
+
+    // ========================================================================
+    // Percussion Tests
+    // ========================================================================
+
+    #[test]
+    fn test_percussion_round_trip() {
+        let perc = Percussion {
+            content: PercussionContent::Timpani,
+        };
+        let sexpr = perc.to_sexpr();
+        let parsed = Percussion::from_sexpr(&sexpr).unwrap();
+        assert!(matches!(parsed.content, PercussionContent::Timpani));
+    }
+
+    #[test]
+    fn test_percussion_not_a_list() {
+        let sexpr = Sexpr::symbol("percussion");
+        let result = Percussion::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
+
+    // ========================================================================
+    // DirectionTypeContent Tests
+    // ========================================================================
+
+    #[test]
+    fn test_direction_type_content_rehearsal() {
+        use crate::ir::common::FormattedText;
+        let dtc = DirectionTypeContent::Rehearsal(vec![FormattedText {
+            value: "A".to_string(),
+            print_style: PrintStyle::default(),
+            lang: None,
+        }]);
+        let sexpr = dtc.to_sexpr();
+        let parsed = DirectionTypeContent::from_sexpr(&sexpr).unwrap();
+        if let DirectionTypeContent::Rehearsal(texts) = parsed {
+            assert_eq!(texts.len(), 1);
+            assert_eq!(texts[0].value, "A");
+        } else {
+            panic!("Expected Rehearsal variant");
+        }
+    }
+
+    #[test]
+    fn test_direction_type_content_segno() {
+        let dtc = DirectionTypeContent::Segno(vec![Segno {
+            print_style: PrintStyle::default(),
+            smufl: None,
+        }]);
+        let sexpr = dtc.to_sexpr();
+        let parsed = DirectionTypeContent::from_sexpr(&sexpr).unwrap();
+        if let DirectionTypeContent::Segno(segnos) = parsed {
+            assert_eq!(segnos.len(), 1);
+        } else {
+            panic!("Expected Segno variant");
+        }
+    }
+
+    #[test]
+    fn test_direction_type_content_coda() {
+        let dtc = DirectionTypeContent::Coda(vec![Coda {
+            print_style: PrintStyle::default(),
+            smufl: None,
+        }]);
+        let sexpr = dtc.to_sexpr();
+        let parsed = DirectionTypeContent::from_sexpr(&sexpr).unwrap();
+        if let DirectionTypeContent::Coda(codas) = parsed {
+            assert_eq!(codas.len(), 1);
+        } else {
+            panic!("Expected Coda variant");
+        }
+    }
+
+    #[test]
+    fn test_direction_type_content_words() {
+        let dtc = DirectionTypeContent::Words(vec![Words {
+            value: "dolce".to_string(),
+            print_style: PrintStyle::default(),
+            justify: None,
+            lang: None,
+        }]);
+        let sexpr = dtc.to_sexpr();
+        let parsed = DirectionTypeContent::from_sexpr(&sexpr).unwrap();
+        if let DirectionTypeContent::Words(words) = parsed {
+            assert_eq!(words.len(), 1);
+            assert_eq!(words[0].value, "dolce");
+        } else {
+            panic!("Expected Words variant");
+        }
+    }
+
+    #[test]
+    fn test_direction_type_content_symbol() {
+        let dtc = DirectionTypeContent::Symbol(vec![FormattedSymbol {
+            value: "segno".to_string(),
+            print_style: PrintStyle::default(),
+            justify: None,
+        }]);
+        let sexpr = dtc.to_sexpr();
+        let parsed = DirectionTypeContent::from_sexpr(&sexpr).unwrap();
+        if let DirectionTypeContent::Symbol(symbols) = parsed {
+            assert_eq!(symbols.len(), 1);
+        } else {
+            panic!("Expected Symbol variant");
+        }
+    }
+
+    #[test]
+    fn test_direction_type_content_dynamics() {
+        let dtc = DirectionTypeContent::Dynamics(Dynamics {
+            content: vec![DynamicElement::F],
+            print_style: PrintStyle::default(),
+            placement: None,
+        });
+        let sexpr = dtc.to_sexpr();
+        let parsed = DirectionTypeContent::from_sexpr(&sexpr).unwrap();
+        assert!(matches!(parsed, DirectionTypeContent::Dynamics(_)));
+    }
+
+    #[test]
+    fn test_direction_type_content_wedge() {
+        let dtc = DirectionTypeContent::Wedge(Wedge {
+            r#type: WedgeType::Crescendo,
+            number: None,
+            spread: None,
+            niente: None,
+            line_type: None,
+            position: Position::default(),
+            color: None,
+        });
+        let sexpr = dtc.to_sexpr();
+        let parsed = DirectionTypeContent::from_sexpr(&sexpr).unwrap();
+        assert!(matches!(parsed, DirectionTypeContent::Wedge(_)));
+    }
+
+    #[test]
+    fn test_direction_type_content_dashes() {
+        use crate::ir::common::StartStopContinue;
+        let dtc = DirectionTypeContent::Dashes(Dashes {
+            r#type: StartStopContinue::Start,
+            number: None,
+            position: Position::default(),
+            color: None,
+        });
+        let sexpr = dtc.to_sexpr();
+        let parsed = DirectionTypeContent::from_sexpr(&sexpr).unwrap();
+        assert!(matches!(parsed, DirectionTypeContent::Dashes(_)));
+    }
+
+    #[test]
+    fn test_direction_type_content_bracket() {
+        use crate::ir::common::StartStopContinue;
+        let dtc = DirectionTypeContent::Bracket(Bracket {
+            r#type: StartStopContinue::Start,
+            number: None,
+            line_end: LineEnd::Up,
+            end_length: None,
+            line_type: None,
+            position: Position::default(),
+            color: None,
+        });
+        let sexpr = dtc.to_sexpr();
+        let parsed = DirectionTypeContent::from_sexpr(&sexpr).unwrap();
+        assert!(matches!(parsed, DirectionTypeContent::Bracket(_)));
+    }
+
+    #[test]
+    fn test_direction_type_content_pedal() {
+        let dtc = DirectionTypeContent::Pedal(Pedal {
+            r#type: PedalType::Start,
+            number: None,
+            line: None,
+            sign: None,
+            abbreviated: None,
+            print_style: PrintStyle::default(),
+        });
+        let sexpr = dtc.to_sexpr();
+        let parsed = DirectionTypeContent::from_sexpr(&sexpr).unwrap();
+        assert!(matches!(parsed, DirectionTypeContent::Pedal(_)));
+    }
+
+    #[test]
+    fn test_direction_type_content_metronome() {
+        let dtc = DirectionTypeContent::Metronome(Metronome {
+            content: MetronomeContent::PerMinute {
+                beat_unit: NoteTypeValue::Quarter,
+                beat_unit_dots: 0,
+                per_minute: PerMinute {
+                    value: "120".to_string(),
+                    font: Font::default(),
+                },
+            },
+            parentheses: None,
+            print_style: PrintStyle::default(),
+        });
+        let sexpr = dtc.to_sexpr();
+        let parsed = DirectionTypeContent::from_sexpr(&sexpr).unwrap();
+        assert!(matches!(parsed, DirectionTypeContent::Metronome(_)));
+    }
+
+    #[test]
+    fn test_direction_type_content_octave_shift() {
+        let dtc = DirectionTypeContent::OctaveShift(OctaveShift {
+            r#type: UpDownStopContinue::Up,
+            number: None,
+            size: Some(8),
+            position: Position::default(),
+        });
+        let sexpr = dtc.to_sexpr();
+        let parsed = DirectionTypeContent::from_sexpr(&sexpr).unwrap();
+        assert!(matches!(parsed, DirectionTypeContent::OctaveShift(_)));
+    }
+
+    #[test]
+    fn test_direction_type_content_harp_pedals() {
+        let dtc = DirectionTypeContent::HarpPedals(HarpPedals {
+            pedal_tuning: vec![],
+        });
+        let sexpr = dtc.to_sexpr();
+        let parsed = DirectionTypeContent::from_sexpr(&sexpr).unwrap();
+        assert!(matches!(parsed, DirectionTypeContent::HarpPedals(_)));
+    }
+
+    #[test]
+    fn test_direction_type_content_damp() {
+        let dtc = DirectionTypeContent::Damp(EmptyPrintStyle::default());
+        let sexpr = dtc.to_sexpr();
+        let parsed = DirectionTypeContent::from_sexpr(&sexpr).unwrap();
+        assert!(matches!(parsed, DirectionTypeContent::Damp(_)));
+    }
+
+    #[test]
+    fn test_direction_type_content_damp_with_position() {
+        let dtc = DirectionTypeContent::Damp(EmptyPrintStyle {
+            print_style: PrintStyle {
+                position: Position {
+                    default_x: Some(10.0),
+                    default_y: Some(20.0),
+                    relative_x: None,
+                    relative_y: None,
+                },
+                font: Default::default(),
+                color: None,
+            },
+        });
+        let sexpr = dtc.to_sexpr();
+        let parsed = DirectionTypeContent::from_sexpr(&sexpr).unwrap();
+        if let DirectionTypeContent::Damp(eps) = parsed {
+            assert_eq!(eps.print_style.position.default_x, Some(10.0));
+        } else {
+            panic!("Expected Damp variant");
+        }
+    }
+
+    #[test]
+    fn test_direction_type_content_damp_all() {
+        let dtc = DirectionTypeContent::DampAll(EmptyPrintStyle::default());
+        let sexpr = dtc.to_sexpr();
+        let parsed = DirectionTypeContent::from_sexpr(&sexpr).unwrap();
+        assert!(matches!(parsed, DirectionTypeContent::DampAll(_)));
+    }
+
+    #[test]
+    fn test_direction_type_content_damp_all_with_position() {
+        let dtc = DirectionTypeContent::DampAll(EmptyPrintStyle {
+            print_style: PrintStyle {
+                position: Position {
+                    default_x: Some(15.0),
+                    default_y: Some(25.0),
+                    relative_x: None,
+                    relative_y: None,
+                },
+                font: Default::default(),
+                color: None,
+            },
+        });
+        let sexpr = dtc.to_sexpr();
+        let parsed = DirectionTypeContent::from_sexpr(&sexpr).unwrap();
+        if let DirectionTypeContent::DampAll(eps) = parsed {
+            assert_eq!(eps.print_style.position.default_x, Some(15.0));
+        } else {
+            panic!("Expected DampAll variant");
+        }
+    }
+
+    #[test]
+    fn test_direction_type_content_eyeglasses() {
+        let dtc = DirectionTypeContent::Eyeglasses(EmptyPrintStyle::default());
+        let sexpr = dtc.to_sexpr();
+        let parsed = DirectionTypeContent::from_sexpr(&sexpr).unwrap();
+        assert!(matches!(parsed, DirectionTypeContent::Eyeglasses(_)));
+    }
+
+    #[test]
+    fn test_direction_type_content_eyeglasses_with_position() {
+        let dtc = DirectionTypeContent::Eyeglasses(EmptyPrintStyle {
+            print_style: PrintStyle {
+                position: Position {
+                    default_x: Some(20.0),
+                    default_y: Some(30.0),
+                    relative_x: None,
+                    relative_y: None,
+                },
+                font: Default::default(),
+                color: None,
+            },
+        });
+        let sexpr = dtc.to_sexpr();
+        let parsed = DirectionTypeContent::from_sexpr(&sexpr).unwrap();
+        if let DirectionTypeContent::Eyeglasses(eps) = parsed {
+            assert_eq!(eps.print_style.position.default_x, Some(20.0));
+        } else {
+            panic!("Expected Eyeglasses variant");
+        }
+    }
+
+    #[test]
+    fn test_direction_type_content_string_mute() {
+        let dtc = DirectionTypeContent::StringMute(StringMute { r#type: OnOff::On });
+        let sexpr = dtc.to_sexpr();
+        let parsed = DirectionTypeContent::from_sexpr(&sexpr).unwrap();
+        assert!(matches!(parsed, DirectionTypeContent::StringMute(_)));
+    }
+
+    #[test]
+    fn test_direction_type_content_scordatura() {
+        let dtc = DirectionTypeContent::Scordatura(Scordatura::default());
+        let sexpr = dtc.to_sexpr();
+        let parsed = DirectionTypeContent::from_sexpr(&sexpr).unwrap();
+        assert!(matches!(parsed, DirectionTypeContent::Scordatura(_)));
+    }
+
+    #[test]
+    fn test_direction_type_content_image() {
+        let dtc = DirectionTypeContent::Image(Image {
+            source: "test.png".to_string(),
+            r#type: "image/png".to_string(),
+            position: Position::default(),
+        });
+        let sexpr = dtc.to_sexpr();
+        let parsed = DirectionTypeContent::from_sexpr(&sexpr).unwrap();
+        assert!(matches!(parsed, DirectionTypeContent::Image(_)));
+    }
+
+    #[test]
+    fn test_direction_type_content_principal_voice() {
+        let dtc = DirectionTypeContent::PrincipalVoice(PrincipalVoice {
+            r#type: StartStop::Start,
+            symbol: PrincipalVoiceSymbol::Hauptstimme,
+        });
+        let sexpr = dtc.to_sexpr();
+        let parsed = DirectionTypeContent::from_sexpr(&sexpr).unwrap();
+        assert!(matches!(parsed, DirectionTypeContent::PrincipalVoice(_)));
+    }
+
+    #[test]
+    fn test_direction_type_content_percussion() {
+        let dtc = DirectionTypeContent::Percussion(vec![Percussion {
+            content: PercussionContent::Timpani,
+        }]);
+        let sexpr = dtc.to_sexpr();
+        let parsed = DirectionTypeContent::from_sexpr(&sexpr).unwrap();
+        if let DirectionTypeContent::Percussion(percs) = parsed {
+            assert_eq!(percs.len(), 1);
+        } else {
+            panic!("Expected Percussion variant");
+        }
+    }
+
+    #[test]
+    fn test_direction_type_content_accordion_registration() {
+        let dtc = DirectionTypeContent::AccordionRegistration(AccordionRegistration::default());
+        let sexpr = dtc.to_sexpr();
+        let parsed = DirectionTypeContent::from_sexpr(&sexpr).unwrap();
+        assert!(matches!(
+            parsed,
+            DirectionTypeContent::AccordionRegistration(_)
+        ));
+    }
+
+    #[test]
+    fn test_direction_type_content_staff_divide() {
+        let dtc = DirectionTypeContent::StaffDivide(StaffDivide {
+            r#type: StaffDivideSymbol::Down,
+        });
+        let sexpr = dtc.to_sexpr();
+        let parsed = DirectionTypeContent::from_sexpr(&sexpr).unwrap();
+        assert!(matches!(parsed, DirectionTypeContent::StaffDivide(_)));
+    }
+
+    #[test]
+    fn test_direction_type_content_other_direction() {
+        let dtc = DirectionTypeContent::OtherDirection(OtherDirection {
+            value: "custom".to_string(),
+            print_object: None,
+            print_style: PrintStyle::default(),
+        });
+        let sexpr = dtc.to_sexpr();
+        let parsed = DirectionTypeContent::from_sexpr(&sexpr).unwrap();
+        assert!(matches!(parsed, DirectionTypeContent::OtherDirection(_)));
+    }
+
+    #[test]
+    fn test_direction_type_content_not_a_list() {
+        let sexpr = Sexpr::symbol("dynamics");
+        let result = DirectionTypeContent::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_direction_type_content_invalid_variant() {
+        let sexpr = ListBuilder::new("invalid-direction-type").build();
+        let result = DirectionTypeContent::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
+
+    // ========================================================================
+    // DirectionType Tests
+    // ========================================================================
+
+    #[test]
+    fn test_direction_type_round_trip() {
+        let dt = DirectionType {
+            content: DirectionTypeContent::Dynamics(Dynamics {
+                content: vec![DynamicElement::F],
+                print_style: PrintStyle::default(),
+                placement: None,
+            }),
+        };
+        let sexpr = dt.to_sexpr();
+        let parsed = DirectionType::from_sexpr(&sexpr).unwrap();
+        if let DirectionTypeContent::Dynamics(d) = parsed.content {
+            assert_eq!(d.content.len(), 1);
+        } else {
+            panic!("Expected Dynamics content");
+        }
+    }
+
+    #[test]
+    fn test_direction_type_not_a_list() {
+        let sexpr = Sexpr::symbol("direction-type");
+        let result = DirectionType::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
+
+    // ========================================================================
+    // Direction Tests
+    // ========================================================================
+
+    #[test]
+    fn test_direction_full() {
         let direction = Direction {
             direction_types: vec![DirectionType {
                 content: DirectionTypeContent::Dynamics(Dynamics {
@@ -2240,92 +4433,167 @@ mod tests {
                     placement: None,
                 }),
             }],
-            offset: None,
-            sound: None,
+            offset: Some(Offset {
+                value: 2,
+                sound: Some(YesNo::Yes),
+            }),
+            sound: Some(Sound {
+                tempo: Some(120.0),
+                ..Default::default()
+            }),
             staff: Some(1),
             voice: Some("1".to_string()),
             placement: Some(AboveBelow::Below),
-            directive: None,
+            directive: Some(YesNo::Yes),
         };
-
         let sexpr = direction.to_sexpr();
         let text = print_sexpr(&sexpr);
         assert!(text.contains("direction"));
         assert!(text.contains(":staff 1"));
-
+        assert!(text.contains(":voice"));
+        assert!(text.contains("offset"));
+        assert!(text.contains("sound"));
         let parsed = Direction::from_sexpr(&sexpr).unwrap();
         assert_eq!(direction.staff, parsed.staff);
+        assert_eq!(direction.voice, parsed.voice);
         assert_eq!(direction.placement, parsed.placement);
+        assert_eq!(direction.directive, parsed.directive);
+        assert!(parsed.offset.is_some());
+        assert!(parsed.sound.is_some());
+    }
+
+    #[test]
+    fn test_direction_minimal() {
+        let direction = Direction {
+            direction_types: vec![],
+            offset: None,
+            sound: None,
+            staff: None,
+            voice: None,
+            placement: None,
+            directive: None,
+        };
+        let sexpr = direction.to_sexpr();
+        let parsed = Direction::from_sexpr(&sexpr).unwrap();
+        assert!(parsed.direction_types.is_empty());
+        assert!(parsed.offset.is_none());
+        assert!(parsed.sound.is_none());
+    }
+
+    #[test]
+    fn test_direction_not_a_list() {
+        let sexpr = Sexpr::symbol("direction");
+        let result = Direction::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_direction_wrong_head() {
+        let sexpr = ListBuilder::new("wrong").build();
+        let result = Direction::from_sexpr(&sexpr);
+        assert!(result.is_err());
+    }
+
+    // ========================================================================
+    // Edge Cases and Error Handling
+    // ========================================================================
+
+    #[test]
+    fn test_dynamics_with_relative_position() {
+        let dynamics = Dynamics {
+            content: vec![DynamicElement::P],
+            print_style: PrintStyle {
+                position: Position {
+                    default_x: None,
+                    default_y: None,
+                    relative_x: Some(5.0),
+                    relative_y: Some(-10.0),
+                },
+                font: Default::default(),
+                color: None,
+            },
+            placement: None,
+        };
+        let sexpr = dynamics.to_sexpr();
+        let text = print_sexpr(&sexpr);
+        assert!(text.contains("position"));
+        let parsed = Dynamics::from_sexpr(&sexpr).unwrap();
         assert_eq!(
-            direction.direction_types.len(),
-            parsed.direction_types.len()
+            dynamics.print_style.position.relative_x,
+            parsed.print_style.position.relative_x
         );
     }
 
-    // === Sound Tests ===
-
     #[test]
-    fn test_sound_with_tempo() {
-        let sound = Sound {
-            tempo: Some(120.0),
-            dynamics: Some(80.0),
-            dacapo: None,
-            segno: None,
-            dalsegno: None,
-            coda: None,
-            tocoda: None,
-            divisions: None,
-            forward_repeat: None,
-            fine: None,
-            time_only: None,
-            pizzicato: None,
+    fn test_wedge_with_all_position_fields() {
+        let wedge = Wedge {
+            r#type: WedgeType::Crescendo,
+            number: None,
+            spread: None,
+            niente: None,
+            line_type: None,
+            position: Position {
+                default_x: Some(1.0),
+                default_y: Some(2.0),
+                relative_x: Some(3.0),
+                relative_y: Some(4.0),
+            },
+            color: None,
         };
-
-        let sexpr = sound.to_sexpr();
-        let parsed = Sound::from_sexpr(&sexpr).unwrap();
-        assert_eq!(sound.tempo, parsed.tempo);
-        assert_eq!(sound.dynamics, parsed.dynamics);
+        let sexpr = wedge.to_sexpr();
+        let parsed = Wedge::from_sexpr(&sexpr).unwrap();
+        assert_eq!(wedge.position.default_x, parsed.position.default_x);
+        assert_eq!(wedge.position.default_y, parsed.position.default_y);
+        assert_eq!(wedge.position.relative_x, parsed.position.relative_x);
+        assert_eq!(wedge.position.relative_y, parsed.position.relative_y);
     }
 
-    // === OctaveShift Tests ===
-
     #[test]
-    fn test_octave_shift_round_trip() {
-        let shift = OctaveShift {
-            r#type: UpDownStopContinue::Down,
-            number: Some(1),
-            size: Some(8),
-            position: Position::default(),
+    fn test_multiple_direction_types() {
+        let direction = Direction {
+            direction_types: vec![
+                DirectionType {
+                    content: DirectionTypeContent::Dynamics(Dynamics {
+                        content: vec![DynamicElement::F],
+                        print_style: PrintStyle::default(),
+                        placement: None,
+                    }),
+                },
+                DirectionType {
+                    content: DirectionTypeContent::Wedge(Wedge {
+                        r#type: WedgeType::Crescendo,
+                        number: None,
+                        spread: None,
+                        niente: None,
+                        line_type: None,
+                        position: Position::default(),
+                        color: None,
+                    }),
+                },
+            ],
+            offset: None,
+            sound: None,
+            staff: None,
+            voice: None,
+            placement: None,
+            directive: None,
         };
-
-        let sexpr = shift.to_sexpr();
-        let parsed = OctaveShift::from_sexpr(&sexpr).unwrap();
-        assert_eq!(shift.r#type, parsed.r#type);
-        assert_eq!(shift.size, parsed.size);
+        let sexpr = direction.to_sexpr();
+        let parsed = Direction::from_sexpr(&sexpr).unwrap();
+        assert_eq!(parsed.direction_types.len(), 2);
     }
 
-    // === Segno/Coda Tests ===
-
     #[test]
-    fn test_segno_round_trip() {
-        let segno = Segno {
+    fn test_dynamics_multiple_elements() {
+        let dynamics = Dynamics {
+            content: vec![DynamicElement::SF, DynamicElement::P],
             print_style: PrintStyle::default(),
-            smufl: Some("segno".to_string()),
+            placement: None,
         };
-
-        let sexpr = segno.to_sexpr();
-        let parsed = Segno::from_sexpr(&sexpr).unwrap();
-        assert_eq!(segno.smufl, parsed.smufl);
-    }
-
-    #[test]
-    fn test_coda_round_trip() {
-        let coda = Coda {
-            print_style: PrintStyle::default(),
-            smufl: None,
-        };
-
-        let sexpr = coda.to_sexpr();
-        let _parsed = Coda::from_sexpr(&sexpr).unwrap();
+        let sexpr = dynamics.to_sexpr();
+        let parsed = Dynamics::from_sexpr(&sexpr).unwrap();
+        assert_eq!(parsed.content.len(), 2);
+        assert_eq!(parsed.content[0], DynamicElement::SF);
+        assert_eq!(parsed.content[1], DynamicElement::P);
     }
 }

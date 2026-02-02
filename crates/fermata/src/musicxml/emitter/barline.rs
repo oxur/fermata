@@ -130,11 +130,15 @@ pub(crate) fn emit_repeat(w: &mut XmlWriter, repeat: &Repeat) -> Result<(), Emit
 mod tests {
     use super::*;
     use crate::ir::PrintStyle;
-    use crate::ir::attributes::BarStyle;
+    use crate::ir::attributes::{BarStyle, Winged};
     use crate::ir::common::{
-        BackwardForward, Editorial, RightLeftMiddle, StartStopDiscontinue, UprightInverted,
+        BackwardForward, Editorial, RightLeftMiddle, StartStopDiscontinue, UprightInverted, YesNo,
     };
     use crate::ir::notation::FermataShape;
+
+    // ==========================================================================
+    // emit_barline tests
+    // ==========================================================================
 
     #[test]
     fn test_emit_barline_with_repeat() {
@@ -221,6 +225,168 @@ mod tests {
     }
 
     #[test]
+    fn test_emit_barline_no_location() {
+        let mut w = XmlWriter::new();
+        let barline = Barline {
+            location: None,
+            bar_style: Some(BarStyle::Regular),
+            editorial: Editorial::default(),
+            wavy_line: None,
+            segno: None,
+            coda: None,
+            fermatas: vec![],
+            ending: None,
+            repeat: None,
+        };
+
+        emit_barline(&mut w, &barline).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<barline>"));
+        assert!(!xml.contains("location="));
+        assert!(xml.contains("<bar-style>regular</bar-style>"));
+    }
+
+    #[test]
+    fn test_emit_barline_no_bar_style() {
+        let mut w = XmlWriter::new();
+        let barline = Barline {
+            location: Some(RightLeftMiddle::Right),
+            bar_style: None,
+            editorial: Editorial::default(),
+            wavy_line: None,
+            segno: None,
+            coda: None,
+            fermatas: vec![],
+            ending: None,
+            repeat: None,
+        };
+
+        emit_barline(&mut w, &barline).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<barline location=\"right\">"));
+        assert!(!xml.contains("<bar-style>"));
+    }
+
+    #[test]
+    fn test_emit_barline_location_middle() {
+        let mut w = XmlWriter::new();
+        let barline = Barline {
+            location: Some(RightLeftMiddle::Middle),
+            bar_style: Some(BarStyle::Dashed),
+            editorial: Editorial::default(),
+            wavy_line: None,
+            segno: None,
+            coda: None,
+            fermatas: vec![],
+            ending: None,
+            repeat: None,
+        };
+
+        emit_barline(&mut w, &barline).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<barline location=\"middle\">"));
+        assert!(xml.contains("<bar-style>dashed</bar-style>"));
+    }
+
+    #[test]
+    fn test_emit_barline_multiple_fermatas() {
+        let mut w = XmlWriter::new();
+        let barline = Barline {
+            location: Some(RightLeftMiddle::Right),
+            bar_style: Some(BarStyle::LightHeavy),
+            editorial: Editorial::default(),
+            wavy_line: None,
+            segno: None,
+            coda: None,
+            fermatas: vec![
+                Fermata {
+                    shape: Some(FermataShape::Normal),
+                    r#type: Some(UprightInverted::Upright),
+                    print_style: PrintStyle::default(),
+                },
+                Fermata {
+                    shape: Some(FermataShape::Normal),
+                    r#type: Some(UprightInverted::Inverted),
+                    print_style: PrintStyle::default(),
+                },
+            ],
+            ending: None,
+            repeat: None,
+        };
+
+        emit_barline(&mut w, &barline).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<fermata type=\"upright\">normal</fermata>"));
+        assert!(xml.contains("<fermata type=\"inverted\">normal</fermata>"));
+    }
+
+    #[test]
+    fn test_emit_barline_with_ending_and_repeat() {
+        let mut w = XmlWriter::new();
+        let barline = Barline {
+            location: Some(RightLeftMiddle::Left),
+            bar_style: Some(BarStyle::HeavyLight),
+            editorial: Editorial::default(),
+            wavy_line: None,
+            segno: None,
+            coda: None,
+            fermatas: vec![],
+            ending: Some(Ending {
+                r#type: StartStopDiscontinue::Start,
+                number: "1".to_string(),
+                text: Some("1.".to_string()),
+                print_object: None,
+                end_length: None,
+                text_x: None,
+                text_y: None,
+            }),
+            repeat: Some(Repeat {
+                direction: BackwardForward::Forward,
+                times: None,
+                winged: None,
+            }),
+        };
+
+        emit_barline(&mut w, &barline).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<barline location=\"left\">"));
+        assert!(xml.contains("<bar-style>heavy-light</bar-style>"));
+        assert!(xml.contains("<ending"));
+        assert!(xml.contains("<repeat direction=\"forward\"/>"));
+    }
+
+    #[test]
+    fn test_emit_barline_minimal() {
+        let mut w = XmlWriter::new();
+        let barline = Barline {
+            location: None,
+            bar_style: None,
+            editorial: Editorial::default(),
+            wavy_line: None,
+            segno: None,
+            coda: None,
+            fermatas: vec![],
+            ending: None,
+            repeat: None,
+        };
+
+        emit_barline(&mut w, &barline).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<barline>"));
+        assert!(xml.contains("</barline>"));
+    }
+
+    // ==========================================================================
+    // emit_repeat tests
+    // ==========================================================================
+
+    #[test]
     fn test_emit_repeat_forward() {
         let mut w = XmlWriter::new();
         let repeat = Repeat {
@@ -234,6 +400,100 @@ mod tests {
 
         assert!(xml.contains("<repeat direction=\"forward\"/>"));
     }
+
+    #[test]
+    fn test_emit_repeat_backward_with_times() {
+        let mut w = XmlWriter::new();
+        let repeat = Repeat {
+            direction: BackwardForward::Backward,
+            times: Some(3),
+            winged: None,
+        };
+
+        emit_repeat(&mut w, &repeat).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<repeat direction=\"backward\" times=\"3\"/>"));
+    }
+
+    #[test]
+    fn test_emit_repeat_with_winged_none() {
+        let mut w = XmlWriter::new();
+        let repeat = Repeat {
+            direction: BackwardForward::Backward,
+            times: None,
+            winged: Some(Winged::None),
+        };
+
+        emit_repeat(&mut w, &repeat).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<repeat direction=\"backward\" winged=\"none\"/>"));
+    }
+
+    #[test]
+    fn test_emit_repeat_with_winged_straight() {
+        let mut w = XmlWriter::new();
+        let repeat = Repeat {
+            direction: BackwardForward::Forward,
+            times: None,
+            winged: Some(Winged::Straight),
+        };
+
+        emit_repeat(&mut w, &repeat).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<repeat direction=\"forward\" winged=\"straight\"/>"));
+    }
+
+    #[test]
+    fn test_emit_repeat_with_winged_curved() {
+        let mut w = XmlWriter::new();
+        let repeat = Repeat {
+            direction: BackwardForward::Backward,
+            times: Some(2),
+            winged: Some(Winged::Curved),
+        };
+
+        emit_repeat(&mut w, &repeat).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<repeat direction=\"backward\" times=\"2\" winged=\"curved\"/>"));
+    }
+
+    #[test]
+    fn test_emit_repeat_with_winged_double_straight() {
+        let mut w = XmlWriter::new();
+        let repeat = Repeat {
+            direction: BackwardForward::Forward,
+            times: None,
+            winged: Some(Winged::DoubleStraight),
+        };
+
+        emit_repeat(&mut w, &repeat).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("winged=\"double-straight\""));
+    }
+
+    #[test]
+    fn test_emit_repeat_with_winged_double_curved() {
+        let mut w = XmlWriter::new();
+        let repeat = Repeat {
+            direction: BackwardForward::Backward,
+            times: None,
+            winged: Some(Winged::DoubleCurved),
+        };
+
+        emit_repeat(&mut w, &repeat).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("winged=\"double-curved\""));
+    }
+
+    // ==========================================================================
+    // emit_ending tests
+    // ==========================================================================
 
     #[test]
     fn test_emit_ending_stop() {
@@ -255,6 +515,190 @@ mod tests {
     }
 
     #[test]
+    fn test_emit_ending_start_with_text() {
+        let mut w = XmlWriter::new();
+        let ending = Ending {
+            r#type: StartStopDiscontinue::Start,
+            number: "1".to_string(),
+            text: Some("1.".to_string()),
+            print_object: None,
+            end_length: None,
+            text_x: None,
+            text_y: None,
+        };
+
+        emit_ending(&mut w, &ending).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<ending number=\"1\" type=\"start\">1.</ending>"));
+    }
+
+    #[test]
+    fn test_emit_ending_discontinue() {
+        let mut w = XmlWriter::new();
+        let ending = Ending {
+            r#type: StartStopDiscontinue::Discontinue,
+            number: "1, 2".to_string(),
+            text: None,
+            print_object: None,
+            end_length: None,
+            text_x: None,
+            text_y: None,
+        };
+
+        emit_ending(&mut w, &ending).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<ending number=\"1, 2\" type=\"discontinue\"/>"));
+    }
+
+    #[test]
+    fn test_emit_ending_with_print_object_yes() {
+        let mut w = XmlWriter::new();
+        let ending = Ending {
+            r#type: StartStopDiscontinue::Start,
+            number: "1".to_string(),
+            text: None,
+            print_object: Some(YesNo::Yes),
+            end_length: None,
+            text_x: None,
+            text_y: None,
+        };
+
+        emit_ending(&mut w, &ending).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("print-object=\"yes\""));
+    }
+
+    #[test]
+    fn test_emit_ending_with_print_object_no() {
+        let mut w = XmlWriter::new();
+        let ending = Ending {
+            r#type: StartStopDiscontinue::Stop,
+            number: "1".to_string(),
+            text: None,
+            print_object: Some(YesNo::No),
+            end_length: None,
+            text_x: None,
+            text_y: None,
+        };
+
+        emit_ending(&mut w, &ending).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("print-object=\"no\""));
+    }
+
+    #[test]
+    fn test_emit_ending_with_end_length() {
+        let mut w = XmlWriter::new();
+        let ending = Ending {
+            r#type: StartStopDiscontinue::Stop,
+            number: "1".to_string(),
+            text: None,
+            print_object: None,
+            end_length: Some(30.0),
+            text_x: None,
+            text_y: None,
+        };
+
+        emit_ending(&mut w, &ending).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("end-length=\"30\""));
+    }
+
+    #[test]
+    fn test_emit_ending_with_text_x() {
+        let mut w = XmlWriter::new();
+        let ending = Ending {
+            r#type: StartStopDiscontinue::Start,
+            number: "1".to_string(),
+            text: Some("1.".to_string()),
+            print_object: None,
+            end_length: None,
+            text_x: Some(5.5),
+            text_y: None,
+        };
+
+        emit_ending(&mut w, &ending).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("text-x=\"5.5\""));
+    }
+
+    #[test]
+    fn test_emit_ending_with_text_y() {
+        let mut w = XmlWriter::new();
+        let ending = Ending {
+            r#type: StartStopDiscontinue::Start,
+            number: "1".to_string(),
+            text: Some("1.".to_string()),
+            print_object: None,
+            end_length: None,
+            text_x: None,
+            text_y: Some(-10.0),
+        };
+
+        emit_ending(&mut w, &ending).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("text-y=\"-10\""));
+    }
+
+    #[test]
+    fn test_emit_ending_with_all_optional_attrs() {
+        let mut w = XmlWriter::new();
+        let ending = Ending {
+            r#type: StartStopDiscontinue::Start,
+            number: "2".to_string(),
+            text: Some("2.".to_string()),
+            print_object: Some(YesNo::Yes),
+            end_length: Some(25.0),
+            text_x: Some(3.0),
+            text_y: Some(-5.0),
+        };
+
+        emit_ending(&mut w, &ending).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("number=\"2\""));
+        assert!(xml.contains("type=\"start\""));
+        assert!(xml.contains("print-object=\"yes\""));
+        assert!(xml.contains("end-length=\"25\""));
+        assert!(xml.contains("text-x=\"3\""));
+        assert!(xml.contains("text-y=\"-5\""));
+        assert!(xml.contains(">2.</ending>"));
+    }
+
+    #[test]
+    fn test_emit_ending_empty_with_all_attrs() {
+        let mut w = XmlWriter::new();
+        let ending = Ending {
+            r#type: StartStopDiscontinue::Stop,
+            number: "1".to_string(),
+            text: None,
+            print_object: Some(YesNo::No),
+            end_length: Some(20.0),
+            text_x: Some(1.0),
+            text_y: Some(-2.0),
+        };
+
+        emit_ending(&mut w, &ending).unwrap();
+        let xml = w.into_string().unwrap();
+
+        // When no text, uses empty element
+        assert!(xml.contains("/>"));
+        assert!(xml.contains("print-object=\"no\""));
+        assert!(xml.contains("end-length=\"20\""));
+    }
+
+    // ==========================================================================
+    // emit_fermata tests
+    // ==========================================================================
+
+    #[test]
     fn test_emit_fermata_empty() {
         let mut w = XmlWriter::new();
         let fermata = Fermata {
@@ -267,5 +711,370 @@ mod tests {
         let xml = w.into_string().unwrap();
 
         assert!(xml.contains("<fermata type=\"upright\"/>"));
+    }
+
+    #[test]
+    fn test_emit_fermata_no_type() {
+        let mut w = XmlWriter::new();
+        let fermata = Fermata {
+            shape: Some(FermataShape::Normal),
+            r#type: None,
+            print_style: PrintStyle::default(),
+        };
+
+        emit_fermata(&mut w, &fermata).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<fermata>normal</fermata>"));
+        assert!(!xml.contains("type="));
+    }
+
+    #[test]
+    fn test_emit_fermata_inverted() {
+        let mut w = XmlWriter::new();
+        let fermata = Fermata {
+            shape: Some(FermataShape::Normal),
+            r#type: Some(UprightInverted::Inverted),
+            print_style: PrintStyle::default(),
+        };
+
+        emit_fermata(&mut w, &fermata).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<fermata type=\"inverted\">normal</fermata>"));
+    }
+
+    #[test]
+    fn test_emit_fermata_minimal() {
+        let mut w = XmlWriter::new();
+        let fermata = Fermata {
+            shape: None,
+            r#type: None,
+            print_style: PrintStyle::default(),
+        };
+
+        emit_fermata(&mut w, &fermata).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<fermata/>"));
+    }
+
+    #[test]
+    fn test_emit_fermata_shape_angled() {
+        let mut w = XmlWriter::new();
+        let fermata = Fermata {
+            shape: Some(FermataShape::Angled),
+            r#type: Some(UprightInverted::Upright),
+            print_style: PrintStyle::default(),
+        };
+
+        emit_fermata(&mut w, &fermata).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<fermata type=\"upright\">angled</fermata>"));
+    }
+
+    #[test]
+    fn test_emit_fermata_shape_square() {
+        let mut w = XmlWriter::new();
+        let fermata = Fermata {
+            shape: Some(FermataShape::Square),
+            r#type: None,
+            print_style: PrintStyle::default(),
+        };
+
+        emit_fermata(&mut w, &fermata).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<fermata>square</fermata>"));
+    }
+
+    #[test]
+    fn test_emit_fermata_shape_double_angled() {
+        let mut w = XmlWriter::new();
+        let fermata = Fermata {
+            shape: Some(FermataShape::DoubleAngled),
+            r#type: Some(UprightInverted::Inverted),
+            print_style: PrintStyle::default(),
+        };
+
+        emit_fermata(&mut w, &fermata).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<fermata type=\"inverted\">double-angled</fermata>"));
+    }
+
+    #[test]
+    fn test_emit_fermata_shape_double_square() {
+        let mut w = XmlWriter::new();
+        let fermata = Fermata {
+            shape: Some(FermataShape::DoubleSquare),
+            r#type: None,
+            print_style: PrintStyle::default(),
+        };
+
+        emit_fermata(&mut w, &fermata).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<fermata>double-square</fermata>"));
+    }
+
+    #[test]
+    fn test_emit_fermata_shape_double_dot() {
+        let mut w = XmlWriter::new();
+        let fermata = Fermata {
+            shape: Some(FermataShape::DoubleDot),
+            r#type: Some(UprightInverted::Upright),
+            print_style: PrintStyle::default(),
+        };
+
+        emit_fermata(&mut w, &fermata).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<fermata type=\"upright\">double-dot</fermata>"));
+    }
+
+    #[test]
+    fn test_emit_fermata_shape_half_curve() {
+        let mut w = XmlWriter::new();
+        let fermata = Fermata {
+            shape: Some(FermataShape::HalfCurve),
+            r#type: None,
+            print_style: PrintStyle::default(),
+        };
+
+        emit_fermata(&mut w, &fermata).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<fermata>half-curve</fermata>"));
+    }
+
+    #[test]
+    fn test_emit_fermata_shape_curlew() {
+        let mut w = XmlWriter::new();
+        let fermata = Fermata {
+            shape: Some(FermataShape::Curlew),
+            r#type: Some(UprightInverted::Inverted),
+            print_style: PrintStyle::default(),
+        };
+
+        emit_fermata(&mut w, &fermata).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<fermata type=\"inverted\">curlew</fermata>"));
+    }
+
+    // ==========================================================================
+    // Bar style emission tests (through emit_barline)
+    // ==========================================================================
+
+    #[test]
+    fn test_emit_barline_bar_style_regular() {
+        let mut w = XmlWriter::new();
+        let barline = Barline {
+            location: None,
+            bar_style: Some(BarStyle::Regular),
+            editorial: Editorial::default(),
+            wavy_line: None,
+            segno: None,
+            coda: None,
+            fermatas: vec![],
+            ending: None,
+            repeat: None,
+        };
+
+        emit_barline(&mut w, &barline).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<bar-style>regular</bar-style>"));
+    }
+
+    #[test]
+    fn test_emit_barline_bar_style_dotted() {
+        let mut w = XmlWriter::new();
+        let barline = Barline {
+            location: None,
+            bar_style: Some(BarStyle::Dotted),
+            editorial: Editorial::default(),
+            wavy_line: None,
+            segno: None,
+            coda: None,
+            fermatas: vec![],
+            ending: None,
+            repeat: None,
+        };
+
+        emit_barline(&mut w, &barline).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<bar-style>dotted</bar-style>"));
+    }
+
+    #[test]
+    fn test_emit_barline_bar_style_dashed() {
+        let mut w = XmlWriter::new();
+        let barline = Barline {
+            location: None,
+            bar_style: Some(BarStyle::Dashed),
+            editorial: Editorial::default(),
+            wavy_line: None,
+            segno: None,
+            coda: None,
+            fermatas: vec![],
+            ending: None,
+            repeat: None,
+        };
+
+        emit_barline(&mut w, &barline).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<bar-style>dashed</bar-style>"));
+    }
+
+    #[test]
+    fn test_emit_barline_bar_style_heavy() {
+        let mut w = XmlWriter::new();
+        let barline = Barline {
+            location: None,
+            bar_style: Some(BarStyle::Heavy),
+            editorial: Editorial::default(),
+            wavy_line: None,
+            segno: None,
+            coda: None,
+            fermatas: vec![],
+            ending: None,
+            repeat: None,
+        };
+
+        emit_barline(&mut w, &barline).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<bar-style>heavy</bar-style>"));
+    }
+
+    #[test]
+    fn test_emit_barline_bar_style_light_light() {
+        let mut w = XmlWriter::new();
+        let barline = Barline {
+            location: None,
+            bar_style: Some(BarStyle::LightLight),
+            editorial: Editorial::default(),
+            wavy_line: None,
+            segno: None,
+            coda: None,
+            fermatas: vec![],
+            ending: None,
+            repeat: None,
+        };
+
+        emit_barline(&mut w, &barline).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<bar-style>light-light</bar-style>"));
+    }
+
+    #[test]
+    fn test_emit_barline_bar_style_heavy_light() {
+        let mut w = XmlWriter::new();
+        let barline = Barline {
+            location: None,
+            bar_style: Some(BarStyle::HeavyLight),
+            editorial: Editorial::default(),
+            wavy_line: None,
+            segno: None,
+            coda: None,
+            fermatas: vec![],
+            ending: None,
+            repeat: None,
+        };
+
+        emit_barline(&mut w, &barline).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<bar-style>heavy-light</bar-style>"));
+    }
+
+    #[test]
+    fn test_emit_barline_bar_style_heavy_heavy() {
+        let mut w = XmlWriter::new();
+        let barline = Barline {
+            location: None,
+            bar_style: Some(BarStyle::HeavyHeavy),
+            editorial: Editorial::default(),
+            wavy_line: None,
+            segno: None,
+            coda: None,
+            fermatas: vec![],
+            ending: None,
+            repeat: None,
+        };
+
+        emit_barline(&mut w, &barline).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<bar-style>heavy-heavy</bar-style>"));
+    }
+
+    #[test]
+    fn test_emit_barline_bar_style_tick() {
+        let mut w = XmlWriter::new();
+        let barline = Barline {
+            location: None,
+            bar_style: Some(BarStyle::Tick),
+            editorial: Editorial::default(),
+            wavy_line: None,
+            segno: None,
+            coda: None,
+            fermatas: vec![],
+            ending: None,
+            repeat: None,
+        };
+
+        emit_barline(&mut w, &barline).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<bar-style>tick</bar-style>"));
+    }
+
+    #[test]
+    fn test_emit_barline_bar_style_short() {
+        let mut w = XmlWriter::new();
+        let barline = Barline {
+            location: None,
+            bar_style: Some(BarStyle::Short),
+            editorial: Editorial::default(),
+            wavy_line: None,
+            segno: None,
+            coda: None,
+            fermatas: vec![],
+            ending: None,
+            repeat: None,
+        };
+
+        emit_barline(&mut w, &barline).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<bar-style>short</bar-style>"));
+    }
+
+    #[test]
+    fn test_emit_barline_bar_style_none() {
+        let mut w = XmlWriter::new();
+        let barline = Barline {
+            location: None,
+            bar_style: Some(BarStyle::None),
+            editorial: Editorial::default(),
+            wavy_line: None,
+            segno: None,
+            coda: None,
+            fermatas: vec![],
+            ending: None,
+            repeat: None,
+        };
+
+        emit_barline(&mut w, &barline).unwrap();
+        let xml = w.into_string().unwrap();
+
+        assert!(xml.contains("<bar-style>none</bar-style>"));
     }
 }

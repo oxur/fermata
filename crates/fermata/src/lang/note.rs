@@ -337,7 +337,7 @@ pub fn parse_start_stop(sexpr: &Sexpr) -> CompileResult<StartStop> {
     }
 }
 
-/// Compile tie option to Vec<Tie>.
+/// Compile tie option to `Vec<Tie>`.
 pub fn compile_ties(tie: Option<StartStop>) -> Vec<Tie> {
     match tie {
         Some(ss) => vec![Tie {

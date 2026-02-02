@@ -119,7 +119,7 @@ pub fn compile_duration_type(base: &DurationBase) -> NoteType {
     NoteType { value, size: None }
 }
 
-/// Compile a dot count to a Vec<Dot>.
+/// Compile a dot count to a `Vec<Dot>`.
 pub fn compile_dots(count: u8) -> Vec<Dot> {
     (0..count).map(|_| Dot::default()).collect()
 }

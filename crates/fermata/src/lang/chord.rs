@@ -21,7 +21,7 @@ use crate::lang::note::{compile_stem_ir, parse_stem, parse_u32};
 use crate::lang::pitch::{compile_pitch, parse_pitch_str};
 use crate::sexpr::Sexpr;
 
-/// Compile a chord S-expression into a Vec<Note>.
+/// Compile a chord S-expression into a `Vec<Note>`.
 ///
 /// A chord compiles to multiple IR Notes where the first note has chord=false
 /// and subsequent notes have chord=true.
@@ -271,7 +271,7 @@ fn is_duration_keyword(s: &str) -> bool {
     )
 }
 
-/// Compile a FermataChord to a Vec<Note>.
+/// Compile a FermataChord to a `Vec<Note>`.
 ///
 /// The first note in the chord has chord=false (it's the root).
 /// Subsequent notes have chord=true.

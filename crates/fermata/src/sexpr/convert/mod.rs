@@ -1,7 +1,9 @@
 //! Conversions between IR types and S-expressions.
 //!
-//! This module contains [`ToSexpr`](super::traits::ToSexpr) and
-//! [`FromSexpr`](super::traits::FromSexpr) implementations for IR types.
+//! This module contains [`ToSexpr`] and [`FromSexpr`] implementations for IR types.
+//!
+//! [`ToSexpr`]: super::traits::ToSexpr
+//! [`FromSexpr`]: super::traits::FromSexpr
 //!
 //! # Module Organization
 //!

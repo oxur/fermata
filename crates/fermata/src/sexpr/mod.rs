@@ -15,7 +15,7 @@
 //!
 //! # Modules
 //!
-//! - [`ast`] - Untyped S-expression AST and [`ListBuilder`]
+//! - `ast` - Untyped S-expression AST and [`ListBuilder`]
 //! - [`error`] - Error types for parsing and conversion
 //! - [`parser`] - nom-based parser (text -> AST)
 //! - [`traits`] - [`ToSexpr`] and [`FromSexpr`] conversion traits

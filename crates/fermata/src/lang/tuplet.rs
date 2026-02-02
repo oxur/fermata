@@ -14,7 +14,7 @@ use crate::lang::error::{CompileError, CompileResult};
 use crate::lang::note::parse_u32;
 use crate::sexpr::Sexpr;
 
-/// Compile a tuplet S-expression into a Vec<Note>.
+/// Compile a tuplet S-expression into a `Vec<Note>`.
 ///
 /// The tuplet wraps a sequence of notes/rests/chords and applies a time modification
 /// to each. Tuplet notation brackets are added to the first and last notes.
@@ -204,7 +204,7 @@ fn parse_ratio(items: &[Sexpr]) -> CompileResult<(u32, u32, usize)> {
     })
 }
 
-/// Compile a FermataTuplet to a Vec<Note>.
+/// Compile a FermataTuplet to a `Vec<Note>`.
 ///
 /// Each note in the tuplet gets:
 /// - A TimeModification specifying the actual:normal ratio

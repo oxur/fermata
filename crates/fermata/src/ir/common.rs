@@ -5,7 +5,7 @@
 /// Tenths of staff space (MusicXML's primary unit for positioning)
 pub type Tenths = f64;
 
-/// Duration in divisions (relative to <divisions> in attributes)
+/// Duration in divisions (relative to `<divisions>` in attributes)
 pub type Divisions = i64;
 
 /// Positive duration value

@@ -39,8 +39,12 @@ pub mod tuplet;
 mod compiler;
 
 pub use ast::*;
-pub use compiler::compile;
+pub use compiler::{
+    check, compile, compile_measure_str, compile_note_str, compile_part_str, compile_pitch_str,
+};
 pub use error::{CompileError, CompileResult};
+pub use part::CompiledPart;
+pub use score::{compile_fermata_score, compile_score, parse_score_to_ast};
 
 /// Compile Fermata source to Music IR
 pub fn compile_str(source: &str) -> CompileResult<crate::ir::score::ScorePartwise> {

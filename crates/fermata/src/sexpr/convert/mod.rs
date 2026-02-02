@@ -37,6 +37,7 @@ pub mod lyric;
 pub mod notation;
 pub mod note;
 pub mod pitch;
+pub mod score;
 pub mod voice;
 
 use super::{ConvertError, ConvertResult, FromSexpr, Sexpr};

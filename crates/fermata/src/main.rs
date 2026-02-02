@@ -29,7 +29,8 @@ use clap::{Parser, Subcommand, ValueEnum};
 use owo_colors::OwoColorize;
 
 use fermata::lang::{check, compile};
-use fermata::musicxml::emit;
+use fermata::musicxml::{emit, parse};
+use fermata::sexpr::{ToSexpr, print_sexpr};
 
 mod show;
 
@@ -68,6 +69,17 @@ enum Commands {
         /// Input file (use '-' for stdin)
         #[arg(value_name = "FILE")]
         file: Option<String>,
+    },
+
+    /// Import MusicXML and convert to Fermata Lisp
+    Import {
+        /// Input MusicXML file (use '-' for stdin)
+        #[arg(value_name = "FILE")]
+        file: Option<String>,
+
+        /// Output file (omit for stdout)
+        #[arg(short, long, value_name = "FILE")]
+        output: Option<String>,
     },
 
     /// Display reference information
@@ -150,6 +162,9 @@ fn main() -> ExitCode {
             target,
         }) => cmd_compile(file.as_deref(), output.as_deref(), target, use_colors),
         Some(Commands::Check { file }) => cmd_check(file.as_deref(), use_colors),
+        Some(Commands::Import { file, output }) => {
+            cmd_import(file.as_deref(), output.as_deref(), use_colors)
+        }
         Some(Commands::Show { topic, format }) => show::run(topic, format, use_colors),
         None => {
             // No subcommand provided - show help
@@ -257,6 +272,45 @@ fn cmd_check(file: Option<&str>, use_colors: bool) -> ExitCode {
             } else {
                 eprintln!("Error in {}: {}", input_path, e);
             }
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// Import command - convert MusicXML to Fermata Lisp
+fn cmd_import(file: Option<&str>, output: Option<&str>, use_colors: bool) -> ExitCode {
+    // Default to stdin if no file specified
+    let input_path = file.unwrap_or("-");
+
+    // Read input
+    let xml = match read_input(input_path) {
+        Ok(s) => s,
+        Err(e) => {
+            print_error("Error reading input", &e.to_string(), use_colors);
+            return ExitCode::FAILURE;
+        }
+    };
+
+    // Parse MusicXML
+    let score = match parse(&xml) {
+        Ok(s) => s,
+        Err(e) => {
+            print_error("MusicXML parse error", &e.to_string(), use_colors);
+            return ExitCode::FAILURE;
+        }
+    };
+
+    // Convert to S-expression
+    let sexpr = score.to_sexpr();
+
+    // Print to string
+    let output_content = print_sexpr(&sexpr);
+
+    // Write output
+    match write_output(output, &output_content) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            print_error("Error writing output", &e.to_string(), use_colors);
             ExitCode::FAILURE
         }
     }

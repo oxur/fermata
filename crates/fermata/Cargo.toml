@@ -15,7 +15,7 @@ rust-version = "1.85"
 
 [dependencies]
 quick-xml = "0.39"
-nom = "7"
+nom = "8"
 thiserror = "2"
 
 [dev-dependencies]

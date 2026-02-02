@@ -23,7 +23,7 @@
 //! ```
 
 use nom::{
-    IResult,
+    IResult, Parser,
     branch::alt,
     bytes::complete::{escaped, tag, take_while, take_while1},
     character::complete::{char, multispace0, none_of, one_of},
@@ -56,7 +56,7 @@ use super::error::{ParseError, ParseResult};
 ///
 /// Returns [`ParseError`] if the input contains invalid syntax.
 pub fn parse(input: &str) -> ParseResult<Sexpr> {
-    let (remaining, sexpr) = preceded(skip_ws_and_comments, sexpr)(input).map_err(|e| match e {
+    let (remaining, sexpr) = preceded(skip_ws_and_comments, sexpr).parse(input).map_err(|e| match e {
         nom::Err::Incomplete(_) => ParseError::UnexpectedEof,
         nom::Err::Error(e) | nom::Err::Failure(e) => ParseError::Nom(format!("{:?}", e)),
     })?;
@@ -95,7 +95,7 @@ pub fn parse(input: &str) -> ParseResult<Sexpr> {
 /// Returns [`ParseError`] if any expression contains invalid syntax.
 pub fn parse_all(input: &str) -> ParseResult<Vec<Sexpr>> {
     let (remaining, sexprs) =
-        many0(preceded(skip_ws_and_comments, sexpr))(input).map_err(|e| match e {
+        many0(preceded(skip_ws_and_comments, sexpr)).parse(input).map_err(|e| match e {
             nom::Err::Incomplete(_) => ParseError::UnexpectedEof,
             nom::Err::Error(e) | nom::Err::Failure(e) => ParseError::Nom(format!("{:?}", e)),
         })?;
@@ -119,7 +119,7 @@ fn sexpr(input: &str) -> IResult<&str, Sexpr> {
     preceded(
         skip_ws_and_comments,
         alt((boolean, nil, string_literal, number, keyword, symbol, list)),
-    )(input)
+    ).parse(input)
 }
 
 /// Skip whitespace and comments.
@@ -127,7 +127,7 @@ fn skip_ws_and_comments(input: &str) -> IResult<&str, ()> {
     let mut remaining = input;
     loop {
         // Skip whitespace
-        let (rest, _) = multispace0(remaining)?;
+        let (rest, _) = multispace0.parse(remaining)?;
         remaining = rest;
 
         // Check for comment
@@ -145,7 +145,7 @@ fn skip_ws_and_comments(input: &str) -> IResult<&str, ()> {
 fn symbol(input: &str) -> IResult<&str, Sexpr> {
     map(take_while1(is_symbol_char), |s: &str| {
         Sexpr::Symbol(s.to_string())
-    })(input)
+    }).parse(input)
 }
 
 /// Parse a keyword (colon-prefixed identifier).
@@ -153,7 +153,7 @@ fn keyword(input: &str) -> IResult<&str, Sexpr> {
     map(
         preceded(char(':'), take_while1(is_keyword_char)),
         |s: &str| Sexpr::Keyword(s.to_string()),
-    )(input)
+    ).parse(input)
 }
 
 /// Check if a character is valid in a symbol.
@@ -191,13 +191,13 @@ fn boolean(input: &str) -> IResult<&str, Sexpr> {
     alt((
         value(Sexpr::Bool(true), tag("#t")),
         value(Sexpr::Bool(false), tag("#f")),
-    ))(input)
+    )).parse(input)
 }
 
 /// Parse nil.
 fn nil(input: &str) -> IResult<&str, Sexpr> {
     // Only match "nil" if not followed by symbol chars (to avoid matching "nilly")
-    let (rest, _) = tag("nil")(input)?;
+    let (rest, _) = tag("nil").parse(input)?;
     if rest.chars().next().is_none_or(|c| !is_symbol_char(c)) {
         Ok((rest, Sexpr::Nil))
     } else {
@@ -214,7 +214,7 @@ fn number(input: &str) -> IResult<&str, Sexpr> {
             take_while1(|c: char| c.is_ascii_digit()),
             opt(pair(char('.'), take_while(|c: char| c.is_ascii_digit()))),
         ),
-    ))(input)?;
+    )).parse(input)?;
 
     // Don't consume if followed by symbol chars (like "123abc")
     if rest
@@ -256,7 +256,7 @@ fn string_literal(input: &str) -> IResult<&str, Sexpr> {
             ),
             |s: &str| Sexpr::String(unescape_string(s)),
         ),
-    ))(input)
+    )).parse(input)
 }
 
 /// Unescape a string (process escape sequences).
@@ -293,7 +293,7 @@ fn list(input: &str) -> IResult<&str, Sexpr> {
             preceded(skip_ws_and_comments, char(')')),
         ),
         Sexpr::List,
-    )(input)
+    ).parse(input)
 }
 
 #[cfg(test)]

@@ -1,11 +1,11 @@
 [package]
 name = "fermata-design"
-version = "0.0.1"
-edition = "2024"
-license = "MIT OR Apache-2.0"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
 description = "Design documents and specifications for Fermata"
-repository = "https://github.com/oxur/fermata"
 publish = false
-rust-version = "1.85"
 
 [dependencies]

@@ -177,6 +177,7 @@ The following table lists all capabilities discussed in this document, ordered b
 
 A session is the top-level container for all state related to a unit of work. In Rust, the core structure is:
 
+```rust
 struct Session {
     id: SessionId,                          // UUID or short stable ID
     metadata: SessionMetadata,              // name, created, modified, tags
@@ -188,6 +189,7 @@ struct Session {
     message\_queue: VecDeque\<IncomingMessage\>, // pending messages from Claude
     midi\_state: Option\<MidiSessionState\>,   // Phase 7+
 }
+```
 
 **SessionId** should be a short, human-friendly identifier (e.g., session-1, session-2, or a user-supplied slug like bach-chorale) rather than a UUID. UUIDs are useful for storage but poor for REPL interaction. A mapping from slug to UUID (or to a monotonic integer) handles uniqueness internally.
 
@@ -199,11 +201,13 @@ struct Session {
 
 The SessionManager owns all sessions and tracks which one is active:
 
+```rust
 struct SessionManager {
     sessions: HashMap\<SessionId, Session\>,
     active: Option\<SessionId\>,
     next\_session\_num: u64,
 }
+```
 
 Operations: create(name) → SessionId, switch(id), list() → Vec\<SessionSummary\>, save(id), load(id), delete(id). On REPL startup, the SessionManager either loads persisted sessions or creates a fresh default session.
 
@@ -213,6 +217,7 @@ Operations: create(name) → SessionId, switch(id), list() → Vec\<SessionSumma
 
 Every event in the REPL receives a HistoryEntry:
 
+```rust
 struct HistoryEntry {
     index: u64,                // monotonic, gapless
     timestamp: DateTime\<Utc\>,  // wall-clock time
@@ -242,6 +247,7 @@ enum EntryKind {
         event: SystemEvent,
     },
 }
+```
 
 **Eval** entries capture the full lifecycle of a Fermata expression: the raw input, the parsed S-expression (if parsing succeeded), the display representation of the result, any error, and an optional ScoreDelta describing what changed in the score. The ScoreDelta is valuable for history queries: “show me all entries that modified the bass line” becomes a filter on score\_delta rather than re-evaluating each entry.
 
@@ -263,6 +269,7 @@ First, drain the message queue. All pending messages from Claude are dequeued, d
 
 The REPL’s main loop runs on a single thread and exclusively owns the history Vec. No locks are needed on the history itself. The concurrency boundary is the message channel:
 
+```
 MCP Server thread(s)
     │
     │  mpsc::Sender\<IncomingMessage\>
@@ -272,12 +279,13 @@ MCP Server thread(s)
 └─────┬───────┘
       │  mpsc::Receiver\<IncomingMessage\>
       ▼
-┌──────────────┐
-│ REPL Loop    │  single-threaded serialization point
-│              │
-│ history: Vec │  exclusively owned
+┌───────────────┐
+│ REPL Loop     │  single-threaded serialization point
+│               │
+│ history: Vec  │  exclusively owned
 │ next\_idx: u64│
-└──────────────┘
+└───────────────┘
+```
 
 For MCP read queries (Claude asks for history), there are two viable approaches. The simpler approach is to route all queries through the same channel: the MCP handler sends a query request, the REPL loop processes it on its thread, and sends the response back via a oneshot channel. This adds a small amount of latency but avoids all concurrency complexity. The alternative is to share the history behind an Arc\<RwLock\<Vec\<HistoryEntry\>\>\>, allowing the MCP handler to take read locks directly. Given the data sizes involved (serializing a few hundred entries is microseconds), the single-threaded approach is recommended as the starting point.
 
@@ -285,6 +293,7 @@ For MCP read queries (Claude asks for history), there are two viable approaches.
 
 The filtering API supports composition of constraints:
 
+```rust
 struct HistoryQuery {
     from\_index: Option\<u64\>,
     to\_index: Option\<u64\>,
@@ -302,6 +311,7 @@ enum EntryKindFilter {
     UserMessage,
     System,
 }
+```
 
 On the REPL side, this maps to command syntax: :history 40:50 shows entries 40–50 (all types); :history 40:50 \--code shows only Eval entries; :history 40:50 \--chat shows AiMessage and UserMessage entries; :history \--since 10m shows the last 10 minutes.
 
@@ -321,6 +331,7 @@ Implementation: the evaluator checks for $In\[n\] and $Out\[n\] forms during eva
 
 The notebook is stored in memory as a typed tree, never as raw text:
 
+```rust
 struct Notebook {
     metadata: NotebookMetadata,  // title, created, modified
     root: Vec\<Section\>,          // top-level sections
@@ -360,6 +371,7 @@ enum Block {
         content: String,
     },
 }
+```
 
 **SectionId** is a stable identifier (a UUID or a monotonic integer) that does not change when sections are reordered, inserted, or deleted. The display numbering (1, 1.1, 1.2, 2, 2.1, etc.) is computed from position in the tree and is *not stored*. This means that when a section is moved or a new section is inserted, all display numbers update automatically, but references by SectionId remain valid.
 

@@ -6,9 +6,8 @@
 
 ## Backlog
 
-- [ ] Refactor crates/fermata into multiple crates
 - [ ] CI/CD .github/* dir setup
 
 ## Completed
 
-- [ ] tbd
+- [x] Refactor crates/fermata into multiple crates -- we pivoted here to a holistic view for the future of our crates, documented in `0006 │ Fermata Crate Architecture`

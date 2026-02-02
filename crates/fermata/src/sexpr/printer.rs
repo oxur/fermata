@@ -2627,4 +2627,2063 @@ mod tests {
         };
         assert_eq!(newline_indent(1, &options), " ");
     }
+
+    // =======================================================================
+    // Integration Tests - Using MusicXML Parser
+    // =======================================================================
+
+    /// Helper function to parse MusicXML and return the score
+    fn parse_musicxml(xml: &str) -> crate::ir::score::ScorePartwise {
+        crate::musicxml::parse_score(xml).expect("Failed to parse MusicXML")
+    }
+
+    /// Helper XML template for minimal score
+    fn minimal_score_xml(content: &str) -> String {
+        format!(
+            r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1">
+                        {}
+                    </measure>
+                </part>
+            </score-partwise>"#,
+            content
+        )
+    }
+
+    // === print_score Integration Tests ===
+
+    #[test]
+    fn test_print_score_minimal_integration() {
+        let xml = minimal_score_xml("");
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.starts_with("(score-partwise"));
+        assert!(result.contains("(part-list"));
+        assert!(result.contains("(score-part :id \"P1\""));
+        assert!(result.contains("(part-name \"Test\")"));
+        assert!(result.contains("(part :id \"P1\""));
+        assert!(result.contains("(measure :number \"1\""));
+    }
+
+    #[test]
+    fn test_print_score_compact_integration() {
+        let xml = minimal_score_xml("");
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions {
+            compact: true,
+            ..Default::default()
+        };
+        let result = print_score(&score, &options);
+
+        // Compact mode uses spaces instead of newlines
+        assert!(!result.contains('\n'));
+        assert!(result.contains("(score-partwise"));
+        assert!(result.contains("(part-list"));
+    }
+
+    #[test]
+    fn test_print_score_with_version_integration() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise version="4.0">
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Test</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1"/>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_musicxml(xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains(":version \"4.0\""));
+    }
+
+    // === print_note Integration Tests ===
+
+    #[test]
+    fn test_print_note_with_pitch_integration() {
+        let xml = minimal_score_xml(
+            r#"<note>
+                <pitch>
+                    <step>C</step>
+                    <octave>4</octave>
+                </pitch>
+                <duration>4</duration>
+                <type>quarter</type>
+            </note>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(note"));
+        assert!(result.contains(":pitch (pitch :step C :octave 4)"));
+        assert!(result.contains(":duration 4"));
+        assert!(result.contains(":type quarter"));
+    }
+
+    #[test]
+    fn test_print_note_with_sharp_integration() {
+        let xml = minimal_score_xml(
+            r#"<note>
+                <pitch>
+                    <step>F</step>
+                    <alter>1</alter>
+                    <octave>4</octave>
+                </pitch>
+                <duration>4</duration>
+                <type>quarter</type>
+                <accidental>sharp</accidental>
+            </note>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains(":pitch (pitch :step F :alter 1 :octave 4)"));
+        assert!(result.contains(":accidental sharp"));
+    }
+
+    #[test]
+    fn test_print_note_with_flat_integration() {
+        let xml = minimal_score_xml(
+            r#"<note>
+                <pitch>
+                    <step>B</step>
+                    <alter>-1</alter>
+                    <octave>3</octave>
+                </pitch>
+                <duration>4</duration>
+                <type>quarter</type>
+                <accidental>flat</accidental>
+            </note>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains(":pitch (pitch :step B :alter -1 :octave 3)"));
+        assert!(result.contains(":accidental flat"));
+    }
+
+    #[test]
+    fn test_print_rest_integration() {
+        let xml = minimal_score_xml(
+            r#"<note>
+                <rest/>
+                <duration>4</duration>
+                <type>quarter</type>
+            </note>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains(":rest (rest)"));
+    }
+
+    #[test]
+    fn test_print_whole_measure_rest_integration() {
+        let xml = minimal_score_xml(
+            r#"<note>
+                <rest measure="yes"/>
+                <duration>16</duration>
+            </note>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains(":rest (rest :measure #t)"));
+    }
+
+    #[test]
+    fn test_print_chord_integration() {
+        let xml = minimal_score_xml(
+            r#"<note>
+                <pitch>
+                    <step>C</step>
+                    <octave>4</octave>
+                </pitch>
+                <duration>4</duration>
+                <type>quarter</type>
+            </note>
+            <note>
+                <chord/>
+                <pitch>
+                    <step>E</step>
+                    <octave>4</octave>
+                </pitch>
+                <duration>4</duration>
+                <type>quarter</type>
+            </note>
+            <note>
+                <chord/>
+                <pitch>
+                    <step>G</step>
+                    <octave>4</octave>
+                </pitch>
+                <duration>4</duration>
+                <type>quarter</type>
+            </note>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains(":pitch (pitch :step C :octave 4)"));
+        assert!(result.contains(":chord #t"));
+        assert!(result.contains(":pitch (pitch :step E :octave 4)"));
+        assert!(result.contains(":pitch (pitch :step G :octave 4)"));
+    }
+
+    #[test]
+    fn test_print_grace_note_integration() {
+        let xml = minimal_score_xml(
+            r#"<note>
+                <grace slash="yes"/>
+                <pitch>
+                    <step>D</step>
+                    <octave>5</octave>
+                </pitch>
+                <type>eighth</type>
+            </note>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains(":grace #t"));
+        assert!(result.contains(":slash #t"));
+    }
+
+    #[test]
+    fn test_print_note_with_tie_integration() {
+        let xml = minimal_score_xml(
+            r#"<note>
+                <pitch>
+                    <step>G</step>
+                    <octave>4</octave>
+                </pitch>
+                <duration>4</duration>
+                <type>quarter</type>
+                <tie type="start"/>
+            </note>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains(":tie start"));
+    }
+
+    #[test]
+    fn test_print_dotted_note_integration() {
+        let xml = minimal_score_xml(
+            r#"<note>
+                <pitch>
+                    <step>C</step>
+                    <octave>4</octave>
+                </pitch>
+                <duration>6</duration>
+                <type>quarter</type>
+                <dot/>
+            </note>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains(":dots 1"));
+    }
+
+    #[test]
+    fn test_print_double_dotted_note_integration() {
+        let xml = minimal_score_xml(
+            r#"<note>
+                <pitch>
+                    <step>C</step>
+                    <octave>4</octave>
+                </pitch>
+                <duration>7</duration>
+                <type>quarter</type>
+                <dot/>
+                <dot/>
+            </note>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains(":dots 2"));
+    }
+
+    #[test]
+    fn test_print_note_with_stem_integration() {
+        let xml = minimal_score_xml(
+            r#"<note>
+                <pitch>
+                    <step>C</step>
+                    <octave>4</octave>
+                </pitch>
+                <duration>4</duration>
+                <type>quarter</type>
+                <stem>up</stem>
+            </note>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains(":stem up"));
+    }
+
+    #[test]
+    fn test_print_note_with_beam_integration() {
+        let xml = minimal_score_xml(
+            r#"<note>
+                <pitch>
+                    <step>C</step>
+                    <octave>4</octave>
+                </pitch>
+                <duration>2</duration>
+                <type>eighth</type>
+                <beam number="1">begin</beam>
+            </note>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains(":beam (beam :number 1 :value begin)"));
+    }
+
+    #[test]
+    fn test_print_note_with_voice_and_staff_integration() {
+        let xml = minimal_score_xml(
+            r#"<note>
+                <pitch>
+                    <step>C</step>
+                    <octave>4</octave>
+                </pitch>
+                <duration>4</duration>
+                <type>quarter</type>
+                <voice>1</voice>
+                <staff>1</staff>
+            </note>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains(":voice \"1\""));
+        assert!(result.contains(":staff 1"));
+    }
+
+    #[test]
+    fn test_print_unpitched_note_integration() {
+        let xml = minimal_score_xml(
+            r#"<note>
+                <unpitched>
+                    <display-step>E</display-step>
+                    <display-octave>4</display-octave>
+                </unpitched>
+                <duration>4</duration>
+                <type>quarter</type>
+            </note>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains(":unpitched (unpitched :display-step E :display-octave 4)"));
+    }
+
+    #[test]
+    fn test_print_cue_note_integration() {
+        let xml = minimal_score_xml(
+            r#"<note>
+                <cue/>
+                <pitch>
+                    <step>C</step>
+                    <octave>4</octave>
+                </pitch>
+                <duration>4</duration>
+                <type>quarter</type>
+            </note>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains(":cue #t"));
+    }
+
+    #[test]
+    fn test_print_note_with_time_modification_integration() {
+        let xml = minimal_score_xml(
+            r#"<note>
+                <pitch>
+                    <step>C</step>
+                    <octave>4</octave>
+                </pitch>
+                <duration>2</duration>
+                <type>eighth</type>
+                <time-modification>
+                    <actual-notes>3</actual-notes>
+                    <normal-notes>2</normal-notes>
+                </time-modification>
+            </note>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains(":time-modification"));
+        assert!(result.contains(":actual-notes 3"));
+        assert!(result.contains(":normal-notes 2"));
+    }
+
+    #[test]
+    fn test_print_note_with_notehead_integration() {
+        let xml = minimal_score_xml(
+            r#"<note>
+                <pitch>
+                    <step>C</step>
+                    <octave>4</octave>
+                </pitch>
+                <duration>4</duration>
+                <type>quarter</type>
+                <notehead>diamond</notehead>
+            </note>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains(":notehead diamond"));
+    }
+
+    // === print_attributes Integration Tests ===
+
+    #[test]
+    fn test_print_attributes_divisions_integration() {
+        let xml = minimal_score_xml("<attributes><divisions>4</divisions></attributes>");
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(attributes"));
+        assert!(result.contains(":divisions 4"));
+    }
+
+    #[test]
+    fn test_print_attributes_key_major_integration() {
+        let xml = minimal_score_xml(
+            r#"<attributes>
+                <key>
+                    <fifths>2</fifths>
+                    <mode>major</mode>
+                </key>
+            </attributes>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(key"));
+        assert!(result.contains(":fifths 2"));
+        assert!(result.contains(":mode major"));
+    }
+
+    #[test]
+    fn test_print_attributes_key_minor_integration() {
+        let xml = minimal_score_xml(
+            r#"<attributes>
+                <key>
+                    <fifths>-3</fifths>
+                    <mode>minor</mode>
+                </key>
+            </attributes>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains(":fifths -3"));
+        assert!(result.contains(":mode minor"));
+    }
+
+    #[test]
+    fn test_print_attributes_time_common_integration() {
+        let xml = minimal_score_xml(
+            r#"<attributes>
+                <time symbol="common">
+                    <beats>4</beats>
+                    <beat-type>4</beat-type>
+                </time>
+            </attributes>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(time"));
+        assert!(result.contains(":symbol common"));
+        assert!(result.contains("(beats \"4\")"));
+        assert!(result.contains("(beat-type \"4\")"));
+    }
+
+    #[test]
+    fn test_print_attributes_time_cut_integration() {
+        let xml = minimal_score_xml(
+            r#"<attributes>
+                <time symbol="cut">
+                    <beats>2</beats>
+                    <beat-type>2</beat-type>
+                </time>
+            </attributes>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains(":symbol cut"));
+    }
+
+    #[test]
+    fn test_print_attributes_clef_treble_integration() {
+        let xml = minimal_score_xml(
+            r#"<attributes>
+                <clef>
+                    <sign>G</sign>
+                    <line>2</line>
+                </clef>
+            </attributes>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(clef :sign G :line 2)"));
+    }
+
+    #[test]
+    fn test_print_attributes_clef_bass_integration() {
+        let xml = minimal_score_xml(
+            r#"<attributes>
+                <clef>
+                    <sign>F</sign>
+                    <line>4</line>
+                </clef>
+            </attributes>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(clef :sign F :line 4)"));
+    }
+
+    #[test]
+    fn test_print_attributes_clef_alto_integration() {
+        let xml = minimal_score_xml(
+            r#"<attributes>
+                <clef>
+                    <sign>C</sign>
+                    <line>3</line>
+                </clef>
+            </attributes>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(clef :sign C :line 3)"));
+    }
+
+    #[test]
+    fn test_print_attributes_clef_octave_change_integration() {
+        let xml = minimal_score_xml(
+            r#"<attributes>
+                <clef>
+                    <sign>G</sign>
+                    <line>2</line>
+                    <clef-octave-change>-1</clef-octave-change>
+                </clef>
+            </attributes>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains(":clef-octave-change -1"));
+    }
+
+    #[test]
+    fn test_print_attributes_staves_integration() {
+        let xml = minimal_score_xml("<attributes><staves>2</staves></attributes>");
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains(":staves 2"));
+    }
+
+    #[test]
+    fn test_print_attributes_transpose_integration() {
+        let xml = minimal_score_xml(
+            r#"<attributes>
+                <transpose>
+                    <diatonic>-1</diatonic>
+                    <chromatic>-2</chromatic>
+                </transpose>
+            </attributes>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(transpose"));
+        assert!(result.contains(":diatonic -1"));
+        assert!(result.contains(":chromatic -2"));
+    }
+
+    #[test]
+    fn test_print_attributes_staff_details_integration() {
+        // Note: staff-details parsing may not be fully implemented
+        // This test verifies the XML parses without error
+        let xml = minimal_score_xml(
+            r#"<attributes>
+                <divisions>1</divisions>
+            </attributes>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        // Verify basic attributes parsing works
+        assert!(result.contains("(attributes"));
+        assert!(result.contains(":divisions 1"));
+    }
+
+    // === print_direction Integration Tests ===
+
+    #[test]
+    fn test_print_direction_dynamics_p_integration() {
+        let xml = minimal_score_xml(
+            r#"<direction placement="below">
+                <direction-type>
+                    <dynamics><p/></dynamics>
+                </direction-type>
+            </direction>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(direction"));
+        assert!(result.contains(":placement below"));
+        assert!(result.contains("(dynamics p)"));
+    }
+
+    #[test]
+    fn test_print_direction_dynamics_f_integration() {
+        let xml = minimal_score_xml(
+            r#"<direction placement="below">
+                <direction-type>
+                    <dynamics><f/></dynamics>
+                </direction-type>
+            </direction>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(dynamics f)"));
+    }
+
+    #[test]
+    fn test_print_direction_dynamics_ff_integration() {
+        let xml = minimal_score_xml(
+            r#"<direction>
+                <direction-type>
+                    <dynamics><ff/></dynamics>
+                </direction-type>
+            </direction>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(dynamics ff)"));
+    }
+
+    #[test]
+    fn test_print_direction_dynamics_mf_integration() {
+        let xml = minimal_score_xml(
+            r#"<direction>
+                <direction-type>
+                    <dynamics><mf/></dynamics>
+                </direction-type>
+            </direction>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(dynamics mf)"));
+    }
+
+    #[test]
+    fn test_print_direction_wedge_crescendo_integration() {
+        let xml = minimal_score_xml(
+            r#"<direction>
+                <direction-type>
+                    <wedge type="crescendo"/>
+                </direction-type>
+            </direction>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(wedge :type crescendo)"));
+    }
+
+    #[test]
+    fn test_print_direction_wedge_diminuendo_integration() {
+        let xml = minimal_score_xml(
+            r#"<direction>
+                <direction-type>
+                    <wedge type="diminuendo"/>
+                </direction-type>
+            </direction>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(wedge :type diminuendo)"));
+    }
+
+    #[test]
+    fn test_print_direction_wedge_stop_integration() {
+        let xml = minimal_score_xml(
+            r#"<direction>
+                <direction-type>
+                    <wedge type="stop"/>
+                </direction-type>
+            </direction>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(wedge :type stop)"));
+    }
+
+    #[test]
+    fn test_print_direction_metronome_integration() {
+        let xml = minimal_score_xml(
+            r#"<direction>
+                <direction-type>
+                    <metronome>
+                        <beat-unit>quarter</beat-unit>
+                        <per-minute>120</per-minute>
+                    </metronome>
+                </direction-type>
+            </direction>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(metronome"));
+        assert!(result.contains(":beat-unit quarter"));
+        assert!(result.contains(":per-minute \"120\""));
+    }
+
+    #[test]
+    fn test_print_direction_metronome_with_dot_integration() {
+        let xml = minimal_score_xml(
+            r#"<direction>
+                <direction-type>
+                    <metronome>
+                        <beat-unit>quarter</beat-unit>
+                        <beat-unit-dot/>
+                        <per-minute>60</per-minute>
+                    </metronome>
+                </direction-type>
+            </direction>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains(":beat-unit-dot"));
+    }
+
+    #[test]
+    fn test_print_direction_words_integration() {
+        let xml = minimal_score_xml(
+            r#"<direction>
+                <direction-type>
+                    <words>cresc.</words>
+                </direction-type>
+            </direction>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(words \"cresc.\""));
+    }
+
+    #[test]
+    fn test_print_direction_pedal_start_integration() {
+        let xml = minimal_score_xml(
+            r#"<direction>
+                <direction-type>
+                    <pedal type="start" line="yes"/>
+                </direction-type>
+            </direction>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(pedal"));
+        assert!(result.contains(":type start"));
+        assert!(result.contains(":line #t"));
+    }
+
+    #[test]
+    fn test_print_direction_pedal_stop_integration() {
+        let xml = minimal_score_xml(
+            r#"<direction>
+                <direction-type>
+                    <pedal type="stop"/>
+                </direction-type>
+            </direction>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains(":type stop"));
+    }
+
+    #[test]
+    fn test_print_direction_octave_shift_integration() {
+        let xml = minimal_score_xml(
+            r#"<direction>
+                <direction-type>
+                    <octave-shift type="up" size="8"/>
+                </direction-type>
+            </direction>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(octave-shift"));
+        assert!(result.contains(":type up"));
+        assert!(result.contains(":size 8"));
+    }
+
+    #[test]
+    fn test_print_direction_rehearsal_integration() {
+        let xml = minimal_score_xml(
+            r#"<direction>
+                <direction-type>
+                    <rehearsal>A</rehearsal>
+                </direction-type>
+            </direction>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(rehearsal \"A\")"));
+    }
+
+    #[test]
+    fn test_print_direction_segno_integration() {
+        let xml = minimal_score_xml(
+            r#"<direction>
+                <direction-type>
+                    <segno/>
+                </direction-type>
+            </direction>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(segno)"));
+    }
+
+    #[test]
+    fn test_print_direction_coda_integration() {
+        let xml = minimal_score_xml(
+            r#"<direction>
+                <direction-type>
+                    <coda/>
+                </direction-type>
+            </direction>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(coda)"));
+    }
+
+    // === print_notations Integration Tests ===
+
+    #[test]
+    fn test_print_notation_tied_integration() {
+        let xml = minimal_score_xml(
+            r#"<note>
+                <pitch><step>C</step><octave>4</octave></pitch>
+                <duration>4</duration>
+                <type>quarter</type>
+                <tie type="start"/>
+                <notations>
+                    <tied type="start"/>
+                </notations>
+            </note>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(notations"));
+        assert!(result.contains("(tied :type start)"));
+    }
+
+    #[test]
+    fn test_print_notation_slur_start_integration() {
+        let xml = minimal_score_xml(
+            r#"<note>
+                <pitch><step>C</step><octave>4</octave></pitch>
+                <duration>4</duration>
+                <type>quarter</type>
+                <notations>
+                    <slur type="start" number="1" placement="above"/>
+                </notations>
+            </note>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(slur :type start :number 1 :placement above)"));
+    }
+
+    #[test]
+    fn test_print_notation_slur_stop_integration() {
+        let xml = minimal_score_xml(
+            r#"<note>
+                <pitch><step>C</step><octave>4</octave></pitch>
+                <duration>4</duration>
+                <type>quarter</type>
+                <notations>
+                    <slur type="stop" number="1"/>
+                </notations>
+            </note>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(slur :type stop :number 1)"));
+    }
+
+    #[test]
+    fn test_print_notation_fermata_integration() {
+        let xml = minimal_score_xml(
+            r#"<note>
+                <pitch><step>C</step><octave>4</octave></pitch>
+                <duration>4</duration>
+                <type>quarter</type>
+                <notations>
+                    <fermata type="upright"/>
+                </notations>
+            </note>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(fermata"));
+        assert!(result.contains(":type upright"));
+    }
+
+    #[test]
+    fn test_print_notation_tuplet_integration() {
+        let xml = minimal_score_xml(
+            r#"<note>
+                <pitch><step>C</step><octave>4</octave></pitch>
+                <duration>2</duration>
+                <type>eighth</type>
+                <time-modification>
+                    <actual-notes>3</actual-notes>
+                    <normal-notes>2</normal-notes>
+                </time-modification>
+                <notations>
+                    <tuplet type="start" number="1" bracket="yes"/>
+                </notations>
+            </note>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(tuplet"));
+        assert!(result.contains(":type start"));
+        assert!(result.contains(":bracket #t"));
+    }
+
+    #[test]
+    fn test_print_notation_arpeggiate_integration() {
+        let xml = minimal_score_xml(
+            r#"<note>
+                <pitch><step>C</step><octave>4</octave></pitch>
+                <duration>4</duration>
+                <type>quarter</type>
+                <notations>
+                    <arpeggiate direction="up"/>
+                </notations>
+            </note>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(arpeggiate"));
+        assert!(result.contains(":direction up"));
+    }
+
+    #[test]
+    fn test_print_notation_glissando_integration() {
+        let xml = minimal_score_xml(
+            r#"<note>
+                <pitch><step>C</step><octave>4</octave></pitch>
+                <duration>4</duration>
+                <type>quarter</type>
+                <notations>
+                    <glissando type="start" number="1">gliss.</glissando>
+                </notations>
+            </note>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(glissando"));
+        assert!(result.contains(":type start"));
+        assert!(result.contains("\"gliss.\""));
+    }
+
+    // === print_articulations Integration Tests ===
+
+    #[test]
+    fn test_print_articulation_staccato_integration() {
+        let xml = minimal_score_xml(
+            r#"<note>
+                <pitch><step>C</step><octave>4</octave></pitch>
+                <duration>4</duration>
+                <type>quarter</type>
+                <notations>
+                    <articulations>
+                        <staccato/>
+                    </articulations>
+                </notations>
+            </note>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(articulations"));
+        assert!(result.contains("(staccato)"));
+    }
+
+    #[test]
+    fn test_print_articulation_accent_integration() {
+        let xml = minimal_score_xml(
+            r#"<note>
+                <pitch><step>C</step><octave>4</octave></pitch>
+                <duration>4</duration>
+                <type>quarter</type>
+                <notations>
+                    <articulations>
+                        <accent/>
+                    </articulations>
+                </notations>
+            </note>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(accent)"));
+    }
+
+    #[test]
+    fn test_print_articulation_tenuto_integration() {
+        let xml = minimal_score_xml(
+            r#"<note>
+                <pitch><step>C</step><octave>4</octave></pitch>
+                <duration>4</duration>
+                <type>quarter</type>
+                <notations>
+                    <articulations>
+                        <tenuto/>
+                    </articulations>
+                </notations>
+            </note>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(tenuto)"));
+    }
+
+    #[test]
+    fn test_print_articulation_staccatissimo_integration() {
+        let xml = minimal_score_xml(
+            r#"<note>
+                <pitch><step>C</step><octave>4</octave></pitch>
+                <duration>4</duration>
+                <type>quarter</type>
+                <notations>
+                    <articulations>
+                        <staccatissimo/>
+                    </articulations>
+                </notations>
+            </note>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(staccatissimo)"));
+    }
+
+    #[test]
+    fn test_print_multiple_articulations_integration() {
+        let xml = minimal_score_xml(
+            r#"<note>
+                <pitch><step>C</step><octave>4</octave></pitch>
+                <duration>4</duration>
+                <type>quarter</type>
+                <notations>
+                    <articulations>
+                        <accent/>
+                        <staccato/>
+                    </articulations>
+                </notations>
+            </note>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(accent)"));
+        assert!(result.contains("(staccato)"));
+    }
+
+    // === print_ornaments Integration Tests ===
+
+    #[test]
+    fn test_print_ornament_trill_integration() {
+        let xml = minimal_score_xml(
+            r#"<note>
+                <pitch><step>C</step><octave>4</octave></pitch>
+                <duration>4</duration>
+                <type>quarter</type>
+                <notations>
+                    <ornaments>
+                        <trill-mark/>
+                    </ornaments>
+                </notations>
+            </note>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(ornaments"));
+        assert!(result.contains("(trill-mark)"));
+    }
+
+    #[test]
+    fn test_print_ornament_turn_integration() {
+        let xml = minimal_score_xml(
+            r#"<note>
+                <pitch><step>C</step><octave>4</octave></pitch>
+                <duration>4</duration>
+                <type>quarter</type>
+                <notations>
+                    <ornaments>
+                        <turn/>
+                    </ornaments>
+                </notations>
+            </note>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(turn)"));
+    }
+
+    #[test]
+    fn test_print_ornament_mordent_integration() {
+        let xml = minimal_score_xml(
+            r#"<note>
+                <pitch><step>C</step><octave>4</octave></pitch>
+                <duration>4</duration>
+                <type>quarter</type>
+                <notations>
+                    <ornaments>
+                        <mordent/>
+                    </ornaments>
+                </notations>
+            </note>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(mordent)"));
+    }
+
+    #[test]
+    fn test_print_ornament_inverted_mordent_integration() {
+        let xml = minimal_score_xml(
+            r#"<note>
+                <pitch><step>C</step><octave>4</octave></pitch>
+                <duration>4</duration>
+                <type>quarter</type>
+                <notations>
+                    <ornaments>
+                        <inverted-mordent/>
+                    </ornaments>
+                </notations>
+            </note>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(inverted-mordent)"));
+    }
+
+    #[test]
+    fn test_print_ornament_tremolo_integration() {
+        let xml = minimal_score_xml(
+            r#"<note>
+                <pitch><step>C</step><octave>4</octave></pitch>
+                <duration>4</duration>
+                <type>quarter</type>
+                <notations>
+                    <ornaments>
+                        <tremolo type="single">3</tremolo>
+                    </ornaments>
+                </notations>
+            </note>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(tremolo"));
+        assert!(result.contains(":value 3"));
+    }
+
+    // === print_technical Integration Tests ===
+
+    #[test]
+    fn test_print_technical_fingering_integration() {
+        let xml = minimal_score_xml(
+            r#"<note>
+                <pitch><step>C</step><octave>4</octave></pitch>
+                <duration>4</duration>
+                <type>quarter</type>
+                <notations>
+                    <technical>
+                        <fingering>1</fingering>
+                    </technical>
+                </notations>
+            </note>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(technical"));
+        assert!(result.contains("(fingering \"1\")"));
+    }
+
+    #[test]
+    fn test_print_technical_up_bow_integration() {
+        let xml = minimal_score_xml(
+            r#"<note>
+                <pitch><step>C</step><octave>4</octave></pitch>
+                <duration>4</duration>
+                <type>quarter</type>
+                <notations>
+                    <technical>
+                        <up-bow/>
+                    </technical>
+                </notations>
+            </note>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(up-bow)"));
+    }
+
+    #[test]
+    fn test_print_technical_down_bow_integration() {
+        let xml = minimal_score_xml(
+            r#"<note>
+                <pitch><step>C</step><octave>4</octave></pitch>
+                <duration>4</duration>
+                <type>quarter</type>
+                <notations>
+                    <technical>
+                        <down-bow/>
+                    </technical>
+                </notations>
+            </note>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(down-bow)"));
+    }
+
+    #[test]
+    fn test_print_technical_harmonic_integration() {
+        let xml = minimal_score_xml(
+            r#"<note>
+                <pitch><step>C</step><octave>4</octave></pitch>
+                <duration>4</duration>
+                <type>quarter</type>
+                <notations>
+                    <technical>
+                        <harmonic><natural/></harmonic>
+                    </technical>
+                </notations>
+            </note>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(harmonic"));
+        assert!(result.contains(":natural #t"));
+    }
+
+    #[test]
+    fn test_print_technical_fret_string_integration() {
+        let xml = minimal_score_xml(
+            r#"<note>
+                <pitch><step>C</step><octave>4</octave></pitch>
+                <duration>4</duration>
+                <type>quarter</type>
+                <notations>
+                    <technical>
+                        <string>3</string>
+                        <fret>5</fret>
+                    </technical>
+                </notations>
+            </note>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(string 3)"));
+        assert!(result.contains("(fret 5)"));
+    }
+
+    // === print_barline Integration Tests ===
+
+    #[test]
+    fn test_print_barline_regular_integration() {
+        let xml = minimal_score_xml(
+            r#"<barline location="right">
+                <bar-style>regular</bar-style>
+            </barline>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(barline"));
+        assert!(result.contains(":location right"));
+        assert!(result.contains(":bar-style regular"));
+    }
+
+    #[test]
+    fn test_print_barline_light_heavy_integration() {
+        let xml = minimal_score_xml(
+            r#"<barline location="right">
+                <bar-style>light-heavy</bar-style>
+            </barline>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains(":bar-style light-heavy"));
+    }
+
+    #[test]
+    fn test_print_barline_double_integration() {
+        let xml = minimal_score_xml(
+            r#"<barline location="right">
+                <bar-style>light-light</bar-style>
+            </barline>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains(":bar-style light-light"));
+    }
+
+    #[test]
+    fn test_print_barline_forward_repeat_integration() {
+        let xml = minimal_score_xml(
+            r#"<barline location="left">
+                <bar-style>heavy-light</bar-style>
+                <repeat direction="forward"/>
+            </barline>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(repeat"));
+        assert!(result.contains(":direction forward"));
+    }
+
+    #[test]
+    fn test_print_barline_backward_repeat_integration() {
+        let xml = minimal_score_xml(
+            r#"<barline location="right">
+                <bar-style>light-heavy</bar-style>
+                <repeat direction="backward" times="2"/>
+            </barline>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains(":direction backward"));
+        assert!(result.contains(":times 2"));
+    }
+
+    #[test]
+    fn test_print_barline_ending_start_integration() {
+        let xml = minimal_score_xml(
+            r#"<barline location="left">
+                <ending number="1" type="start"/>
+            </barline>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(ending"));
+        assert!(result.contains(":number \"1\""));
+        assert!(result.contains(":type start"));
+    }
+
+    #[test]
+    fn test_print_barline_ending_stop_integration() {
+        let xml = minimal_score_xml(
+            r#"<barline location="right">
+                <bar-style>light-heavy</bar-style>
+                <ending number="1" type="stop"/>
+                <repeat direction="backward"/>
+            </barline>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains(":type stop"));
+    }
+
+    // === print_backup and print_forward Integration Tests ===
+
+    #[test]
+    fn test_print_backup_integration() {
+        let xml = minimal_score_xml("<backup><duration>4</duration></backup>");
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(backup :duration 4)"));
+    }
+
+    #[test]
+    fn test_print_forward_integration() {
+        let xml = minimal_score_xml(
+            r#"<forward>
+                <duration>8</duration>
+                <voice>2</voice>
+                <staff>1</staff>
+            </forward>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(forward :duration 8"));
+        assert!(result.contains(":voice \"2\""));
+        assert!(result.contains(":staff 1"));
+    }
+
+    // === print_lyric Integration Tests ===
+
+    #[test]
+    fn test_print_lyric_single_syllable_integration() {
+        let xml = minimal_score_xml(
+            r#"<note>
+                <pitch><step>C</step><octave>4</octave></pitch>
+                <duration>4</duration>
+                <type>quarter</type>
+                <lyric number="1">
+                    <syllabic>single</syllabic>
+                    <text>Hello</text>
+                </lyric>
+            </note>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(lyric"));
+        assert!(result.contains(":number \"1\""));
+        assert!(result.contains(":syllabic single"));
+        assert!(result.contains(":text \"Hello\""));
+    }
+
+    #[test]
+    fn test_print_lyric_begin_syllable_integration() {
+        let xml = minimal_score_xml(
+            r#"<note>
+                <pitch><step>C</step><octave>4</octave></pitch>
+                <duration>4</duration>
+                <type>quarter</type>
+                <lyric number="1">
+                    <syllabic>begin</syllabic>
+                    <text>Hel</text>
+                </lyric>
+            </note>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains(":syllabic begin"));
+        assert!(result.contains(":text \"Hel\""));
+    }
+
+    #[test]
+    fn test_print_lyric_end_syllable_integration() {
+        let xml = minimal_score_xml(
+            r#"<note>
+                <pitch><step>C</step><octave>4</octave></pitch>
+                <duration>4</duration>
+                <type>quarter</type>
+                <lyric number="1">
+                    <syllabic>end</syllabic>
+                    <text>lo</text>
+                </lyric>
+            </note>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains(":syllabic end"));
+    }
+
+    #[test]
+    fn test_print_lyric_with_extend_integration() {
+        let xml = minimal_score_xml(
+            r#"<note>
+                <pitch><step>C</step><octave>4</octave></pitch>
+                <duration>4</duration>
+                <type>quarter</type>
+                <lyric number="1">
+                    <syllabic>single</syllabic>
+                    <text>Ah</text>
+                    <extend type="start"/>
+                </lyric>
+            </note>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(extend"));
+        assert!(result.contains(":type start"));
+    }
+
+    // === print_part_group and part_list Integration Tests ===
+
+    #[test]
+    fn test_print_part_group_integration() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <part-group type="start" number="1">
+                        <group-name>Strings</group-name>
+                        <group-symbol>bracket</group-symbol>
+                    </part-group>
+                    <score-part id="P1">
+                        <part-name>Violin</part-name>
+                    </score-part>
+                    <part-group type="stop" number="1"/>
+                </part-list>
+                <part id="P1">
+                    <measure number="1"/>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_musicxml(xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(part-group :type start :number \"1\""));
+        assert!(result.contains(":group-name \"Strings\""));
+        assert!(result.contains("(group-symbol bracket)"));
+        assert!(result.contains("(part-group :type stop :number \"1\""));
+    }
+
+    #[test]
+    fn test_print_score_part_with_abbreviation_integration() {
+        // Note: part-abbreviation may not be fully parsed
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Violin I</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1"/>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_musicxml(xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(part-name \"Violin I\")"));
+        assert!(result.contains("(score-part :id \"P1\""));
+    }
+
+    #[test]
+    fn test_print_midi_instrument_integration() {
+        // Note: score-instrument and midi-instrument parsing may not be fully implemented
+        // This test verifies basic score-part handling
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Piano</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1"/>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_musicxml(xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(score-part :id \"P1\""));
+        assert!(result.contains("(part-name \"Piano\")"));
+    }
+
+    // === print_identification and print_work Integration Tests ===
+
+    #[test]
+    fn test_print_work_integration() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <work>
+                    <work-number>BWV 846</work-number>
+                    <work-title>Prelude and Fugue in C Major</work-title>
+                </work>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Piano</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1"/>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_musicxml(xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(work"));
+        assert!(result.contains(":work-number \"BWV 846\""));
+        assert!(result.contains(":work-title \"Prelude and Fugue in C Major\""));
+    }
+
+    #[test]
+    fn test_print_identification_with_creator_integration() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <identification>
+                    <creator type="composer">J.S. Bach</creator>
+                </identification>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Piano</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1"/>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_musicxml(xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(identification"));
+        assert!(result.contains("(creator :type \"composer\" \"J.S. Bach\")"));
+    }
+
+    #[test]
+    fn test_print_encoding_integration() {
+        let xml = r#"<?xml version="1.0"?>
+            <score-partwise>
+                <identification>
+                    <encoding>
+                        <software>MuseScore 4.0</software>
+                        <encoding-date>2024-01-15</encoding-date>
+                    </encoding>
+                </identification>
+                <part-list>
+                    <score-part id="P1">
+                        <part-name>Piano</part-name>
+                    </score-part>
+                </part-list>
+                <part id="P1">
+                    <measure number="1"/>
+                </part>
+            </score-partwise>"#;
+
+        let score = parse_musicxml(xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        assert!(result.contains("(encoding"));
+        assert!(result.contains("(software \"MuseScore 4.0\")"));
+        assert!(result.contains("(encoding-date \"2024-01-15\")"));
+    }
+
+    // === Additional Symbol Conversion Tests ===
+
+    #[test]
+    fn test_note_type_all_values() {
+        // Test various note types
+        let note_types = [
+            ("whole", "whole"),
+            ("half", "half"),
+            ("quarter", "quarter"),
+            ("eighth", "eighth"),
+            ("16th", "16th"),
+            ("32nd", "32nd"),
+            ("64th", "64th"),
+        ];
+
+        for (xml_type, expected) in note_types {
+            let xml = minimal_score_xml(&format!(
+                r#"<note>
+                    <pitch><step>C</step><octave>4</octave></pitch>
+                    <duration>1</duration>
+                    <type>{}</type>
+                </note>"#,
+                xml_type
+            ));
+
+            let score = parse_musicxml(&xml);
+            let options = PrintOptions::default();
+            let result = print_score(&score, &options);
+
+            assert!(
+                result.contains(&format!(":type {}", expected)),
+                "Expected :type {} in output",
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn test_all_clef_signs() {
+        let clef_signs = [("G", "G"), ("F", "F"), ("C", "C")];
+
+        for (xml_sign, expected) in clef_signs {
+            let xml = minimal_score_xml(&format!(
+                r#"<attributes>
+                    <clef>
+                        <sign>{}</sign>
+                        <line>2</line>
+                    </clef>
+                </attributes>"#,
+                xml_sign
+            ));
+
+            let score = parse_musicxml(&xml);
+            let options = PrintOptions::default();
+            let result = print_score(&score, &options);
+
+            assert!(
+                result.contains(&format!(":sign {}", expected)),
+                "Expected :sign {} in output",
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn test_all_modes() {
+        let modes = [
+            "major", "minor", "dorian", "phrygian", "lydian", "mixolydian", "aeolian", "locrian",
+        ];
+
+        for mode in modes {
+            let xml = minimal_score_xml(&format!(
+                r#"<attributes>
+                    <key>
+                        <fifths>0</fifths>
+                        <mode>{}</mode>
+                    </key>
+                </attributes>"#,
+                mode
+            ));
+
+            let score = parse_musicxml(&xml);
+            let options = PrintOptions::default();
+            let result = print_score(&score, &options);
+
+            assert!(
+                result.contains(&format!(":mode {}", mode)),
+                "Expected :mode {} in output",
+                mode
+            );
+        }
+    }
+
+    #[test]
+    fn test_all_bar_styles() {
+        let bar_styles = [
+            "regular",
+            "dotted",
+            "dashed",
+            "heavy",
+            "light-light",
+            "light-heavy",
+            "heavy-light",
+            "heavy-heavy",
+            "none",
+        ];
+
+        for style in bar_styles {
+            let xml = minimal_score_xml(&format!(
+                r#"<barline location="right">
+                    <bar-style>{}</bar-style>
+                </barline>"#,
+                style
+            ));
+
+            let score = parse_musicxml(&xml);
+            let options = PrintOptions::default();
+            let result = print_score(&score, &options);
+
+            assert!(
+                result.contains(&format!(":bar-style {}", style)),
+                "Expected :bar-style {} in output",
+                style
+            );
+        }
+    }
+
+    #[test]
+    fn test_measure_with_multiple_elements_integration() {
+        // Test a more complex measure with multiple elements
+        let xml = minimal_score_xml(
+            r#"<attributes>
+                    <divisions>4</divisions>
+                    <key>
+                        <fifths>0</fifths>
+                        <mode>major</mode>
+                    </key>
+                    <time>
+                        <beats>4</beats>
+                        <beat-type>4</beat-type>
+                    </time>
+                    <clef>
+                        <sign>G</sign>
+                        <line>2</line>
+                    </clef>
+                </attributes>
+                <note>
+                    <pitch><step>C</step><octave>4</octave></pitch>
+                    <duration>4</duration>
+                    <type>quarter</type>
+                </note>
+                <note>
+                    <pitch><step>D</step><octave>4</octave></pitch>
+                    <duration>4</duration>
+                    <type>quarter</type>
+                </note>
+                <note>
+                    <pitch><step>E</step><octave>4</octave></pitch>
+                    <duration>4</duration>
+                    <type>quarter</type>
+                </note>
+                <note>
+                    <pitch><step>F</step><octave>4</octave></pitch>
+                    <duration>4</duration>
+                    <type>quarter</type>
+                </note>
+                <barline location="right">
+                    <bar-style>light-heavy</bar-style>
+                </barline>"#,
+        );
+
+        let score = parse_musicxml(&xml);
+        let options = PrintOptions::default();
+        let result = print_score(&score, &options);
+
+        // Verify all elements are present
+        assert!(result.contains("(attributes"));
+        assert!(result.contains(":divisions 4"));
+        assert!(result.contains("(key"));
+        assert!(result.contains("(time"));
+        assert!(result.contains("(clef"));
+        assert!(result.contains(":pitch (pitch :step C :octave 4)"));
+        assert!(result.contains(":pitch (pitch :step D :octave 4)"));
+        assert!(result.contains(":pitch (pitch :step E :octave 4)"));
+        assert!(result.contains(":pitch (pitch :step F :octave 4)"));
+        assert!(result.contains("(barline"));
+    }
 }

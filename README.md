@@ -12,57 +12,59 @@
 > *In music, a fermata (𝄐) indicates that a note should be held longer than its written value —
 > a pause, a moment of expressiveness left to the performer's discretion.*
 
-Fermata is a Lisp-like domain-specific language for describing musical notation. It compiles to
-MusicXML, LilyPond, and Rust, enabling precise musical communication between humans and machines.
+Fermata is a Lisp-like domain-specific language for describing musical notation.
 
-## Status: 🚧 Under Construction
+## Status
 
-This crate is in early development. The API will change significantly.
+**Core functionality is implemented.** The CLI supports compiling Fermata source to MusicXML,
+importing MusicXML to Fermata, and validating source files. The API may still change.
 
-## Vision
+## Example
 
 ```lisp
-;; Describe music naturally
+;; A simple C major scale
 (score
- (title "Prelude in C")
- (composer "J.S. Bach")
- (tempo 66 :quarter)
-
- (part :piano
-       (staff :treble
-              (measure
-               (voice
-                (chord :8 (c5 e5 g5))
-                (chord :8 (c5 e5 g5))
-                (chord :8 (c5 e5 g5))
-                (chord :8 (c5 e5 g5))
-                (chord :8 (c5 e5 g5))
-                (chord :8 (c5 e5 g5))
-                (chord :8 (c5 e5 g5))
-                (chord :8 (c5 e5 g5)))))
-       (staff :bass
-              (measure
-               (voice
-                (note c3 :h)
-                (note c4 :h))))))
+  :title "C Major Scale"
+  :composer "Anonymous"
+  (part :id "P1" :name "Piano"
+    (measure
+      :time (4 4)
+      :clef :treble
+      :key 0
+      (note C4 :q)
+      (note D4 :q)
+      (note E4 :q)
+      (note F4 :q))
+    (measure
+      (note G4 :q)
+      (note A4 :q)
+      (note B4 :q)
+      (note C5 :q))))
 ```
 
-### Output Targets
+## Features
 
-| Target | Use Case |
-|--------|----------|
-| **MusicXML** | Import into Finale, Sibelius, MuseScore, Dorico |
-| **LilyPond** | Publication-quality PDF engraving |
-| **Rust** | Embed notation generation in Rust applications |
+### Implemented
+
+| Feature | Description |
+|---------|-------------|
+| **Compile** | Fermata source → MusicXML |
+| **Import** | MusicXML → Fermata source |
+| **Check** | Validate Fermata source files |
+| **Show** | Built-in reference for durations, pitches, clefs, dynamics, etc. |
+| **MusicXML Parser** | Full MusicXML 4.0 parsing |
+| **MusicXML Emitter** | Full MusicXML 4.0 generation |
+
+### Planned
+
+| Feature | Description |
+|---------|-------------|
+| **LilyPond** | Compile to LilyPond for publication-quality PDF engraving |
+| **REPL** | Interactive prompt for experimentation |
+| **Macros** | Define reusable patterns like `(cadence :authentic :key c-major)` |
+| **Transformations** | `(transpose +2 ...)`, `(invert ...)`, `(retrograde ...)` |
+| **Theory-aware** | Built-in knowledge of scales, chords, intervals, voice leading |
 | **SVG** | Direct rendering via [verovioxide](https://github.com/oxur/verovioxide) |
-
-### Planned Features
-
-- **REPL** — Interactive `fermata>` prompt for experimentation
-- **Macros** — Define reusable patterns like `(cadence :authentic :key c-major)`
-- **Transformations** — `(transpose +2 ...)`, `(invert ...)`, `(retrograde ...)`
-- **Bidirectional** — Parse MusicXML back into Fermata expressions
-- **Theory-aware** — Built-in knowledge of scales, chords, intervals, voice leading
 
 ## Installation
 
@@ -74,111 +76,131 @@ Or add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-fermata = "0.0.1"
+fermata = "0.1"
 ```
 
 ## Usage
 
-### As a CLI
+### CLI Commands
 
 ```bash
-# Start the REPL
-fermata
-
-# Compile to MusicXML
+# Compile Fermata source to MusicXML
 fermata compile score.fm -o score.musicxml
 
-# Compile to LilyPond
-fermata compile score.fm -o score.ly --target lilypond
+# Import MusicXML to Fermata source
+fermata import score.musicxml -o score.fm
 
-# Render directly to SVG (requires verovioxide)
-fermata render score.fm -o score.svg
+# Validate a Fermata file
+fermata check score.fm
+
+# Show reference information
+fermata show durations
+fermata show pitches
+fermata show dynamics
+fermata show --help  # list all topics
+
+# Machine-readable output
+fermata show durations --format json
+```
+
+### Stdin/Stdout Support
+
+```bash
+# Read from stdin, write to stdout
+cat score.fm | fermata compile > score.musicxml
+
+# Convert MusicXML from stdin
+cat score.musicxml | fermata import > score.fm
 ```
 
 ### As a Library
 
 ```rust,ignore
-use fermata::{parse, compile_to_musicxml};
+use fermata::lang::{compile, check};
+use fermata::musicxml::{emit, parse};
 
-fn main() -> fermata::Result<()> {
-let source = r#"
-(score
- (part :piano
-       (measure
-        (note c4 :q)
-        (note d4 :q)
-        (note e4 :q)
-        (note f4 :q))))
-"#;
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Compile Fermata source to MusicXML
+    let source = r#"
+        (score
+          (part :id "P1" :name "Piano"
+            (measure
+              (note C4 :q)
+              (note D4 :q)
+              (note E4 :q)
+              (note F4 :q))))
+    "#;
 
-let ast = parse(source)?;
-let musicxml = compile_to_musicxml(&ast)?;
+    let ir = compile(source)?;
+    let musicxml = emit(&ir)?;
+    std::fs::write("output.musicxml", musicxml)?;
 
-std::fs::write("output.musicxml", musicxml)?;
-Ok(())
+    // Parse MusicXML to IR
+    let xml = std::fs::read_to_string("input.musicxml")?;
+    let score = parse(&xml)?;
+
+    Ok(())
 }
 ```
 
 ## Language Reference
 
-*Coming soon — see [LANGUAGE.md](LANGUAGE.md) for the developing specification.*
+Use `fermata show` to explore the language:
+
+```bash
+fermata show syntax        # Quick syntax overview
+fermata show durations     # :w :h :q :8 :16 :32 :64
+fermata show pitches       # C4, D#5, Bb3, etc.
+fermata show dynamics      # pp, p, mp, mf, f, ff, etc.
+fermata show articulations # staccato, accent, tenuto, etc.
+fermata show clefs         # treble, bass, alto, tenor, etc.
+fermata show keys          # Key signatures and modes
+```
 
 ### Quick Reference
 
 ```lisp
-;; Notes
-(note c4 :q) ; C4 quarter note
-(note d#5 :h :dot) ; D#5 dotted half
-(note bb3 :8 :staccato) ; Bb3 eighth, staccato
+;; Notes with pitch and duration
+(note C4 :q)              ; C4 quarter note
+(note D#5 :h)             ; D#5 half note
+(note Bb3 :8)             ; Bb3 eighth note
 
 ;; Rests
-(rest :q) ; quarter rest
-(rest :w) ; whole rest
+(rest :q)                 ; quarter rest
+(rest :w)                 ; whole rest
 
 ;; Chords
-(chord :q (c4 e4 g4)) ; C major triad, quarter
+(chord :q C4 E4 G4)       ; C major triad, quarter
 
 ;; Durations
-:w ; whole
-:h ; half
-:q ; quarter
-:8 ; eighth
-:16 ; sixteenth
-:32 ; thirty-second
+:w                        ; whole
+:h                        ; half
+:q                        ; quarter
+:8                        ; eighth
+:16                       ; sixteenth
+:32                       ; thirty-second
 
-;; Articulations & Ornaments
-:staccato :accent :tenuto :fermata
-:trill :mordent :turn
+;; Score structure
+(score
+  :title "Title"
+  :composer "Composer"
+  (part :id "P1" :name "Piano"
+    (measure
+      :time (4 4)
+      :clef :treble
+      :key 0                ; 0 = C major, 1 = G major, -1 = F major
+      (note C4 :q)
+      ...)))
 
-;; Dynamics
+;; Dynamics (planned)
 :pp :p :mp :mf :f :ff
-(cresc :from pp :to f :over 4) ; 4 measures
 
-;; Structure
-(score ...)
-(part <instrument> ...)
-(staff <clef> ...)
-(measure ...)
-(voice ...)
-
-;; Clefs
-:treble :bass :alto :tenor :percussion
-
-;; Key signatures
-(key c :major)
-(key a :minor)
-(key f# :major)
-
-;; Time signatures
-(time 4 4)
-(time 6 8)
-(time 2 2)
+;; Articulations (planned)
+:staccato :accent :tenuto :fermata
 
 ;; Theory macros (planned)
-(scale c :major) ; => (c4 d4 e4 f4 g4 a4 b4 c5)
-(chord-voicing c :dom7) ; => (c4 e4 g4 bb4)
-(cadence :authentic :key c) ; => V-I progression
-(progression c :major I IV V I)
+(scale c :major)          ; => (c4 d4 e4 f4 g4 a4 b4 c5)
+(chord-voicing c :dom7)   ; => (c4 e4 g4 bb4)
 ```
 
 ## Related Projects

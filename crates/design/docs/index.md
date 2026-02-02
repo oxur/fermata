@@ -6,6 +6,7 @@ This index is automatically generated. Do not edit manually.
 
 | Number | Title | State | Updated |
 |--------|-------|-------|----------|
+| 0005 | REPL, Session Management, and Collaborative Architecture | Active | 2026-02-01 |
 | 0004 | Fermata IR S-Expression Format Reference | Final | 2026-02-01 |
 | 0003 | MusicXML Schema Triage for Fermata | Final | 2026-01-31 |
 | 0002 | MusicXML → Fermata IR Analysis Workflow | Active | 2026-01-31 |
@@ -19,6 +20,7 @@ This index is automatically generated. Do not edit manually.
 
 ### Active
 
+- [0005 - REPL, Session Management, and Collaborative Architecture](05-active/0005-repl-session-management-and-collaborative-architecture.md)
 - [0002 - MusicXML → Fermata IR Analysis Workflow](05-active/0002-musicxml-fermata-ir-analysis-workflow.md)
 
 ### Final

@@ -706,10 +706,7 @@ impl FromSexpr for FormattedText {
             .ok_or_else(|| ConvertError::type_mismatch("formatted-text list", sexpr))?;
 
         // Check head
-        if !list
-            .first()
-            .map_or(false, |h| h.is_symbol("formatted-text"))
-        {
+        if !list.first().is_some_and(|h| h.is_symbol("formatted-text")) {
             return Err(ConvertError::type_mismatch("formatted-text", sexpr));
         }
 
@@ -762,7 +759,7 @@ impl FromSexpr for WavyLine {
             .ok_or_else(|| ConvertError::type_mismatch("wavy-line list", sexpr))?;
 
         // Check head
-        if !list.first().map_or(false, |h| h.is_symbol("wavy-line")) {
+        if !list.first().is_some_and(|h| h.is_symbol("wavy-line")) {
             return Err(ConvertError::type_mismatch("wavy-line", sexpr));
         }
 

@@ -5,7 +5,7 @@
 
 use crate::ir::common::{Position, YesNo};
 use crate::ir::note::{FullNote, Grace, Note, NoteContent, PitchRestUnpitched};
-use crate::lang::ast::{FermataDuration, FermataGraceNote, FermataPitch};
+use crate::lang::ast::{FermataDuration, FermataGraceNote};
 use crate::lang::duration::{compile_dots, compile_duration_type};
 use crate::lang::error::{CompileError, CompileResult};
 use crate::lang::pitch::{compile_pitch, parse_pitch_str};
@@ -221,7 +221,7 @@ pub fn compile_fermata_grace(grace_note: &FermataGraceNote) -> CompileResult<Not
 mod tests {
     use super::*;
     use crate::ir::pitch::Step as IrStep;
-    use crate::lang::ast::{DurationBase, PitchStep};
+    use crate::lang::ast::{DurationBase, FermataPitch, PitchStep};
 
     // === is_duration_keyword tests ===
 

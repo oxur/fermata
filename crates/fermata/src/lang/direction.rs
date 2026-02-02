@@ -369,9 +369,8 @@ pub fn compile_tempo_mark(mark: &TempoMark) -> CompileResult<Direction> {
     }
 
     // Add metronome if there's a beat unit and per minute
-    if mark.beat_unit.is_some() && mark.per_minute.is_some() {
-        let beat_unit = duration_base_to_note_type(mark.beat_unit.as_ref().unwrap());
-        let pm = mark.per_minute.unwrap();
+    if let (Some(bu), Some(pm)) = (&mark.beat_unit, mark.per_minute) {
+        let beat_unit = duration_base_to_note_type(bu);
 
         direction_types.push(DirectionType {
             content: DirectionTypeContent::Metronome(Metronome {

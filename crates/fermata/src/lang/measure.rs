@@ -6,13 +6,10 @@
 
 use crate::ir::attributes::{Attributes, BarStyle, Barline, Clef, Key, Repeat, Time};
 use crate::ir::common::{Editorial, RightLeftMiddle};
-use crate::ir::direction::Direction;
 use crate::ir::measure::{Measure, MusicDataElement};
-use crate::ir::note::Note;
 use crate::ir::voice::{Backup, Forward};
 use crate::lang::ast::{
-    BarlineSpec, ClefSpec, DynamicMark, EndingAction, FermataDirection, FermataMeasure, KeySpec,
-    MeasureElement, TempoMark, TimeSpec,
+    BarlineSpec, EndingAction, FermataDirection, FermataMeasure, MeasureElement,
 };
 use crate::lang::attributes::{compile_clef_spec, compile_key_spec, compile_time_spec};
 use crate::lang::chord::compile_fermata_chord;
@@ -215,7 +212,7 @@ fn parse_barline_form(args: &[Sexpr]) -> CompileResult<BarlineSpec> {
             let action_str = args[2]
                 .as_keyword()
                 .or_else(|| args[2].as_symbol())
-                .ok_or_else(|| CompileError::MissingField("ending action"))?;
+                .ok_or(CompileError::MissingField("ending action"))?;
             let action = match action_str.to_lowercase().as_str() {
                 "start" => EndingAction::Start,
                 "stop" => EndingAction::Stop,

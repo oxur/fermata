@@ -6,14 +6,13 @@
 //! chord=true.
 
 use crate::ir::beam::Stem;
-use crate::ir::common::{Position, UpDown, YesNo};
+use crate::ir::common::{Position, UpDown};
 use crate::ir::notation::{
     Arpeggiate, ArticulationElement, Articulations, NotationContent, Notations,
 };
 use crate::ir::note::{FullNote, Note, NoteContent, PitchRestUnpitched};
 use crate::lang::ast::{
-    ArpeggiateDirection, Articulation, FermataChord, FermataDuration, FermataPitch, PitchStep,
-    StemDirection,
+    ArpeggiateDirection, Articulation, FermataChord, FermataDuration, StemDirection,
 };
 use crate::lang::defaults::DEFAULT_DIVISIONS;
 use crate::lang::duration::{compile_dots, compile_duration_divisions_with, compile_duration_type};
@@ -423,6 +422,7 @@ fn compile_arpeggiate(direction: ArpeggiateDirection) -> Arpeggiate {
 mod tests {
     use super::*;
     use crate::ir::pitch::Step as IrStep;
+    use crate::lang::ast::{FermataPitch, PitchStep};
 
     // === parse_arpeggiate_direction tests ===
 

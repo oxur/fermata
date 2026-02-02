@@ -563,9 +563,10 @@ impl Default for TimeSpec {
 }
 
 /// Clef specification
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub enum ClefSpec {
     /// Treble clef (G clef on line 2)
+    #[default]
     Treble,
     /// Bass clef (F clef on line 4)
     Bass,
@@ -596,12 +597,6 @@ pub enum ClefSpec {
     },
 }
 
-impl Default for ClefSpec {
-    fn default() -> Self {
-        ClefSpec::Treble
-    }
-}
-
 /// Action for endings (start, stop, or discontinue for jumps)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EndingAction {
@@ -614,9 +609,10 @@ pub enum EndingAction {
 }
 
 /// Barline specification
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub enum BarlineSpec {
     /// Regular single barline
+    #[default]
     Regular,
     /// Double barline
     Double,
@@ -635,12 +631,6 @@ pub enum BarlineSpec {
         /// Ending action
         action: EndingAction,
     },
-}
-
-impl Default for BarlineSpec {
-    fn default() -> Self {
-        BarlineSpec::Regular
-    }
 }
 
 /// Slur mark

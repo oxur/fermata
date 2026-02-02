@@ -295,10 +295,7 @@ impl FromSexpr for DynamicElement {
 
         // Check for other-dynamics list form
         if let Some(list) = sexpr.as_list() {
-            if list
-                .first()
-                .map_or(false, |h| h.is_symbol("other-dynamics"))
-            {
+            if list.first().is_some_and(|h| h.is_symbol("other-dynamics")) {
                 let value: String = require_kwarg(list, "value")?;
                 return Ok(DynamicElement::OtherDynamics(value));
             }

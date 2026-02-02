@@ -83,8 +83,8 @@ impl Sexpr {
     /// ```
     pub fn keyword(s: impl Into<String>) -> Self {
         let s = s.into();
-        let k = if s.starts_with(':') {
-            s[1..].to_string()
+        let k = if let Some(stripped) = s.strip_prefix(':') {
+            stripped.to_string()
         } else {
             s
         };
@@ -378,7 +378,7 @@ impl Sexpr {
 ///     .kwarg("octave", &4i32)
 ///     .build();
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ListBuilder {
     items: Vec<Sexpr>,
 }
@@ -594,12 +594,6 @@ impl ListBuilder {
     /// ```
     pub fn build(self) -> Sexpr {
         Sexpr::List(self.items)
-    }
-}
-
-impl Default for ListBuilder {
-    fn default() -> Self {
-        Self { items: vec![] }
     }
 }
 

@@ -198,7 +198,7 @@ fn boolean(input: &str) -> IResult<&str, Sexpr> {
 fn nil(input: &str) -> IResult<&str, Sexpr> {
     // Only match "nil" if not followed by symbol chars (to avoid matching "nilly")
     let (rest, _) = tag("nil")(input)?;
-    if rest.chars().next().map_or(true, |c| !is_symbol_char(c)) {
+    if rest.chars().next().is_none_or(|c| !is_symbol_char(c)) {
         Ok((rest, Sexpr::Nil))
     } else {
         // It's actually a symbol starting with "nil"
@@ -217,9 +217,11 @@ fn number(input: &str) -> IResult<&str, Sexpr> {
     ))(input)?;
 
     // Don't consume if followed by symbol chars (like "123abc")
-    if rest.chars().next().map_or(false, |c| {
-        is_symbol_char(c) && !c.is_ascii_digit() && c != '.'
-    }) {
+    if rest
+        .chars()
+        .next()
+        .is_some_and(|c| is_symbol_char(c) && !c.is_ascii_digit() && c != '.')
+    {
         return Err(nom::Err::Error(nom::error::Error::new(
             input,
             nom::error::ErrorKind::Digit,

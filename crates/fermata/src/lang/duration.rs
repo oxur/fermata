@@ -32,7 +32,9 @@ use crate::sexpr::Sexpr;
 pub fn parse_duration(s: &str) -> CompileResult<FermataDuration> {
     let s = s.trim();
     if s.is_empty() {
-        return Err(CompileError::InvalidDuration("empty duration string".to_string()));
+        return Err(CompileError::InvalidDuration(
+            "empty duration string".to_string(),
+        ));
     }
 
     // Strip leading colon if present (keyword syntax)
@@ -44,7 +46,7 @@ pub fn parse_duration(s: &str) -> CompileResult<FermataDuration> {
 
     if base_str.is_empty() {
         return Err(CompileError::InvalidDuration(
-            "duration cannot be only dots".to_string()
+            "duration cannot be only dots".to_string(),
         ));
     }
 
@@ -70,21 +72,28 @@ pub fn parse_duration_base(s: &str) -> CompileResult<DurationBase> {
         "q" | "quarter" | "crotchet" => Ok(DurationBase::Quarter),
         "8" | "eighth" | "quaver" => Ok(DurationBase::Eighth),
         "16" | "sixteenth" | "semiquaver" => Ok(DurationBase::Sixteenth),
-        "32" | "thirty-second" | "thirtysecond" | "demisemiquaver" => Ok(DurationBase::ThirtySecond),
-        "64" | "sixty-fourth" | "sixtyfourth" | "hemidemisemiquaver" => Ok(DurationBase::SixtyFourth),
+        "32" | "thirty-second" | "thirtysecond" | "demisemiquaver" => {
+            Ok(DurationBase::ThirtySecond)
+        }
+        "64" | "sixty-fourth" | "sixtyfourth" | "hemidemisemiquaver" => {
+            Ok(DurationBase::SixtyFourth)
+        }
         "128" | "one-twenty-eighth" | "onetwentyeighth" => Ok(DurationBase::OneTwentyEighth),
         "256" | "two-fifty-sixth" | "twofiftysixth" => Ok(DurationBase::TwoFiftySixth),
         "512" | "five-twelfth" | "fivetwelfth" => Ok(DurationBase::FiveTwelfth),
-        "1024" | "one-thousand-twenty-fourth" | "onethousandtwentyfourth" => Ok(DurationBase::OneThousandTwentyFourth),
+        "1024" | "one-thousand-twenty-fourth" | "onethousandtwentyfourth" => {
+            Ok(DurationBase::OneThousandTwentyFourth)
+        }
 
         // Long durations
         "breve" | "double-whole" | "doublewhole" => Ok(DurationBase::Breve),
         "long" | "longa" => Ok(DurationBase::Long),
         "maxima" => Ok(DurationBase::Maxima),
 
-        _ => Err(CompileError::InvalidDuration(
-            format!("unknown duration '{}', expected q, h, w, 8, 16, 32, etc.", s)
-        )),
+        _ => Err(CompileError::InvalidDuration(format!(
+            "unknown duration '{}', expected q, h, w, 8, 16, 32, etc.",
+            s
+        ))),
     }
 }
 
@@ -137,12 +146,12 @@ pub fn compile_duration_divisions_with(
 ) -> PositiveDivisions {
     // Base duration relative to quarter note
     let base_quarters = match duration.base {
-        DurationBase::Maxima => 32.0,  // 8 whole notes = 32 quarters
-        DurationBase::Long => 16.0,    // 4 whole notes = 16 quarters
-        DurationBase::Breve => 8.0,    // 2 whole notes = 8 quarters
-        DurationBase::Whole => 4.0,    // 4 quarters
-        DurationBase::Half => 2.0,     // 2 quarters
-        DurationBase::Quarter => 1.0,  // 1 quarter
+        DurationBase::Maxima => 32.0, // 8 whole notes = 32 quarters
+        DurationBase::Long => 16.0,   // 4 whole notes = 16 quarters
+        DurationBase::Breve => 8.0,   // 2 whole notes = 8 quarters
+        DurationBase::Whole => 4.0,   // 4 quarters
+        DurationBase::Half => 2.0,    // 2 quarters
+        DurationBase::Quarter => 1.0, // 1 quarter
         DurationBase::Eighth => 0.5,
         DurationBase::Sixteenth => 0.25,
         DurationBase::ThirtySecond => 0.125,
@@ -191,14 +200,17 @@ pub fn parse_duration_sexpr(sexpr: &Sexpr) -> CompileResult<FermataDuration> {
         // Full form: (duration :base quarter :dots 1)
         Sexpr::List(items) => {
             if items.is_empty() {
-                return Err(CompileError::InvalidDuration("empty duration list".to_string()));
+                return Err(CompileError::InvalidDuration(
+                    "empty duration list".to_string(),
+                ));
             }
 
             // Check for 'duration' head
             if !items[0].is_symbol("duration") {
-                return Err(CompileError::InvalidDuration(
-                    format!("expected 'duration', got {:?}", items[0])
-                ));
+                return Err(CompileError::InvalidDuration(format!(
+                    "expected 'duration', got {:?}",
+                    items[0]
+                )));
             }
 
             let mut base: Option<DurationBase> = None;
@@ -209,9 +221,10 @@ pub fn parse_duration_sexpr(sexpr: &Sexpr) -> CompileResult<FermataDuration> {
             while i < items.len() {
                 if let Some(kw) = items[i].as_keyword() {
                     if i + 1 >= items.len() {
-                        return Err(CompileError::InvalidDuration(
-                            format!("missing value for keyword :{}", kw)
-                        ));
+                        return Err(CompileError::InvalidDuration(format!(
+                            "missing value for keyword :{}",
+                            kw
+                        )));
                     }
 
                     match kw {
@@ -222,16 +235,18 @@ pub fn parse_duration_sexpr(sexpr: &Sexpr) -> CompileResult<FermataDuration> {
                             dots = parse_dots_sexpr(&items[i + 1])?;
                         }
                         _ => {
-                            return Err(CompileError::InvalidDuration(
-                                format!("unknown duration keyword :{}", kw)
-                            ));
+                            return Err(CompileError::InvalidDuration(format!(
+                                "unknown duration keyword :{}",
+                                kw
+                            )));
                         }
                     }
                     i += 2;
                 } else {
-                    return Err(CompileError::InvalidDuration(
-                        format!("expected keyword, got {:?}", items[i])
-                    ));
+                    return Err(CompileError::InvalidDuration(format!(
+                        "expected keyword, got {:?}",
+                        items[i]
+                    )));
                 }
             }
 
@@ -243,9 +258,10 @@ pub fn parse_duration_sexpr(sexpr: &Sexpr) -> CompileResult<FermataDuration> {
             Ok(FermataDuration { base, dots })
         }
 
-        _ => Err(CompileError::InvalidDuration(
-            format!("expected duration keyword or list, got {:?}", sexpr)
-        )),
+        _ => Err(CompileError::InvalidDuration(format!(
+            "expected duration keyword or list, got {:?}",
+            sexpr
+        ))),
     }
 }
 
@@ -268,14 +284,16 @@ fn parse_duration_base_sexpr(sexpr: &Sexpr) -> CompileResult<DurationBase> {
                 256 => Ok(DurationBase::TwoFiftySixth),
                 512 => Ok(DurationBase::FiveTwelfth),
                 1024 => Ok(DurationBase::OneThousandTwentyFourth),
-                _ => Err(CompileError::InvalidDuration(
-                    format!("invalid numeric duration {}, expected 1, 2, 4, 8, etc.", n)
-                )),
+                _ => Err(CompileError::InvalidDuration(format!(
+                    "invalid numeric duration {}, expected 1, 2, 4, 8, etc.",
+                    n
+                ))),
             }
         }
-        _ => Err(CompileError::InvalidDuration(
-            format!("expected duration base symbol or number, got {:?}", sexpr)
-        )),
+        _ => Err(CompileError::InvalidDuration(format!(
+            "expected duration base symbol or number, got {:?}",
+            sexpr
+        ))),
     }
 }
 
@@ -284,15 +302,17 @@ fn parse_dots_sexpr(sexpr: &Sexpr) -> CompileResult<u8> {
     match sexpr {
         Sexpr::Integer(n) => {
             if *n < 0 || *n > 4 {
-                return Err(CompileError::InvalidDuration(
-                    format!("dots {} out of range (0-4)", n)
-                ));
+                return Err(CompileError::InvalidDuration(format!(
+                    "dots {} out of range (0-4)",
+                    n
+                )));
             }
             Ok(*n as u8)
         }
-        _ => Err(CompileError::InvalidDuration(
-            format!("expected dots integer, got {:?}", sexpr)
-        )),
+        _ => Err(CompileError::InvalidDuration(format!(
+            "expected dots integer, got {:?}",
+            sexpr
+        ))),
     }
 }
 
@@ -309,30 +329,63 @@ mod tests {
         assert_eq!(parse_duration_base("q").unwrap(), DurationBase::Quarter);
         assert_eq!(parse_duration_base("8").unwrap(), DurationBase::Eighth);
         assert_eq!(parse_duration_base("16").unwrap(), DurationBase::Sixteenth);
-        assert_eq!(parse_duration_base("32").unwrap(), DurationBase::ThirtySecond);
-        assert_eq!(parse_duration_base("64").unwrap(), DurationBase::SixtyFourth);
-        assert_eq!(parse_duration_base("128").unwrap(), DurationBase::OneTwentyEighth);
-        assert_eq!(parse_duration_base("256").unwrap(), DurationBase::TwoFiftySixth);
-        assert_eq!(parse_duration_base("512").unwrap(), DurationBase::FiveTwelfth);
-        assert_eq!(parse_duration_base("1024").unwrap(), DurationBase::OneThousandTwentyFourth);
+        assert_eq!(
+            parse_duration_base("32").unwrap(),
+            DurationBase::ThirtySecond
+        );
+        assert_eq!(
+            parse_duration_base("64").unwrap(),
+            DurationBase::SixtyFourth
+        );
+        assert_eq!(
+            parse_duration_base("128").unwrap(),
+            DurationBase::OneTwentyEighth
+        );
+        assert_eq!(
+            parse_duration_base("256").unwrap(),
+            DurationBase::TwoFiftySixth
+        );
+        assert_eq!(
+            parse_duration_base("512").unwrap(),
+            DurationBase::FiveTwelfth
+        );
+        assert_eq!(
+            parse_duration_base("1024").unwrap(),
+            DurationBase::OneThousandTwentyFourth
+        );
     }
 
     #[test]
     fn test_parse_duration_base_full_names() {
         assert_eq!(parse_duration_base("whole").unwrap(), DurationBase::Whole);
         assert_eq!(parse_duration_base("half").unwrap(), DurationBase::Half);
-        assert_eq!(parse_duration_base("quarter").unwrap(), DurationBase::Quarter);
+        assert_eq!(
+            parse_duration_base("quarter").unwrap(),
+            DurationBase::Quarter
+        );
         assert_eq!(parse_duration_base("eighth").unwrap(), DurationBase::Eighth);
-        assert_eq!(parse_duration_base("sixteenth").unwrap(), DurationBase::Sixteenth);
+        assert_eq!(
+            parse_duration_base("sixteenth").unwrap(),
+            DurationBase::Sixteenth
+        );
     }
 
     #[test]
     fn test_parse_duration_base_british_names() {
-        assert_eq!(parse_duration_base("semibreve").unwrap(), DurationBase::Whole);
+        assert_eq!(
+            parse_duration_base("semibreve").unwrap(),
+            DurationBase::Whole
+        );
         assert_eq!(parse_duration_base("minim").unwrap(), DurationBase::Half);
-        assert_eq!(parse_duration_base("crotchet").unwrap(), DurationBase::Quarter);
+        assert_eq!(
+            parse_duration_base("crotchet").unwrap(),
+            DurationBase::Quarter
+        );
         assert_eq!(parse_duration_base("quaver").unwrap(), DurationBase::Eighth);
-        assert_eq!(parse_duration_base("semiquaver").unwrap(), DurationBase::Sixteenth);
+        assert_eq!(
+            parse_duration_base("semiquaver").unwrap(),
+            DurationBase::Sixteenth
+        );
     }
 
     #[test]
@@ -344,8 +397,14 @@ mod tests {
 
     #[test]
     fn test_parse_duration_base_case_insensitive() {
-        assert_eq!(parse_duration_base("QUARTER").unwrap(), DurationBase::Quarter);
-        assert_eq!(parse_duration_base("Quarter").unwrap(), DurationBase::Quarter);
+        assert_eq!(
+            parse_duration_base("QUARTER").unwrap(),
+            DurationBase::Quarter
+        );
+        assert_eq!(
+            parse_duration_base("Quarter").unwrap(),
+            DurationBase::Quarter
+        );
         assert_eq!(parse_duration_base("WHOLE").unwrap(), DurationBase::Whole);
     }
 
@@ -472,7 +531,10 @@ mod tests {
             (DurationBase::OneTwentyEighth, NoteTypeValue::N128th),
             (DurationBase::TwoFiftySixth, NoteTypeValue::N256th),
             (DurationBase::FiveTwelfth, NoteTypeValue::N512th),
-            (DurationBase::OneThousandTwentyFourth, NoteTypeValue::N1024th),
+            (
+                DurationBase::OneThousandTwentyFourth,
+                NoteTypeValue::N1024th,
+            ),
         ];
 
         for (base, expected) in cases {

@@ -988,9 +988,7 @@ mod tests {
 
     #[test]
     fn test_list_builder_kwarg() {
-        let sexpr = ListBuilder::new("note")
-            .kwarg("duration", &4i32)
-            .build();
+        let sexpr = ListBuilder::new("note").kwarg("duration", &4i32).build();
         let items = sexpr.as_list().unwrap();
         assert_eq!(items.len(), 3);
         assert!(items[1].is_keyword("duration"));
@@ -1000,9 +998,7 @@ mod tests {
     #[test]
     fn test_list_builder_kwarg_opt_some() {
         let value: Option<i32> = Some(42);
-        let sexpr = ListBuilder::new("test")
-            .kwarg_opt("value", &value)
-            .build();
+        let sexpr = ListBuilder::new("test").kwarg_opt("value", &value).build();
         let items = sexpr.as_list().unwrap();
         assert_eq!(items.len(), 3);
         assert!(items[1].is_keyword("value"));
@@ -1011,9 +1007,7 @@ mod tests {
     #[test]
     fn test_list_builder_kwarg_opt_none() {
         let value: Option<i32> = None;
-        let sexpr = ListBuilder::new("test")
-            .kwarg_opt("value", &value)
-            .build();
+        let sexpr = ListBuilder::new("test").kwarg_opt("value", &value).build();
         let items = sexpr.as_list().unwrap();
         assert_eq!(items.len(), 1); // Only the head
     }
@@ -1021,9 +1015,7 @@ mod tests {
     #[test]
     fn test_list_builder_kwarg_raw() {
         let inner = Sexpr::list(vec![Sexpr::symbol("pitch")]);
-        let sexpr = ListBuilder::new("note")
-            .kwarg_raw("pitch", inner)
-            .build();
+        let sexpr = ListBuilder::new("note").kwarg_raw("pitch", inner).build();
         let items = sexpr.as_list().unwrap();
         assert_eq!(items.len(), 3);
         assert!(items[2].is_list());
@@ -1074,9 +1066,7 @@ mod tests {
 
     #[test]
     fn test_list_builder_kwarg_bool_true() {
-        let sexpr = ListBuilder::new("note")
-            .kwarg_bool("chord", true)
-            .build();
+        let sexpr = ListBuilder::new("note").kwarg_bool("chord", true).build();
         let items = sexpr.as_list().unwrap();
         assert_eq!(items.len(), 3);
         assert!(items[1].is_keyword("chord"));
@@ -1085,9 +1075,7 @@ mod tests {
 
     #[test]
     fn test_list_builder_kwarg_bool_false() {
-        let sexpr = ListBuilder::new("note")
-            .kwarg_bool("chord", false)
-            .build();
+        let sexpr = ListBuilder::new("note").kwarg_bool("chord", false).build();
         let items = sexpr.as_list().unwrap();
         assert_eq!(items.len(), 1); // False is omitted
     }
@@ -1098,9 +1086,7 @@ mod tests {
             Sexpr::list(vec![Sexpr::symbol("note")]),
             Sexpr::list(vec![Sexpr::symbol("rest")]),
         ];
-        let sexpr = ListBuilder::new("measure")
-            .children(&children)
-            .build();
+        let sexpr = ListBuilder::new("measure").children(&children).build();
         let items = sexpr.as_list().unwrap();
         assert_eq!(items.len(), 3);
         assert!(items[1].is_list());
@@ -1110,9 +1096,7 @@ mod tests {
     #[test]
     fn test_list_builder_children_from() {
         let numbers = vec![1i32, 2, 3];
-        let sexpr = ListBuilder::new("numbers")
-            .children_from(&numbers)
-            .build();
+        let sexpr = ListBuilder::new("numbers").children_from(&numbers).build();
         let items = sexpr.as_list().unwrap();
         assert_eq!(items.len(), 4); // head + 3 numbers
     }
@@ -1138,8 +1122,7 @@ mod tests {
 
     #[test]
     fn test_list_builder_clone() {
-        let builder = ListBuilder::new("test")
-            .kwarg("value", &42i32);
+        let builder = ListBuilder::new("test").kwarg("value", &42i32);
         let cloned = builder.clone();
         assert_eq!(builder.build(), cloned.build());
     }

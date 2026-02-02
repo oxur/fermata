@@ -459,10 +459,9 @@ mod tests {
 
     #[test]
     fn test_timemodification_from_sexpr_with_type() {
-        let sexpr = parse(
-            "(time-modification :actual-notes 5 :normal-notes 4 :normal-type eighth)",
-        )
-        .unwrap();
+        let sexpr =
+            parse("(time-modification :actual-notes 5 :normal-notes 4 :normal-type eighth)")
+                .unwrap();
         let tm = TimeModification::from_sexpr(&sexpr).unwrap();
         assert_eq!(tm.actual_notes, 5);
         assert_eq!(tm.normal_notes, 4);

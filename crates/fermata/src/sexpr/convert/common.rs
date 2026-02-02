@@ -3,16 +3,14 @@
 //! This module implements [`ToSexpr`] and [`FromSexpr`] for all types
 //! defined in `crate::ir::common`.
 
+use super::optional_kwarg;
 use crate::ir::common::{
     AboveBelow, AccidentalValue, BackwardForward, CssFontSize, Font, FontSize, FontStyle,
     FontWeight, FormattedText, LeftCenterRight, LineType, OverUnder, Position, PrintStyle,
     RightLeftMiddle, StartStop, StartStopContinue, StartStopDiscontinue, StartStopSingle,
     SymbolSize, TopMiddleBottom, UpDown, UprightInverted, WavyLine, YesNo,
 };
-use crate::sexpr::{
-    ConvertError, ConvertResult, FromSexpr, ListBuilder, Sexpr, ToSexpr,
-};
-use super::optional_kwarg;
+use crate::sexpr::{ConvertError, ConvertResult, FromSexpr, ListBuilder, Sexpr, ToSexpr};
 
 // ============================================================================
 // YesNo
@@ -130,10 +128,7 @@ impl FromSexpr for StartStopDiscontinue {
             Some("start") => Ok(StartStopDiscontinue::Start),
             Some("stop") => Ok(StartStopDiscontinue::Stop),
             Some("discontinue") => Ok(StartStopDiscontinue::Discontinue),
-            _ => Err(ConvertError::type_mismatch(
-                "start/stop/discontinue",
-                sexpr,
-            )),
+            _ => Err(ConvertError::type_mismatch("start/stop/discontinue", sexpr)),
         }
     }
 }
@@ -486,13 +481,7 @@ impl FromSexpr for FontSize {
         if let Some(sym) = sexpr.as_symbol() {
             if matches!(
                 sym,
-                "xx-small"
-                    | "x-small"
-                    | "small"
-                    | "medium"
-                    | "large"
-                    | "x-large"
-                    | "xx-large"
+                "xx-small" | "x-small" | "small" | "medium" | "large" | "x-large" | "xx-large"
             ) {
                 return CssFontSize::from_sexpr(sexpr).map(FontSize::Css);
             }
@@ -717,7 +706,10 @@ impl FromSexpr for FormattedText {
             .ok_or_else(|| ConvertError::type_mismatch("formatted-text list", sexpr))?;
 
         // Check head
-        if !list.first().map_or(false, |h| h.is_symbol("formatted-text")) {
+        if !list
+            .first()
+            .map_or(false, |h| h.is_symbol("formatted-text"))
+        {
             return Err(ConvertError::type_mismatch("formatted-text", sexpr));
         }
 

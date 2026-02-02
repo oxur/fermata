@@ -322,8 +322,8 @@ mod tests {
     use super::*;
     use crate::ir::{
         common::PrintStyle,
-        part::{Part, PartList, PartListElement, PartName, ScorePart},
         measure::Measure,
+        part::{Part, PartList, PartListElement, PartName, ScorePart},
         score::ScorePartwise,
     };
 

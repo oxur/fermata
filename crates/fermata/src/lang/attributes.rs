@@ -3,10 +3,10 @@
 //! This module handles compiling attribute S-expressions (key, time, clef,
 //! divisions, etc.) into IR types.
 
+use crate::ir::attributes::Mode as IrMode;
 use crate::ir::attributes::{
     Clef, ClefSign, Key, KeyContent, Time, TimeContent, TimeSignature, TimeSymbol, TraditionalKey,
 };
-use crate::ir::attributes::Mode as IrMode;
 use crate::sexpr::Sexpr;
 
 use super::ast::{ClefSpec, KeySpec, Mode as FermataMode, PitchAlter, PitchStep, TimeSpec};
@@ -105,7 +105,7 @@ pub fn parse_key_root(s: &str) -> CompileResult<(PitchStep, Option<PitchAlter>)>
             return Err(CompileError::InvalidKey(format!(
                 "invalid pitch step: {}",
                 chars[0]
-            )))
+            )));
         }
     };
 
@@ -287,7 +287,7 @@ pub fn parse_time_form(args: &[Sexpr]) -> CompileResult<TimeSpec> {
                 return Err(CompileError::InvalidTime(format!(
                     "unknown time keyword: {}",
                     kw
-                )))
+                )));
             }
         }
     }
@@ -480,7 +480,7 @@ pub fn compile_clef_spec(spec: &ClefSpec) -> CompileResult<Clef> {
                     return Err(CompileError::InvalidClef(format!(
                         "unknown clef sign: {}",
                         sign
-                    )))
+                    )));
                 }
             };
             (clef_sign, Some(*line), *octave_change)
@@ -910,22 +910,10 @@ mod tests {
 
         #[test]
         fn test_compute_fifths_major_keys() {
-            assert_eq!(
-                compute_fifths(PitchStep::C, None, &FermataMode::Major),
-                0
-            );
-            assert_eq!(
-                compute_fifths(PitchStep::G, None, &FermataMode::Major),
-                1
-            );
-            assert_eq!(
-                compute_fifths(PitchStep::D, None, &FermataMode::Major),
-                2
-            );
-            assert_eq!(
-                compute_fifths(PitchStep::F, None, &FermataMode::Major),
-                -1
-            );
+            assert_eq!(compute_fifths(PitchStep::C, None, &FermataMode::Major), 0);
+            assert_eq!(compute_fifths(PitchStep::G, None, &FermataMode::Major), 1);
+            assert_eq!(compute_fifths(PitchStep::D, None, &FermataMode::Major), 2);
+            assert_eq!(compute_fifths(PitchStep::F, None, &FermataMode::Major), -1);
         }
 
         #[test]
@@ -954,18 +942,9 @@ mod tests {
 
         #[test]
         fn test_compute_fifths_minor_keys() {
-            assert_eq!(
-                compute_fifths(PitchStep::A, None, &FermataMode::Minor),
-                0
-            );
-            assert_eq!(
-                compute_fifths(PitchStep::E, None, &FermataMode::Minor),
-                1
-            );
-            assert_eq!(
-                compute_fifths(PitchStep::D, None, &FermataMode::Minor),
-                -1
-            );
+            assert_eq!(compute_fifths(PitchStep::A, None, &FermataMode::Minor), 0);
+            assert_eq!(compute_fifths(PitchStep::E, None, &FermataMode::Minor), 1);
+            assert_eq!(compute_fifths(PitchStep::D, None, &FermataMode::Minor), -1);
         }
     }
 

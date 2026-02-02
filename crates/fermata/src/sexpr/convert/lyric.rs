@@ -12,7 +12,9 @@
 //! - [`Extend`] - Lyric extension line
 
 use crate::ir::common::Position;
-use crate::ir::lyric::{Elision, Extend, Lyric, LyricContent, LyricExtension, Syllabic, TextElementData};
+use crate::ir::lyric::{
+    Elision, Extend, Lyric, LyricContent, LyricExtension, Syllabic, TextElementData,
+};
 use crate::sexpr::{ConvertError, ConvertResult, FromSexpr, ListBuilder, Sexpr, ToSexpr};
 
 use super::{expect_head, find_kwarg, get_head, optional_kwarg, require_kwarg};

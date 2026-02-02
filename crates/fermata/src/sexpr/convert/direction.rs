@@ -18,11 +18,11 @@ use crate::ir::common::{FormattedText, Position, PrintStyle};
 use crate::ir::direction::{
     Accord, AccordionRegistration, Beater, Bracket, Coda, Dashes, Direction, DirectionType,
     DirectionTypeContent, DynamicElement, Dynamics, Effect, EmptyPrintStyle, FormattedSymbol,
-    Glass, HarpPedals, Image, LineEnd, Membrane, Metal, Metronome, MetronomeContent,
-    MetronomeNote, MetronomeTuplet, OctaveShift, Offset, OnOff, OtherDirection, Pedal,
-    PedalTuning, PedalType, Percussion, PercussionContent, PerMinute, Pitched, PrincipalVoice,
-    PrincipalVoiceSymbol, Scordatura, Segno, Sound, StaffDivide, StaffDivideSymbol, Stick,
-    StickLocation, StringMute, UpDownStopContinue, Wedge, WedgeType, Wood, Words,
+    Glass, HarpPedals, Image, LineEnd, Membrane, Metal, Metronome, MetronomeContent, MetronomeNote,
+    MetronomeTuplet, OctaveShift, Offset, OnOff, OtherDirection, Pedal, PedalTuning, PedalType,
+    PerMinute, Percussion, PercussionContent, Pitched, PrincipalVoice, PrincipalVoiceSymbol,
+    Scordatura, Segno, Sound, StaffDivide, StaffDivideSymbol, Stick, StickLocation, StringMute,
+    UpDownStopContinue, Wedge, WedgeType, Wood, Words,
 };
 use crate::sexpr::{ConvertError, ConvertResult, FromSexpr, ListBuilder, Sexpr, ToSexpr};
 
@@ -253,9 +253,7 @@ impl ToSexpr for DynamicElement {
             DynamicElement::PF => Sexpr::symbol("pf"),
             DynamicElement::SFZP => Sexpr::symbol("sfzp"),
             DynamicElement::OtherDynamics(s) => {
-                ListBuilder::new("other-dynamics")
-                    .kwarg("value", s)
-                    .build()
+                ListBuilder::new("other-dynamics").kwarg("value", s).build()
             }
         }
     }
@@ -1817,9 +1815,9 @@ impl ToSexpr for DirectionTypeContent {
             DirectionTypeContent::Rehearsal(texts) => ListBuilder::new("rehearsal")
                 .kwarg_list("texts", texts)
                 .build(),
-            DirectionTypeContent::Segno(segnos) => {
-                ListBuilder::new("segnos").kwarg_list("items", segnos).build()
-            }
+            DirectionTypeContent::Segno(segnos) => ListBuilder::new("segnos")
+                .kwarg_list("items", segnos)
+                .build(),
             DirectionTypeContent::Coda(codas) => {
                 ListBuilder::new("codas").kwarg_list("items", codas).build()
             }

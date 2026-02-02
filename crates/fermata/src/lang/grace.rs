@@ -26,22 +26,26 @@ pub fn compile_grace_note(sexpr: &Sexpr) -> CompileResult<Note> {
     match sexpr {
         Sexpr::List(items) => {
             if items.is_empty() {
-                return Err(CompileError::InvalidNote("empty grace note list".to_string()));
+                return Err(CompileError::InvalidNote(
+                    "empty grace note list".to_string(),
+                ));
             }
 
             // Check for 'grace' head
             if !items[0].is_symbol("grace") {
-                return Err(CompileError::InvalidNote(
-                    format!("expected 'grace', got {:?}", items[0])
-                ));
+                return Err(CompileError::InvalidNote(format!(
+                    "expected 'grace', got {:?}",
+                    items[0]
+                )));
             }
 
             let fermata_grace = parse_grace_form(&items[1..])?;
             compile_fermata_grace(&fermata_grace)
         }
-        _ => Err(CompileError::InvalidNote(
-            format!("expected grace note list, got {:?}", sexpr)
-        )),
+        _ => Err(CompileError::InvalidNote(format!(
+            "expected grace note list, got {:?}",
+            sexpr
+        ))),
     }
 }
 
@@ -52,7 +56,9 @@ pub fn compile_grace_note(sexpr: &Sexpr) -> CompileResult<Note> {
 /// - keywords: :slash, :duration :8, etc.
 pub fn parse_grace_form(items: &[Sexpr]) -> CompileResult<FermataGraceNote> {
     if items.is_empty() {
-        return Err(CompileError::InvalidNote("grace note requires pitch".to_string()));
+        return Err(CompileError::InvalidNote(
+            "grace note requires pitch".to_string(),
+        ));
     }
 
     // First item is pitch
@@ -74,15 +80,21 @@ pub fn parse_grace_form(items: &[Sexpr]) -> CompileResult<FermataGraceNote> {
                 }
                 "duration" => {
                     if i + 1 >= items.len() {
-                        return Err(CompileError::InvalidNote("missing :duration value".to_string()));
+                        return Err(CompileError::InvalidNote(
+                            "missing :duration value".to_string(),
+                        ));
                     }
                     // Parse the duration value
-                    if let Some(dur_str) = items[i + 1].as_keyword().or_else(|| items[i + 1].as_symbol()) {
+                    if let Some(dur_str) = items[i + 1]
+                        .as_keyword()
+                        .or_else(|| items[i + 1].as_symbol())
+                    {
                         duration = Some(crate::lang::duration::parse_duration(dur_str)?);
                     } else {
-                        return Err(CompileError::InvalidNote(
-                            format!("expected duration keyword, got {:?}", items[i + 1])
-                        ));
+                        return Err(CompileError::InvalidNote(format!(
+                            "expected duration keyword, got {:?}",
+                            items[i + 1]
+                        )));
                     }
                     i += 2;
                 }
@@ -121,10 +133,29 @@ fn is_duration_keyword(s: &str) -> bool {
     let s = s.trim_end_matches('.');
     matches!(
         s.to_lowercase().as_str(),
-        "q" | "h" | "w" | "8" | "16" | "32" | "64" | "128" | "256" | "512" | "1024"
-            | "quarter" | "half" | "whole" | "eighth" | "sixteenth"
-            | "crotchet" | "minim" | "semibreve" | "quaver" | "semiquaver"
-            | "breve" | "long" | "maxima"
+        "q" | "h"
+            | "w"
+            | "8"
+            | "16"
+            | "32"
+            | "64"
+            | "128"
+            | "256"
+            | "512"
+            | "1024"
+            | "quarter"
+            | "half"
+            | "whole"
+            | "eighth"
+            | "sixteenth"
+            | "crotchet"
+            | "minim"
+            | "semibreve"
+            | "quaver"
+            | "semiquaver"
+            | "breve"
+            | "long"
+            | "maxima"
     )
 }
 
@@ -137,12 +168,23 @@ pub fn compile_fermata_grace(grace_note: &FermataGraceNote) -> CompileResult<Not
         steal_time_previous: None,
         steal_time_following: None,
         make_time: None,
-        slash: if grace_note.slash { Some(YesNo::Yes) } else { None },
+        slash: if grace_note.slash {
+            Some(YesNo::Yes)
+        } else {
+            None
+        },
     };
 
     // Determine note type from duration if provided
-    let note_type = grace_note.duration.as_ref().map(|d| compile_duration_type(&d.base));
-    let dots = grace_note.duration.as_ref().map(|d| compile_dots(d.dots)).unwrap_or_default();
+    let note_type = grace_note
+        .duration
+        .as_ref()
+        .map(|d| compile_duration_type(&d.base));
+    let dots = grace_note
+        .duration
+        .as_ref()
+        .map(|d| compile_dots(d.dots))
+        .unwrap_or_default();
 
     Ok(Note {
         position: Position::default(),
@@ -222,10 +264,7 @@ mod tests {
 
     #[test]
     fn test_parse_grace_form_with_slash() {
-        let items = vec![
-            Sexpr::symbol("c4"),
-            Sexpr::keyword("slash"),
-        ];
+        let items = vec![Sexpr::symbol("c4"), Sexpr::keyword("slash")];
         let grace = parse_grace_form(&items).unwrap();
         assert!(grace.slash);
     }
@@ -245,10 +284,7 @@ mod tests {
 
     #[test]
     fn test_parse_grace_form_with_direct_duration() {
-        let items = vec![
-            Sexpr::symbol("d5"),
-            Sexpr::keyword("8"),
-        ];
+        let items = vec![Sexpr::symbol("d5"), Sexpr::keyword("8")];
         let grace = parse_grace_form(&items).unwrap();
         assert!(grace.duration.is_some());
         let dur = grace.duration.unwrap();
@@ -269,10 +305,7 @@ mod tests {
 
     #[test]
     fn test_parse_grace_form_with_sharp() {
-        let items = vec![
-            Sexpr::symbol("f#5"),
-            Sexpr::keyword("slash"),
-        ];
+        let items = vec![Sexpr::symbol("f#5"), Sexpr::keyword("slash")];
         let grace = parse_grace_form(&items).unwrap();
         assert_eq!(grace.pitch.step, PitchStep::F);
         assert!(grace.pitch.alter.is_some());
@@ -288,13 +321,13 @@ mod tests {
 
     #[test]
     fn test_compile_grace_note_simple() {
-        let sexpr = Sexpr::list(vec![
-            Sexpr::symbol("grace"),
-            Sexpr::symbol("c4"),
-        ]);
+        let sexpr = Sexpr::list(vec![Sexpr::symbol("grace"), Sexpr::symbol("c4")]);
         let note = compile_grace_note(&sexpr).unwrap();
 
-        if let NoteContent::Grace { grace, full_note, .. } = &note.content {
+        if let NoteContent::Grace {
+            grace, full_note, ..
+        } = &note.content
+        {
             assert!(grace.slash.is_none());
             if let PitchRestUnpitched::Pitch(p) = &full_note.content {
                 assert_eq!(p.step, IrStep::C);
@@ -339,10 +372,7 @@ mod tests {
 
     #[test]
     fn test_compile_grace_note_with_sharp() {
-        let sexpr = Sexpr::list(vec![
-            Sexpr::symbol("grace"),
-            Sexpr::symbol("g#5"),
-        ]);
+        let sexpr = Sexpr::list(vec![Sexpr::symbol("grace"), Sexpr::symbol("g#5")]);
         let note = compile_grace_note(&sexpr).unwrap();
 
         if let NoteContent::Grace { full_note, .. } = &note.content {
@@ -366,10 +396,7 @@ mod tests {
 
     #[test]
     fn test_compile_grace_note_wrong_head() {
-        let sexpr = Sexpr::list(vec![
-            Sexpr::symbol("note"),
-            Sexpr::symbol("c4"),
-        ]);
+        let sexpr = Sexpr::list(vec![Sexpr::symbol("note"), Sexpr::symbol("c4")]);
         assert!(compile_grace_note(&sexpr).is_err());
     }
 
@@ -384,14 +411,21 @@ mod tests {
     #[test]
     fn test_compile_fermata_grace_basic() {
         let grace_note = FermataGraceNote {
-            pitch: FermataPitch { step: PitchStep::C, alter: None, octave: 4 },
+            pitch: FermataPitch {
+                step: PitchStep::C,
+                alter: None,
+                octave: 4,
+            },
             slash: false,
             duration: None,
         };
 
         let note = compile_fermata_grace(&grace_note).unwrap();
 
-        if let NoteContent::Grace { grace, full_note, .. } = &note.content {
+        if let NoteContent::Grace {
+            grace, full_note, ..
+        } = &note.content
+        {
             assert!(grace.slash.is_none());
             assert!(!full_note.chord);
         } else {
@@ -402,7 +436,11 @@ mod tests {
     #[test]
     fn test_compile_fermata_grace_with_slash() {
         let grace_note = FermataGraceNote {
-            pitch: FermataPitch { step: PitchStep::D, alter: None, octave: 4 },
+            pitch: FermataPitch {
+                step: PitchStep::D,
+                alter: None,
+                octave: 4,
+            },
             slash: true,
             duration: None,
         };
@@ -419,7 +457,11 @@ mod tests {
     #[test]
     fn test_compile_fermata_grace_with_duration() {
         let grace_note = FermataGraceNote {
-            pitch: FermataPitch { step: PitchStep::E, alter: None, octave: 4 },
+            pitch: FermataPitch {
+                step: PitchStep::E,
+                alter: None,
+                octave: 4,
+            },
             slash: true,
             duration: Some(FermataDuration {
                 base: DurationBase::Sixteenth,
@@ -437,7 +479,11 @@ mod tests {
     #[test]
     fn test_compile_fermata_grace_with_dotted_duration() {
         let grace_note = FermataGraceNote {
-            pitch: FermataPitch { step: PitchStep::F, alter: None, octave: 4 },
+            pitch: FermataPitch {
+                step: PitchStep::F,
+                alter: None,
+                octave: 4,
+            },
             slash: false,
             duration: Some(FermataDuration {
                 base: DurationBase::Eighth,

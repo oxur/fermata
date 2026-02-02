@@ -1076,14 +1076,12 @@ mod tests {
             stem: None,
             notehead: None,
             staff: None,
-            beams: vec![
-                Beam {
-                    value: BeamValue::Begin,
-                    number: 1,
-                    fan: None,
-                    color: None,
-                },
-            ],
+            beams: vec![Beam {
+                value: BeamValue::Begin,
+                number: 1,
+                fan: None,
+                color: None,
+            }],
             notations: vec![],
             lyrics: vec![],
         };

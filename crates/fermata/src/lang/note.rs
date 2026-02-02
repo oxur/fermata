@@ -3,12 +3,10 @@
 //! This module handles compiling note and rest S-expressions into IR Note types.
 
 use crate::ir::beam::{Stem, StemValue};
-use crate::ir::common::{
-    EmptyPlacement, Position, StartStop, StartStopContinue, YesNo,
-};
+use crate::ir::common::{EmptyPlacement, Position, StartStop, StartStopContinue, YesNo};
 use crate::ir::notation::{
-    ArticulationElement, Articulations, Mordent, NotationContent, Notations,
-    OrnamentElement, OrnamentWithAccidentals, Ornaments, Slur, StrongAccent, Tied, Turn,
+    ArticulationElement, Articulations, Mordent, NotationContent, Notations, OrnamentElement,
+    OrnamentWithAccidentals, Ornaments, Slur, StrongAccent, Tied, Turn,
 };
 use crate::ir::note::{FullNote, Note, NoteContent, PitchRestUnpitched, Rest, Tie};
 use crate::lang::ast::{
@@ -40,17 +38,19 @@ pub fn compile_note(sexpr: &Sexpr) -> CompileResult<Note> {
 
             // Check for 'note' head
             if !items[0].is_symbol("note") {
-                return Err(CompileError::InvalidNote(
-                    format!("expected 'note', got {:?}", items[0])
-                ));
+                return Err(CompileError::InvalidNote(format!(
+                    "expected 'note', got {:?}",
+                    items[0]
+                )));
             }
 
             let fermata_note = parse_note_form(&items[1..])?;
             compile_fermata_note(&fermata_note)
         }
-        _ => Err(CompileError::InvalidNote(
-            format!("expected note list, got {:?}", sexpr)
-        )),
+        _ => Err(CompileError::InvalidNote(format!(
+            "expected note list, got {:?}",
+            sexpr
+        ))),
     }
 }
 
@@ -101,14 +101,18 @@ pub fn parse_note_form(items: &[Sexpr]) -> CompileResult<FermataNote> {
             match kw {
                 "voice" => {
                     if i + 1 >= items.len() {
-                        return Err(CompileError::InvalidNote("missing :voice value".to_string()));
+                        return Err(CompileError::InvalidNote(
+                            "missing :voice value".to_string(),
+                        ));
                     }
                     voice = Some(parse_u32(&items[i + 1])?);
                     i += 2;
                 }
                 "staff" => {
                     if i + 1 >= items.len() {
-                        return Err(CompileError::InvalidNote("missing :staff value".to_string()));
+                        return Err(CompileError::InvalidNote(
+                            "missing :staff value".to_string(),
+                        ));
                     }
                     staff = Some(parse_u32(&items[i + 1])?);
                     i += 2;
@@ -203,10 +207,29 @@ fn is_duration_keyword(s: &str) -> bool {
     let s = s.trim_end_matches('.');
     matches!(
         s.to_lowercase().as_str(),
-        "q" | "h" | "w" | "8" | "16" | "32" | "64" | "128" | "256" | "512" | "1024"
-            | "quarter" | "half" | "whole" | "eighth" | "sixteenth"
-            | "crotchet" | "minim" | "semibreve" | "quaver" | "semiquaver"
-            | "breve" | "long" | "maxima"
+        "q" | "h"
+            | "w"
+            | "8"
+            | "16"
+            | "32"
+            | "64"
+            | "128"
+            | "256"
+            | "512"
+            | "1024"
+            | "quarter"
+            | "half"
+            | "whole"
+            | "eighth"
+            | "sixteenth"
+            | "crotchet"
+            | "minim"
+            | "semibreve"
+            | "quaver"
+            | "semiquaver"
+            | "breve"
+            | "long"
+            | "maxima"
     )
 }
 
@@ -257,50 +280,60 @@ pub fn parse_u32(sexpr: &Sexpr) -> CompileResult<u32> {
     match sexpr {
         Sexpr::Integer(n) => {
             if *n < 0 {
-                return Err(CompileError::InvalidNote(
-                    format!("expected positive integer, got {}", n)
-                ));
+                return Err(CompileError::InvalidNote(format!(
+                    "expected positive integer, got {}",
+                    n
+                )));
             }
             Ok(*n as u32)
         }
-        Sexpr::Symbol(s) => s.parse().map_err(|_| {
-            CompileError::InvalidNote(format!("invalid number '{}'", s))
-        }),
-        _ => Err(CompileError::InvalidNote(
-            format!("expected integer, got {:?}", sexpr)
-        )),
+        Sexpr::Symbol(s) => s
+            .parse()
+            .map_err(|_| CompileError::InvalidNote(format!("invalid number '{}'", s))),
+        _ => Err(CompileError::InvalidNote(format!(
+            "expected integer, got {:?}",
+            sexpr
+        ))),
     }
 }
 
 /// Parse stem direction from an S-expression.
 pub fn parse_stem(sexpr: &Sexpr) -> CompileResult<StemDirection> {
-    let s = sexpr.as_symbol().or_else(|| sexpr.as_keyword()).ok_or_else(|| {
-        CompileError::InvalidNote(format!("expected stem symbol, got {:?}", sexpr))
-    })?;
+    let s = sexpr
+        .as_symbol()
+        .or_else(|| sexpr.as_keyword())
+        .ok_or_else(|| {
+            CompileError::InvalidNote(format!("expected stem symbol, got {:?}", sexpr))
+        })?;
 
     match s.to_lowercase().as_str() {
         "up" => Ok(StemDirection::Up),
         "down" => Ok(StemDirection::Down),
         "none" => Ok(StemDirection::None),
         "double" => Ok(StemDirection::Double),
-        _ => Err(CompileError::InvalidNote(
-            format!("invalid stem direction '{}', expected up, down, none, or double", s)
-        )),
+        _ => Err(CompileError::InvalidNote(format!(
+            "invalid stem direction '{}', expected up, down, none, or double",
+            s
+        ))),
     }
 }
 
 /// Parse start/stop from an S-expression.
 pub fn parse_start_stop(sexpr: &Sexpr) -> CompileResult<StartStop> {
-    let s = sexpr.as_symbol().or_else(|| sexpr.as_keyword()).ok_or_else(|| {
-        CompileError::InvalidNote(format!("expected start/stop symbol, got {:?}", sexpr))
-    })?;
+    let s = sexpr
+        .as_symbol()
+        .or_else(|| sexpr.as_keyword())
+        .ok_or_else(|| {
+            CompileError::InvalidNote(format!("expected start/stop symbol, got {:?}", sexpr))
+        })?;
 
     match s.to_lowercase().as_str() {
         "start" => Ok(StartStop::Start),
         "stop" => Ok(StartStop::Stop),
-        _ => Err(CompileError::InvalidNote(
-            format!("invalid start/stop '{}', expected start or stop", s)
-        )),
+        _ => Err(CompileError::InvalidNote(format!(
+            "invalid start/stop '{}', expected start or stop",
+            s
+        ))),
     }
 }
 
@@ -376,12 +409,18 @@ pub fn compile_notations(note: &FermataNote) -> CompileResult<Vec<Notations>> {
             .iter()
             .map(|a| match a {
                 Articulation::Staccato => ArticulationElement::Staccato(EmptyPlacement::default()),
-                Articulation::Staccatissimo => ArticulationElement::Staccatissimo(EmptyPlacement::default()),
+                Articulation::Staccatissimo => {
+                    ArticulationElement::Staccatissimo(EmptyPlacement::default())
+                }
                 Articulation::Spiccato => ArticulationElement::Spiccato(EmptyPlacement::default()),
                 Articulation::Accent => ArticulationElement::Accent(EmptyPlacement::default()),
-                Articulation::StrongAccent => ArticulationElement::StrongAccent(StrongAccent::default()),
+                Articulation::StrongAccent => {
+                    ArticulationElement::StrongAccent(StrongAccent::default())
+                }
                 Articulation::Tenuto => ArticulationElement::Tenuto(EmptyPlacement::default()),
-                Articulation::DetachedLegato => ArticulationElement::DetachedLegato(EmptyPlacement::default()),
+                Articulation::DetachedLegato => {
+                    ArticulationElement::DetachedLegato(EmptyPlacement::default())
+                }
                 Articulation::BreathMark => {
                     // BreathMark requires a value, using default
                     ArticulationElement::BreathMark(crate::ir::notation::BreathMark {
@@ -412,25 +451,27 @@ pub fn compile_notations(note: &FermataNote) -> CompileResult<Vec<Notations>> {
             .iter()
             .map(|o| {
                 let ornament = match o {
-                    Ornament::Trill => OrnamentElement::TrillMark(
-                        crate::ir::notation::EmptyTrillSound::default()
-                    ),
+                    Ornament::Trill => {
+                        OrnamentElement::TrillMark(crate::ir::notation::EmptyTrillSound::default())
+                    }
                     Ornament::Mordent => OrnamentElement::Mordent(Mordent::default()),
-                    Ornament::InvertedMordent => OrnamentElement::InvertedMordent(Mordent::default()),
+                    Ornament::InvertedMordent => {
+                        OrnamentElement::InvertedMordent(Mordent::default())
+                    }
                     Ornament::Turn => OrnamentElement::Turn(Turn::default()),
                     Ornament::InvertedTurn => OrnamentElement::InvertedTurn(Turn::default()),
                     Ornament::DelayedTurn => OrnamentElement::DelayedTurn(Turn::default()),
-                    Ornament::Shake => OrnamentElement::Shake(
-                        crate::ir::notation::EmptyTrillSound::default()
-                    ),
-                    Ornament::Tremolo(marks) => OrnamentElement::Tremolo(
-                        crate::ir::notation::Tremolo {
+                    Ornament::Shake => {
+                        OrnamentElement::Shake(crate::ir::notation::EmptyTrillSound::default())
+                    }
+                    Ornament::Tremolo(marks) => {
+                        OrnamentElement::Tremolo(crate::ir::notation::Tremolo {
                             value: *marks,
                             r#type: None,
                             placement: None,
                             position: Position::default(),
-                        }
-                    ),
+                        })
+                    }
                 };
                 OrnamentWithAccidentals {
                     ornament,
@@ -478,17 +519,19 @@ pub fn compile_rest(sexpr: &Sexpr) -> CompileResult<Note> {
 
             // Check for 'rest' head
             if !items[0].is_symbol("rest") {
-                return Err(CompileError::InvalidRest(
-                    format!("expected 'rest', got {:?}", items[0])
-                ));
+                return Err(CompileError::InvalidRest(format!(
+                    "expected 'rest', got {:?}",
+                    items[0]
+                )));
             }
 
             let fermata_rest = parse_rest_form(&items[1..])?;
             compile_fermata_rest(&fermata_rest)
         }
-        _ => Err(CompileError::InvalidRest(
-            format!("expected rest list, got {:?}", sexpr)
-        )),
+        _ => Err(CompileError::InvalidRest(format!(
+            "expected rest list, got {:?}",
+            sexpr
+        ))),
     }
 }
 
@@ -530,14 +573,18 @@ pub fn parse_rest_form(items: &[Sexpr]) -> CompileResult<FermataRest> {
             match kw {
                 "voice" => {
                     if i + 1 >= items.len() {
-                        return Err(CompileError::InvalidRest("missing :voice value".to_string()));
+                        return Err(CompileError::InvalidRest(
+                            "missing :voice value".to_string(),
+                        ));
                     }
                     voice = Some(parse_u32(&items[i + 1])?);
                     i += 2;
                 }
                 "staff" => {
                     if i + 1 >= items.len() {
-                        return Err(CompileError::InvalidRest("missing :staff value".to_string()));
+                        return Err(CompileError::InvalidRest(
+                            "missing :staff value".to_string(),
+                        ));
                     }
                     staff = Some(parse_u32(&items[i + 1])?);
                     i += 2;
@@ -576,7 +623,11 @@ pub fn compile_fermata_rest(rest: &FermataRest) -> CompileResult<Note> {
     let divisions = DEFAULT_DIVISIONS as u64;
 
     let ir_rest = Rest {
-        measure: if rest.measure_rest { Some(YesNo::Yes) } else { None },
+        measure: if rest.measure_rest {
+            Some(YesNo::Yes)
+        } else {
+            None
+        },
         display_step: None,
         display_octave: None,
     };
@@ -653,17 +704,26 @@ mod tests {
 
     #[test]
     fn test_parse_stem_down() {
-        assert_eq!(parse_stem(&Sexpr::symbol("down")).unwrap(), StemDirection::Down);
+        assert_eq!(
+            parse_stem(&Sexpr::symbol("down")).unwrap(),
+            StemDirection::Down
+        );
     }
 
     #[test]
     fn test_parse_stem_none() {
-        assert_eq!(parse_stem(&Sexpr::symbol("none")).unwrap(), StemDirection::None);
+        assert_eq!(
+            parse_stem(&Sexpr::symbol("none")).unwrap(),
+            StemDirection::None
+        );
     }
 
     #[test]
     fn test_parse_stem_double() {
-        assert_eq!(parse_stem(&Sexpr::symbol("double")).unwrap(), StemDirection::Double);
+        assert_eq!(
+            parse_stem(&Sexpr::symbol("double")).unwrap(),
+            StemDirection::Double
+        );
     }
 
     #[test]
@@ -675,12 +735,18 @@ mod tests {
 
     #[test]
     fn test_parse_start_stop_start() {
-        assert_eq!(parse_start_stop(&Sexpr::symbol("start")).unwrap(), StartStop::Start);
+        assert_eq!(
+            parse_start_stop(&Sexpr::symbol("start")).unwrap(),
+            StartStop::Start
+        );
     }
 
     #[test]
     fn test_parse_start_stop_stop() {
-        assert_eq!(parse_start_stop(&Sexpr::symbol("stop")).unwrap(), StartStop::Stop);
+        assert_eq!(
+            parse_start_stop(&Sexpr::symbol("stop")).unwrap(),
+            StartStop::Stop
+        );
     }
 
     #[test]
@@ -740,12 +806,18 @@ mod tests {
 
     #[test]
     fn test_start_stop_to_continue_start() {
-        assert_eq!(start_stop_to_continue(StartStop::Start), StartStopContinue::Start);
+        assert_eq!(
+            start_stop_to_continue(StartStop::Start),
+            StartStopContinue::Start
+        );
     }
 
     #[test]
     fn test_start_stop_to_continue_stop() {
-        assert_eq!(start_stop_to_continue(StartStop::Stop), StartStopContinue::Stop);
+        assert_eq!(
+            start_stop_to_continue(StartStop::Stop),
+            StartStopContinue::Stop
+        );
     }
 
     // === is_duration_keyword tests ===
@@ -789,10 +861,7 @@ mod tests {
 
     #[test]
     fn test_parse_note_form_simple() {
-        let items = vec![
-            Sexpr::symbol("c4"),
-            Sexpr::keyword("q"),
-        ];
+        let items = vec![Sexpr::symbol("c4"), Sexpr::keyword("q")];
         let note = parse_note_form(&items).unwrap();
         assert_eq!(note.pitch.step, PitchStep::C);
         assert_eq!(note.pitch.octave, 4);
@@ -908,7 +977,12 @@ mod tests {
         ]);
         let note = compile_note(&sexpr).unwrap();
 
-        if let NoteContent::Regular { full_note, duration, .. } = &note.content {
+        if let NoteContent::Regular {
+            full_note,
+            duration,
+            ..
+        } = &note.content
+        {
             if let PitchRestUnpitched::Pitch(p) = &full_note.content {
                 assert_eq!(p.step, IrStep::C);
                 assert_eq!(p.octave, 4);
@@ -930,7 +1004,12 @@ mod tests {
         ]);
         let note = compile_note(&sexpr).unwrap();
 
-        if let NoteContent::Regular { full_note, duration, .. } = &note.content {
+        if let NoteContent::Regular {
+            full_note,
+            duration,
+            ..
+        } = &note.content
+        {
             if let PitchRestUnpitched::Pitch(p) = &full_note.content {
                 assert_eq!(p.step, IrStep::F);
                 assert_eq!(p.alter, Some(1.0));
@@ -1010,7 +1089,9 @@ mod tests {
         assert!(!note.notations.is_empty());
         // Check that articulations are in the notations
         let has_articulations = note.notations.iter().any(|n| {
-            n.content.iter().any(|c| matches!(c, NotationContent::Articulations(_)))
+            n.content
+                .iter()
+                .any(|c| matches!(c, NotationContent::Articulations(_)))
         });
         assert!(has_articulations);
     }
@@ -1023,10 +1104,7 @@ mod tests {
 
     #[test]
     fn test_compile_note_wrong_head() {
-        let sexpr = Sexpr::list(vec![
-            Sexpr::symbol("rest"),
-            Sexpr::keyword("q"),
-        ]);
+        let sexpr = Sexpr::list(vec![Sexpr::symbol("rest"), Sexpr::keyword("q")]);
         assert!(compile_note(&sexpr).is_err());
     }
 
@@ -1040,9 +1118,7 @@ mod tests {
 
     #[test]
     fn test_parse_rest_form_simple() {
-        let items = vec![
-            Sexpr::keyword("q"),
-        ];
+        let items = vec![Sexpr::keyword("q")];
         let rest = parse_rest_form(&items).unwrap();
         assert!(!rest.measure_rest);
     }
@@ -1071,10 +1147,7 @@ mod tests {
 
     #[test]
     fn test_parse_rest_form_measure_rest() {
-        let items = vec![
-            Sexpr::keyword("w"),
-            Sexpr::keyword("measure"),
-        ];
+        let items = vec![Sexpr::keyword("w"), Sexpr::keyword("measure")];
         let rest = parse_rest_form(&items).unwrap();
         assert!(rest.measure_rest);
     }
@@ -1091,13 +1164,15 @@ mod tests {
 
     #[test]
     fn test_compile_rest_simple() {
-        let sexpr = Sexpr::list(vec![
-            Sexpr::symbol("rest"),
-            Sexpr::keyword("q"),
-        ]);
+        let sexpr = Sexpr::list(vec![Sexpr::symbol("rest"), Sexpr::keyword("q")]);
         let note = compile_rest(&sexpr).unwrap();
 
-        if let NoteContent::Regular { full_note, duration, .. } = &note.content {
+        if let NoteContent::Regular {
+            full_note,
+            duration,
+            ..
+        } = &note.content
+        {
             if let PitchRestUnpitched::Rest(r) = &full_note.content {
                 assert!(r.measure.is_none());
             } else {
@@ -1111,10 +1186,7 @@ mod tests {
 
     #[test]
     fn test_compile_rest_half() {
-        let sexpr = Sexpr::list(vec![
-            Sexpr::symbol("rest"),
-            Sexpr::keyword("h"),
-        ]);
+        let sexpr = Sexpr::list(vec![Sexpr::symbol("rest"), Sexpr::keyword("h")]);
         let note = compile_rest(&sexpr).unwrap();
 
         if let NoteContent::Regular { duration, .. } = &note.content {
@@ -1176,10 +1248,7 @@ mod tests {
 
     #[test]
     fn test_compile_rest_wrong_head() {
-        let sexpr = Sexpr::list(vec![
-            Sexpr::symbol("note"),
-            Sexpr::symbol("c4"),
-        ]);
+        let sexpr = Sexpr::list(vec![Sexpr::symbol("note"), Sexpr::symbol("c4")]);
         assert!(compile_rest(&sexpr).is_err());
     }
 
@@ -1261,7 +1330,9 @@ mod tests {
         assert!(!note.notations.is_empty());
 
         let has_ornaments = note.notations.iter().any(|n| {
-            n.content.iter().any(|c| matches!(c, NotationContent::Ornaments(_)))
+            n.content
+                .iter()
+                .any(|c| matches!(c, NotationContent::Ornaments(_)))
         });
         assert!(has_ornaments);
     }
@@ -1357,7 +1428,10 @@ mod tests {
         let notations = compile_notations(&fermata_note).unwrap();
         assert!(!notations.is_empty());
 
-        let has_tied = notations[0].content.iter().any(|c| matches!(c, NotationContent::Tied(_)));
+        let has_tied = notations[0]
+            .content
+            .iter()
+            .any(|c| matches!(c, NotationContent::Tied(_)));
         assert!(has_tied);
     }
 
@@ -1383,7 +1457,10 @@ mod tests {
         let notations = compile_notations(&fermata_note).unwrap();
         assert!(!notations.is_empty());
 
-        let has_slur = notations[0].content.iter().any(|c| matches!(c, NotationContent::Slur(_)));
+        let has_slur = notations[0]
+            .content
+            .iter()
+            .any(|c| matches!(c, NotationContent::Slur(_)));
         assert!(has_slur);
     }
 
@@ -1411,9 +1488,25 @@ mod tests {
 
         // Should have tied, slur, articulations, and ornaments
         let content = &notations[0].content;
-        assert!(content.iter().any(|c| matches!(c, NotationContent::Tied(_))));
-        assert!(content.iter().any(|c| matches!(c, NotationContent::Slur(_))));
-        assert!(content.iter().any(|c| matches!(c, NotationContent::Articulations(_))));
-        assert!(content.iter().any(|c| matches!(c, NotationContent::Ornaments(_))));
+        assert!(
+            content
+                .iter()
+                .any(|c| matches!(c, NotationContent::Tied(_)))
+        );
+        assert!(
+            content
+                .iter()
+                .any(|c| matches!(c, NotationContent::Slur(_)))
+        );
+        assert!(
+            content
+                .iter()
+                .any(|c| matches!(c, NotationContent::Articulations(_)))
+        );
+        assert!(
+            content
+                .iter()
+                .any(|c| matches!(c, NotationContent::Ornaments(_)))
+        );
     }
 }

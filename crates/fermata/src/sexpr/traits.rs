@@ -436,7 +436,11 @@ mod tests {
         let v = vec![1i32, 2, 3];
         assert_eq!(
             v.to_sexpr(),
-            Sexpr::List(vec![Sexpr::Integer(1), Sexpr::Integer(2), Sexpr::Integer(3)])
+            Sexpr::List(vec![
+                Sexpr::Integer(1),
+                Sexpr::Integer(2),
+                Sexpr::Integer(3)
+            ])
         );
     }
 
@@ -448,7 +452,11 @@ mod tests {
 
     #[test]
     fn test_vec_from_sexpr() {
-        let sexpr = Sexpr::List(vec![Sexpr::Integer(1), Sexpr::Integer(2), Sexpr::Integer(3)]);
+        let sexpr = Sexpr::List(vec![
+            Sexpr::Integer(1),
+            Sexpr::Integer(2),
+            Sexpr::Integer(3),
+        ]);
         assert_eq!(Vec::<i32>::from_sexpr(&sexpr).unwrap(), vec![1, 2, 3]);
     }
 

@@ -269,7 +269,8 @@ mod tests {
 
     #[test]
     fn test_convert_error_type_mismatch_long_string() {
-        let sexpr = Sexpr::String("this is a very long string that should be truncated".to_string());
+        let sexpr =
+            Sexpr::String("this is a very long string that should be truncated".to_string());
         let err = ConvertError::type_mismatch("integer", &sexpr);
         let msg = err.to_string();
         assert!(msg.contains("..."));

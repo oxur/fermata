@@ -6,15 +6,15 @@
 
 use crate::ir::common::{EmptyPlacement, Position, PrintStyle};
 use crate::ir::notation::{
-    AccidentalMark, Arpeggiate, ArticulationElement, Articulations, Arrow, ArrowDirection,
-    ArrowStyle, Bend, BendRelease, BreathMark, BreathMarkValue, Caesura, CaesuraValue,
+    AccidentalMark, Arpeggiate, Arrow, ArrowDirection, ArrowStyle, ArticulationElement,
+    Articulations, Bend, BendRelease, BreathMark, BreathMarkValue, Caesura, CaesuraValue,
     EmptyLine, EmptyTrillSound, Fingering, Fret, Glissando, HammerPull, Handbell, HandbellValue,
     HarmonMute, Harmonic, HeelToe, Hole, HoleClosed, HoleClosedLocation, HoleClosedValue,
     LineLength, LineShape, Mordent, NonArpeggiate, NotationContent, Notations, OrnamentElement,
     OrnamentWithAccidentals, Ornaments, OtherArticulation, OtherNotation, OtherOrnament,
     OtherTechnical, Pluck, ShowTuplet, Slide, Slur, StartNote, StringNumber, StrongAccent, Tap,
-    TapHand, Technical, TechnicalElement, TopBottom, Tremolo, TremoloType, TrillStep, Tuplet,
-    TupletDot, TupletNumber, TupletPortion, TupletType, Turn, Tied, TwoNoteTurn,
+    TapHand, Technical, TechnicalElement, Tied, TopBottom, Tremolo, TremoloType, TrillStep, Tuplet,
+    TupletDot, TupletNumber, TupletPortion, TupletType, Turn, TwoNoteTurn,
 };
 use crate::sexpr::{ConvertError, ConvertResult, FromSexpr, ListBuilder, Sexpr, ToSexpr};
 
@@ -1291,74 +1291,48 @@ impl FromSexpr for OtherArticulation {
 impl ToSexpr for ArticulationElement {
     fn to_sexpr(&self) -> Sexpr {
         match self {
-            ArticulationElement::Accent(ep) => {
-                ListBuilder::new("accent")
-                    .kwarg_raw("data", ep.to_sexpr())
-                    .build()
-            }
+            ArticulationElement::Accent(ep) => ListBuilder::new("accent")
+                .kwarg_raw("data", ep.to_sexpr())
+                .build(),
             ArticulationElement::StrongAccent(sa) => sa.to_sexpr(),
-            ArticulationElement::Staccato(ep) => {
-                ListBuilder::new("staccato")
-                    .kwarg_raw("data", ep.to_sexpr())
-                    .build()
-            }
-            ArticulationElement::Tenuto(ep) => {
-                ListBuilder::new("tenuto")
-                    .kwarg_raw("data", ep.to_sexpr())
-                    .build()
-            }
-            ArticulationElement::DetachedLegato(ep) => {
-                ListBuilder::new("detached-legato")
-                    .kwarg_raw("data", ep.to_sexpr())
-                    .build()
-            }
-            ArticulationElement::Staccatissimo(ep) => {
-                ListBuilder::new("staccatissimo")
-                    .kwarg_raw("data", ep.to_sexpr())
-                    .build()
-            }
-            ArticulationElement::Spiccato(ep) => {
-                ListBuilder::new("spiccato")
-                    .kwarg_raw("data", ep.to_sexpr())
-                    .build()
-            }
-            ArticulationElement::Scoop(el) => {
-                ListBuilder::new("scoop")
-                    .kwarg_raw("data", el.to_sexpr())
-                    .build()
-            }
-            ArticulationElement::Plop(el) => {
-                ListBuilder::new("plop")
-                    .kwarg_raw("data", el.to_sexpr())
-                    .build()
-            }
-            ArticulationElement::Doit(el) => {
-                ListBuilder::new("doit")
-                    .kwarg_raw("data", el.to_sexpr())
-                    .build()
-            }
-            ArticulationElement::Falloff(el) => {
-                ListBuilder::new("falloff")
-                    .kwarg_raw("data", el.to_sexpr())
-                    .build()
-            }
+            ArticulationElement::Staccato(ep) => ListBuilder::new("staccato")
+                .kwarg_raw("data", ep.to_sexpr())
+                .build(),
+            ArticulationElement::Tenuto(ep) => ListBuilder::new("tenuto")
+                .kwarg_raw("data", ep.to_sexpr())
+                .build(),
+            ArticulationElement::DetachedLegato(ep) => ListBuilder::new("detached-legato")
+                .kwarg_raw("data", ep.to_sexpr())
+                .build(),
+            ArticulationElement::Staccatissimo(ep) => ListBuilder::new("staccatissimo")
+                .kwarg_raw("data", ep.to_sexpr())
+                .build(),
+            ArticulationElement::Spiccato(ep) => ListBuilder::new("spiccato")
+                .kwarg_raw("data", ep.to_sexpr())
+                .build(),
+            ArticulationElement::Scoop(el) => ListBuilder::new("scoop")
+                .kwarg_raw("data", el.to_sexpr())
+                .build(),
+            ArticulationElement::Plop(el) => ListBuilder::new("plop")
+                .kwarg_raw("data", el.to_sexpr())
+                .build(),
+            ArticulationElement::Doit(el) => ListBuilder::new("doit")
+                .kwarg_raw("data", el.to_sexpr())
+                .build(),
+            ArticulationElement::Falloff(el) => ListBuilder::new("falloff")
+                .kwarg_raw("data", el.to_sexpr())
+                .build(),
             ArticulationElement::BreathMark(bm) => bm.to_sexpr(),
             ArticulationElement::Caesura(c) => c.to_sexpr(),
-            ArticulationElement::Stress(ep) => {
-                ListBuilder::new("stress")
-                    .kwarg_raw("data", ep.to_sexpr())
-                    .build()
-            }
-            ArticulationElement::Unstress(ep) => {
-                ListBuilder::new("unstress")
-                    .kwarg_raw("data", ep.to_sexpr())
-                    .build()
-            }
-            ArticulationElement::SoftAccent(ep) => {
-                ListBuilder::new("soft-accent")
-                    .kwarg_raw("data", ep.to_sexpr())
-                    .build()
-            }
+            ArticulationElement::Stress(ep) => ListBuilder::new("stress")
+                .kwarg_raw("data", ep.to_sexpr())
+                .build(),
+            ArticulationElement::Unstress(ep) => ListBuilder::new("unstress")
+                .kwarg_raw("data", ep.to_sexpr())
+                .build(),
+            ArticulationElement::SoftAccent(ep) => ListBuilder::new("soft-accent")
+                .kwarg_raw("data", ep.to_sexpr())
+                .build(),
             ArticulationElement::OtherArticulation(oa) => oa.to_sexpr(),
         }
     }
@@ -1466,7 +1440,8 @@ impl FromSexpr for Articulations {
         expect_head(list, "articulations")?;
 
         Ok(Articulations {
-            content: optional_kwarg::<Vec<ArticulationElement>>(list, "content")?.unwrap_or_default(),
+            content: optional_kwarg::<Vec<ArticulationElement>>(list, "content")?
+                .unwrap_or_default(),
         })
     }
 }
@@ -1736,64 +1711,44 @@ impl FromSexpr for OtherOrnament {
 impl ToSexpr for OrnamentElement {
     fn to_sexpr(&self) -> Sexpr {
         match self {
-            OrnamentElement::TrillMark(ets) => {
-                ListBuilder::new("trill-mark")
-                    .kwarg_raw("data", ets.to_sexpr())
-                    .build()
-            }
+            OrnamentElement::TrillMark(ets) => ListBuilder::new("trill-mark")
+                .kwarg_raw("data", ets.to_sexpr())
+                .build(),
             OrnamentElement::Turn(t) => t.to_sexpr(),
-            OrnamentElement::DelayedTurn(t) => {
-                ListBuilder::new("delayed-turn")
-                    .kwarg_raw("data", t.to_sexpr())
-                    .build()
-            }
-            OrnamentElement::InvertedTurn(t) => {
-                ListBuilder::new("inverted-turn")
-                    .kwarg_raw("data", t.to_sexpr())
-                    .build()
-            }
-            OrnamentElement::DelayedInvertedTurn(t) => {
-                ListBuilder::new("delayed-inverted-turn")
-                    .kwarg_raw("data", t.to_sexpr())
-                    .build()
-            }
-            OrnamentElement::VerticalTurn(ets) => {
-                ListBuilder::new("vertical-turn")
-                    .kwarg_raw("data", ets.to_sexpr())
-                    .build()
-            }
+            OrnamentElement::DelayedTurn(t) => ListBuilder::new("delayed-turn")
+                .kwarg_raw("data", t.to_sexpr())
+                .build(),
+            OrnamentElement::InvertedTurn(t) => ListBuilder::new("inverted-turn")
+                .kwarg_raw("data", t.to_sexpr())
+                .build(),
+            OrnamentElement::DelayedInvertedTurn(t) => ListBuilder::new("delayed-inverted-turn")
+                .kwarg_raw("data", t.to_sexpr())
+                .build(),
+            OrnamentElement::VerticalTurn(ets) => ListBuilder::new("vertical-turn")
+                .kwarg_raw("data", ets.to_sexpr())
+                .build(),
             OrnamentElement::InvertedVerticalTurn(ets) => {
                 ListBuilder::new("inverted-vertical-turn")
                     .kwarg_raw("data", ets.to_sexpr())
                     .build()
             }
-            OrnamentElement::Shake(ets) => {
-                ListBuilder::new("shake")
-                    .kwarg_raw("data", ets.to_sexpr())
-                    .build()
-            }
-            OrnamentElement::WavyLine(wl) => {
-                ListBuilder::new("wavy-line")
-                    .kwarg_raw("data", wl.to_sexpr())
-                    .build()
-            }
+            OrnamentElement::Shake(ets) => ListBuilder::new("shake")
+                .kwarg_raw("data", ets.to_sexpr())
+                .build(),
+            OrnamentElement::WavyLine(wl) => ListBuilder::new("wavy-line")
+                .kwarg_raw("data", wl.to_sexpr())
+                .build(),
             OrnamentElement::Mordent(m) => m.to_sexpr(),
-            OrnamentElement::InvertedMordent(m) => {
-                ListBuilder::new("inverted-mordent")
-                    .kwarg_raw("data", m.to_sexpr())
-                    .build()
-            }
-            OrnamentElement::Schleifer(ep) => {
-                ListBuilder::new("schleifer")
-                    .kwarg_raw("data", ep.to_sexpr())
-                    .build()
-            }
+            OrnamentElement::InvertedMordent(m) => ListBuilder::new("inverted-mordent")
+                .kwarg_raw("data", m.to_sexpr())
+                .build(),
+            OrnamentElement::Schleifer(ep) => ListBuilder::new("schleifer")
+                .kwarg_raw("data", ep.to_sexpr())
+                .build(),
             OrnamentElement::Tremolo(t) => t.to_sexpr(),
-            OrnamentElement::Haydn(ets) => {
-                ListBuilder::new("haydn")
-                    .kwarg_raw("data", ets.to_sexpr())
-                    .build()
-            }
+            OrnamentElement::Haydn(ets) => ListBuilder::new("haydn")
+                .kwarg_raw("data", ets.to_sexpr())
+                .build(),
             OrnamentElement::OtherOrnament(oo) => oo.to_sexpr(),
         }
     }
@@ -1857,7 +1812,10 @@ impl FromSexpr for OrnamentElement {
             "other-ornament" => Ok(OrnamentElement::OtherOrnament(OtherOrnament::from_sexpr(
                 sexpr,
             )?)),
-            _ => Err(ConvertError::type_mismatch("ornament-element variant", sexpr)),
+            _ => Err(ConvertError::type_mismatch(
+                "ornament-element variant",
+                sexpr,
+            )),
         }
     }
 }
@@ -2430,112 +2388,74 @@ impl FromSexpr for OtherTechnical {
 impl ToSexpr for TechnicalElement {
     fn to_sexpr(&self) -> Sexpr {
         match self {
-            TechnicalElement::UpBow(ep) => {
-                ListBuilder::new("up-bow")
-                    .kwarg_raw("data", ep.to_sexpr())
-                    .build()
-            }
-            TechnicalElement::DownBow(ep) => {
-                ListBuilder::new("down-bow")
-                    .kwarg_raw("data", ep.to_sexpr())
-                    .build()
-            }
+            TechnicalElement::UpBow(ep) => ListBuilder::new("up-bow")
+                .kwarg_raw("data", ep.to_sexpr())
+                .build(),
+            TechnicalElement::DownBow(ep) => ListBuilder::new("down-bow")
+                .kwarg_raw("data", ep.to_sexpr())
+                .build(),
             TechnicalElement::Harmonic(h) => h.to_sexpr(),
-            TechnicalElement::OpenString(ep) => {
-                ListBuilder::new("open-string")
-                    .kwarg_raw("data", ep.to_sexpr())
-                    .build()
-            }
-            TechnicalElement::ThumbPosition(ep) => {
-                ListBuilder::new("thumb-position")
-                    .kwarg_raw("data", ep.to_sexpr())
-                    .build()
-            }
+            TechnicalElement::OpenString(ep) => ListBuilder::new("open-string")
+                .kwarg_raw("data", ep.to_sexpr())
+                .build(),
+            TechnicalElement::ThumbPosition(ep) => ListBuilder::new("thumb-position")
+                .kwarg_raw("data", ep.to_sexpr())
+                .build(),
             TechnicalElement::Fingering(f) => f.to_sexpr(),
             TechnicalElement::Pluck(p) => p.to_sexpr(),
-            TechnicalElement::DoubleTongue(ep) => {
-                ListBuilder::new("double-tongue")
-                    .kwarg_raw("data", ep.to_sexpr())
-                    .build()
-            }
-            TechnicalElement::TripleTongue(ep) => {
-                ListBuilder::new("triple-tongue")
-                    .kwarg_raw("data", ep.to_sexpr())
-                    .build()
-            }
-            TechnicalElement::Stopped(ep) => {
-                ListBuilder::new("stopped")
-                    .kwarg_raw("data", ep.to_sexpr())
-                    .build()
-            }
-            TechnicalElement::SnapPizzicato(ep) => {
-                ListBuilder::new("snap-pizzicato")
-                    .kwarg_raw("data", ep.to_sexpr())
-                    .build()
-            }
+            TechnicalElement::DoubleTongue(ep) => ListBuilder::new("double-tongue")
+                .kwarg_raw("data", ep.to_sexpr())
+                .build(),
+            TechnicalElement::TripleTongue(ep) => ListBuilder::new("triple-tongue")
+                .kwarg_raw("data", ep.to_sexpr())
+                .build(),
+            TechnicalElement::Stopped(ep) => ListBuilder::new("stopped")
+                .kwarg_raw("data", ep.to_sexpr())
+                .build(),
+            TechnicalElement::SnapPizzicato(ep) => ListBuilder::new("snap-pizzicato")
+                .kwarg_raw("data", ep.to_sexpr())
+                .build(),
             TechnicalElement::Fret(f) => f.to_sexpr(),
             TechnicalElement::String(s) => s.to_sexpr(),
-            TechnicalElement::HammerOn(hp) => {
-                ListBuilder::new("hammer-on")
-                    .kwarg_raw("data", hp.to_sexpr())
-                    .build()
-            }
-            TechnicalElement::PullOff(hp) => {
-                ListBuilder::new("pull-off")
-                    .kwarg_raw("data", hp.to_sexpr())
-                    .build()
-            }
+            TechnicalElement::HammerOn(hp) => ListBuilder::new("hammer-on")
+                .kwarg_raw("data", hp.to_sexpr())
+                .build(),
+            TechnicalElement::PullOff(hp) => ListBuilder::new("pull-off")
+                .kwarg_raw("data", hp.to_sexpr())
+                .build(),
             TechnicalElement::Bend(b) => b.to_sexpr(),
             TechnicalElement::Tap(t) => t.to_sexpr(),
-            TechnicalElement::Heel(ht) => {
-                ListBuilder::new("heel")
-                    .kwarg_raw("data", ht.to_sexpr())
-                    .build()
-            }
-            TechnicalElement::Toe(ht) => {
-                ListBuilder::new("toe")
-                    .kwarg_raw("data", ht.to_sexpr())
-                    .build()
-            }
-            TechnicalElement::Fingernails(ep) => {
-                ListBuilder::new("fingernails")
-                    .kwarg_raw("data", ep.to_sexpr())
-                    .build()
-            }
+            TechnicalElement::Heel(ht) => ListBuilder::new("heel")
+                .kwarg_raw("data", ht.to_sexpr())
+                .build(),
+            TechnicalElement::Toe(ht) => ListBuilder::new("toe")
+                .kwarg_raw("data", ht.to_sexpr())
+                .build(),
+            TechnicalElement::Fingernails(ep) => ListBuilder::new("fingernails")
+                .kwarg_raw("data", ep.to_sexpr())
+                .build(),
             TechnicalElement::Hole(h) => h.to_sexpr(),
             TechnicalElement::Arrow(a) => a.to_sexpr(),
             TechnicalElement::Handbell(h) => h.to_sexpr(),
-            TechnicalElement::BrassBend(ep) => {
-                ListBuilder::new("brass-bend")
-                    .kwarg_raw("data", ep.to_sexpr())
-                    .build()
-            }
-            TechnicalElement::Flip(ep) => {
-                ListBuilder::new("flip")
-                    .kwarg_raw("data", ep.to_sexpr())
-                    .build()
-            }
-            TechnicalElement::Smear(ep) => {
-                ListBuilder::new("smear")
-                    .kwarg_raw("data", ep.to_sexpr())
-                    .build()
-            }
-            TechnicalElement::Open(ep) => {
-                ListBuilder::new("open")
-                    .kwarg_raw("data", ep.to_sexpr())
-                    .build()
-            }
-            TechnicalElement::HalfMuted(ep) => {
-                ListBuilder::new("half-muted")
-                    .kwarg_raw("data", ep.to_sexpr())
-                    .build()
-            }
+            TechnicalElement::BrassBend(ep) => ListBuilder::new("brass-bend")
+                .kwarg_raw("data", ep.to_sexpr())
+                .build(),
+            TechnicalElement::Flip(ep) => ListBuilder::new("flip")
+                .kwarg_raw("data", ep.to_sexpr())
+                .build(),
+            TechnicalElement::Smear(ep) => ListBuilder::new("smear")
+                .kwarg_raw("data", ep.to_sexpr())
+                .build(),
+            TechnicalElement::Open(ep) => ListBuilder::new("open")
+                .kwarg_raw("data", ep.to_sexpr())
+                .build(),
+            TechnicalElement::HalfMuted(ep) => ListBuilder::new("half-muted")
+                .kwarg_raw("data", ep.to_sexpr())
+                .build(),
             TechnicalElement::HarmonMute(hm) => hm.to_sexpr(),
-            TechnicalElement::Golpe(ep) => {
-                ListBuilder::new("golpe")
-                    .kwarg_raw("data", ep.to_sexpr())
-                    .build()
-            }
+            TechnicalElement::Golpe(ep) => ListBuilder::new("golpe")
+                .kwarg_raw("data", ep.to_sexpr())
+                .build(),
             TechnicalElement::OtherTechnical(ot) => ot.to_sexpr(),
         }
     }
@@ -2635,9 +2555,9 @@ impl FromSexpr for TechnicalElement {
                 let data: EmptyPlacement = require_kwarg(list, "data")?;
                 Ok(TechnicalElement::Golpe(data))
             }
-            "other-technical" => Ok(TechnicalElement::OtherTechnical(OtherTechnical::from_sexpr(
-                sexpr,
-            )?)),
+            "other-technical" => Ok(TechnicalElement::OtherTechnical(
+                OtherTechnical::from_sexpr(sexpr)?,
+            )),
             _ => Err(ConvertError::type_mismatch(
                 "technical-element variant",
                 sexpr,
@@ -2710,7 +2630,9 @@ impl FromSexpr for NotationContent {
         match get_head(list)? {
             "tied" => Ok(NotationContent::Tied(Tied::from_sexpr(sexpr)?)),
             "slur" => Ok(NotationContent::Slur(Slur::from_sexpr(sexpr)?)),
-            "tuplet" => Ok(NotationContent::Tuplet(Box::new(Tuplet::from_sexpr(sexpr)?))),
+            "tuplet" => Ok(NotationContent::Tuplet(Box::new(Tuplet::from_sexpr(
+                sexpr,
+            )?))),
             "glissando" => Ok(NotationContent::Glissando(Glissando::from_sexpr(sexpr)?)),
             "slide" => Ok(NotationContent::Slide(Slide::from_sexpr(sexpr)?)),
             "ornaments" => Ok(NotationContent::Ornaments(Box::new(Ornaments::from_sexpr(
@@ -2756,7 +2678,8 @@ impl FromSexpr for NotationContent {
 
 impl ToSexpr for Notations {
     fn to_sexpr(&self) -> Sexpr {
-        let mut builder = ListBuilder::new("notations").kwarg_opt("print-object", &self.print_object);
+        let mut builder =
+            ListBuilder::new("notations").kwarg_opt("print-object", &self.print_object);
 
         if !self.content.is_empty() {
             builder = builder.kwarg_list("content", &self.content);

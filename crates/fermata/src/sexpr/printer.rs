@@ -4,6 +4,7 @@
 //! S-expression strings.
 
 use crate::ir::{
+    Barline, Measure,
     attributes::{
         Attributes, BarStyle, Cancel, Clef, ClefSign, Ending, GroupSymbolValue, Key, KeyContent,
         Mode, Repeat, StaffDetails, Time, TimeContent, TimeSymbol, Transpose,
@@ -21,11 +22,11 @@ use crate::ir::{
     },
     duration::{NoteTypeValue, TimeModification},
     lyric::{Extend, Lyric, LyricContent, LyricExtension, Syllabic},
-    measure::{MusicDataElement},
+    measure::MusicDataElement,
     notation::{
         Arpeggiate, ArticulationElement, Articulations, FermataShape, Glissando, NonArpeggiate,
         NotationContent, Notations, OrnamentElement, OrnamentWithAccidentals, Ornaments,
-        OtherNotation, Slide, Technical, TechnicalElement, TopBottom, Tied, Tuplet, TupletPortion,
+        OtherNotation, Slide, Technical, TechnicalElement, Tied, TopBottom, Tuplet, TupletPortion,
     },
     note::{Accidental, Note, NoteContent, PitchRestUnpitched, Rest, Tie},
     part::{
@@ -36,7 +37,6 @@ use crate::ir::{
     pitch::{Pitch, Step, Unpitched},
     score::{Credit, Defaults, ScorePartwise, Work},
     voice::{Backup, Forward},
-    Barline, Measure,
 };
 
 use super::PrintOptions;
@@ -382,11 +382,7 @@ fn print_name_display(pnd: &NameDisplay, level: usize, options: &PrintOptions) -
 
 fn print_score_instrument(si: &ScoreInstrument, level: usize, options: &PrintOptions) -> String {
     let ind = indent(level, options);
-    let mut out = format!(
-        "{}(score-instrument :id \"{}\"",
-        ind,
-        escape_string(&si.id)
-    );
+    let mut out = format!("{}(score-instrument :id \"{}\"", ind, escape_string(&si.id));
 
     out.push_str(&format!(
         " :instrument-name \"{}\"",
@@ -401,10 +397,7 @@ fn print_score_instrument(si: &ScoreInstrument, level: usize, options: &PrintOpt
     }
 
     if let Some(ref sound) = si.instrument_sound {
-        out.push_str(&format!(
-            " :instrument-sound \"{}\"",
-            escape_string(sound)
-        ));
+        out.push_str(&format!(" :instrument-sound \"{}\"", escape_string(sound)));
     }
 
     if let Some(ref solo_or_ensemble) = si.solo_or_ensemble {
@@ -429,10 +422,7 @@ fn print_virtual_instrument(vi: &VirtualInstrument) -> String {
     let mut out = String::from("(virtual-instrument");
 
     if let Some(ref library) = vi.virtual_library {
-        out.push_str(&format!(
-            " :virtual-library \"{}\"",
-            escape_string(library)
-        ));
+        out.push_str(&format!(" :virtual-library \"{}\"", escape_string(library)));
     }
 
     if let Some(ref name) = vi.virtual_name {
@@ -676,10 +666,7 @@ fn print_note(note: &Note, level: usize, options: &PrintOptions) -> String {
 
     // Type
     if let Some(ref note_type) = note.r#type {
-        out.push_str(&format!(
-            " :type {}",
-            note_type_to_symbol(&note_type.value)
-        ));
+        out.push_str(&format!(" :type {}", note_type_to_symbol(&note_type.value)));
         if let Some(ref size) = note_type.size {
             out.push_str(&format!(" :size {}", symbol_size_to_symbol(size)));
         }
@@ -1020,7 +1007,10 @@ fn print_time(time: &Time, level: usize, options: &PrintOptions) -> String {
         TimeContent::Measured { signatures } => {
             for sig in signatures {
                 out.push_str(&format!(" (beats \"{}\")", escape_string(&sig.beats)));
-                out.push_str(&format!(" (beat-type \"{}\")", escape_string(&sig.beat_type)));
+                out.push_str(&format!(
+                    " (beat-type \"{}\")",
+                    escape_string(&sig.beat_type)
+                ));
             }
         }
         TimeContent::SenzaMisura(text) => {
@@ -1150,13 +1140,21 @@ fn print_direction_type(dt: &DirectionType, level: usize, options: &PrintOptions
         }
         DirectionTypeContent::Dynamics(dynamics) => print_dynamics(dynamics, level, options),
         DirectionTypeContent::Wedge(wedge) => {
-            format!("{}(wedge :type {})", ind, wedge_type_to_symbol(&wedge.r#type))
+            format!(
+                "{}(wedge :type {})",
+                ind,
+                wedge_type_to_symbol(&wedge.r#type)
+            )
         }
         DirectionTypeContent::Metronome(metronome) => print_metronome(metronome, level, options),
         DirectionTypeContent::OctaveShift(os) => print_octave_shift(os, level, options),
         DirectionTypeContent::Pedal(pedal) => print_pedal(pedal, level, options),
         DirectionTypeContent::OtherDirection(other) => {
-            format!("{}(other-direction \"{}\")", ind, escape_string(&other.value))
+            format!(
+                "{}(other-direction \"{}\")",
+                ind,
+                escape_string(&other.value)
+            )
         }
         _ => format!("{}(direction-type)", ind),
     }
@@ -1201,14 +1199,14 @@ fn print_metronome(metronome: &Metronome, level: usize, options: &PrintOptions) 
             beat_unit_dots,
             per_minute,
         } => {
-            out.push_str(&format!(
-                " :beat-unit {}",
-                note_type_to_symbol(beat_unit)
-            ));
+            out.push_str(&format!(" :beat-unit {}", note_type_to_symbol(beat_unit)));
             for _ in 0..*beat_unit_dots {
                 out.push_str(" :beat-unit-dot");
             }
-            out.push_str(&format!(" :per-minute \"{}\"", escape_string(&per_minute.value)));
+            out.push_str(&format!(
+                " :per-minute \"{}\"",
+                escape_string(&per_minute.value)
+            ));
         }
         MetronomeContent::BeatEquation {
             left_unit,
@@ -1216,17 +1214,11 @@ fn print_metronome(metronome: &Metronome, level: usize, options: &PrintOptions) 
             right_unit,
             right_dots,
         } => {
-            out.push_str(&format!(
-                " :left-unit {}",
-                note_type_to_symbol(left_unit)
-            ));
+            out.push_str(&format!(" :left-unit {}", note_type_to_symbol(left_unit)));
             for _ in 0..*left_dots {
                 out.push_str(" :left-dot");
             }
-            out.push_str(&format!(
-                " :right-unit {}",
-                note_type_to_symbol(right_unit)
-            ));
+            out.push_str(&format!(" :right-unit {}", note_type_to_symbol(right_unit)));
             for _ in 0..*right_dots {
                 out.push_str(" :right-dot");
             }
@@ -1375,7 +1367,10 @@ fn print_tuplet(tuplet: &Tuplet, level: usize, options: &PrintOptions) -> String
     }
 
     if let Some(ref show_number) = tuplet.show_number {
-        out.push_str(&format!(" :show-number {}", show_tuplet_to_symbol(show_number)));
+        out.push_str(&format!(
+            " :show-number {}",
+            show_tuplet_to_symbol(show_number)
+        ));
     }
 
     if let Some(ref show_type) = tuplet.show_type {
@@ -1384,12 +1379,22 @@ fn print_tuplet(tuplet: &Tuplet, level: usize, options: &PrintOptions) -> String
 
     if let Some(ref actual) = tuplet.tuplet_actual {
         out.push_str(&newline_indent(level + 1, options));
-        out.push_str(&print_tuplet_portion("tuplet-actual", actual, level + 1, options));
+        out.push_str(&print_tuplet_portion(
+            "tuplet-actual",
+            actual,
+            level + 1,
+            options,
+        ));
     }
 
     if let Some(ref normal) = tuplet.tuplet_normal {
         out.push_str(&newline_indent(level + 1, options));
-        out.push_str(&print_tuplet_portion("tuplet-normal", normal, level + 1, options));
+        out.push_str(&print_tuplet_portion(
+            "tuplet-normal",
+            normal,
+            level + 1,
+            options,
+        ));
     }
 
     out.push(')');
@@ -1428,10 +1433,7 @@ fn print_glissando(glissando: &Glissando, level: usize, options: &PrintOptions) 
     let ind = indent(level, options);
     let mut out = format!("{}(glissando", ind);
 
-    out.push_str(&format!(
-        " :type {}",
-        print_start_stop(glissando.r#type)
-    ));
+    out.push_str(&format!(" :type {}", print_start_stop(glissando.r#type)));
 
     if let Some(number) = glissando.number {
         out.push_str(&format!(" :number {}", number));
@@ -1469,7 +1471,11 @@ fn print_ornaments(ornaments: &Ornaments, level: usize, options: &PrintOptions) 
 
     for content in &ornaments.content {
         out.push_str(&newline_indent(level + 1, options));
-        out.push_str(&print_ornament_with_accidentals(content, level + 1, options));
+        out.push_str(&print_ornament_with_accidentals(
+            content,
+            level + 1,
+            options,
+        ));
     }
 
     out.push(')');
@@ -1525,7 +1531,11 @@ fn print_ornament_with_accidentals(
         }
         OrnamentElement::Haydn(_) => format!("{}(haydn)", ind),
         OrnamentElement::OtherOrnament(other) => {
-            format!("{}(other-ornament \"{}\")", ind, escape_string(&other.value))
+            format!(
+                "{}(other-ornament \"{}\")",
+                ind,
+                escape_string(&other.value)
+            )
         }
     }
 }
@@ -1621,7 +1631,11 @@ fn print_technical_element(
         TechnicalElement::HarmonMute(_) => format!("{}(harmon-mute)", ind),
         TechnicalElement::Golpe(_) => format!("{}(golpe)", ind),
         TechnicalElement::OtherTechnical(other) => {
-            format!("{}(other-technical \"{}\")", ind, escape_string(&other.value))
+            format!(
+                "{}(other-technical \"{}\")",
+                ind,
+                escape_string(&other.value)
+            )
         }
     }
 }
@@ -1678,7 +1692,11 @@ fn print_articulation_element(
         ArticulationElement::Unstress(_) => format!("{}(unstress)", ind),
         ArticulationElement::SoftAccent(_) => format!("{}(soft-accent)", ind),
         ArticulationElement::OtherArticulation(other) => {
-            format!("{}(other-articulation \"{}\")", ind, escape_string(&other.value))
+            format!(
+                "{}(other-articulation \"{}\")",
+                ind,
+                escape_string(&other.value)
+            )
         }
     }
 }
@@ -1740,10 +1758,7 @@ fn print_other_notation(other: &OtherNotation, level: usize, options: &PrintOpti
     let ind = indent(level, options);
     let mut out = format!("{}(other-notation", ind);
 
-    out.push_str(&format!(
-        " :type {}",
-        print_start_stop_single(other.r#type)
-    ));
+    out.push_str(&format!(" :type {}", print_start_stop_single(other.r#type)));
 
     if !other.value.is_empty() {
         out.push_str(&format!(" \"{}\"", escape_string(&other.value)));
@@ -1767,10 +1782,7 @@ fn print_barline(barline: &Barline, level: usize, options: &PrintOptions) -> Str
     }
 
     if let Some(ref bar_style) = barline.bar_style {
-        out.push_str(&format!(
-            " :bar-style {}",
-            bar_style_to_symbol(bar_style)
-        ));
+        out.push_str(&format!(" :bar-style {}", bar_style_to_symbol(bar_style)));
     }
 
     if let Some(ref repeat) = barline.repeat {

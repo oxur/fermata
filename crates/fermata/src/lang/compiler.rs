@@ -3,8 +3,8 @@
 //! This module orchestrates the compilation of Fermata syntax to Music IR.
 
 use crate::ir::score::ScorePartwise;
-use crate::sexpr::parser::parse as parse_sexpr;
 use crate::sexpr::Sexpr;
+use crate::sexpr::parser::parse as parse_sexpr;
 
 use super::ast::FermataScore;
 use super::error::{CompileError, CompileResult};
@@ -253,7 +253,8 @@ mod tests {
 
     #[test]
     fn test_compile_measure_str_with_attributes() {
-        let measure = compile_measure_str("(measure (key c :major) (time 4 4) (note c4 :q))").unwrap();
+        let measure =
+            compile_measure_str("(measure (key c :major) (time 4 4) (note c4 :q))").unwrap();
 
         // First element should be attributes
         assert!(matches!(
@@ -348,10 +349,7 @@ mod tests {
         // First measure should have direction (dynamics) and note
         let measure = &score.parts[0].measures[0];
         assert!(measure.content.len() >= 2);
-        assert!(matches!(
-            measure.content[0],
-            MusicDataElement::Direction(_)
-        ));
+        assert!(matches!(measure.content[0], MusicDataElement::Direction(_)));
     }
 
     #[test]

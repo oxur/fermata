@@ -47,9 +47,9 @@ pub fn compile_part(sexpr: &Sexpr, index: usize) -> CompileResult<CompiledPart> 
 ///
 /// Expected format: `(part :name "Name" [:id "P1"] [:abbreviation "Abbr."] content...)`
 pub fn parse_part_from_sexpr(sexpr: &Sexpr, index: usize) -> CompileResult<FermataPart> {
-    let items = sexpr.as_list().ok_or_else(|| {
-        CompileError::UnknownForm(format!("expected part list, got {:?}", sexpr))
-    })?;
+    let items = sexpr
+        .as_list()
+        .ok_or_else(|| CompileError::UnknownForm(format!("expected part list, got {:?}", sexpr)))?;
 
     if items.is_empty() {
         return Err(CompileError::UnknownForm("empty part list".to_string()));
@@ -89,7 +89,9 @@ pub fn parse_part_from_sexpr(sexpr: &Sexpr, index: usize) -> CompileResult<Ferma
                     name = Some(
                         items[i + 1]
                             .as_string()
-                            .ok_or_else(|| CompileError::type_mismatch("string", format!("{:?}", items[i + 1])))?
+                            .ok_or_else(|| {
+                                CompileError::type_mismatch("string", format!("{:?}", items[i + 1]))
+                            })?
                             .to_string(),
                     );
                     i += 2;
@@ -102,7 +104,9 @@ pub fn parse_part_from_sexpr(sexpr: &Sexpr, index: usize) -> CompileResult<Ferma
                         items[i + 1]
                             .as_string()
                             .or_else(|| items[i + 1].as_symbol())
-                            .ok_or_else(|| CompileError::type_mismatch("string", format!("{:?}", items[i + 1])))?
+                            .ok_or_else(|| {
+                                CompileError::type_mismatch("string", format!("{:?}", items[i + 1]))
+                            })?
                             .to_string(),
                     );
                     i += 2;
@@ -114,7 +118,9 @@ pub fn parse_part_from_sexpr(sexpr: &Sexpr, index: usize) -> CompileResult<Ferma
                     abbreviation = Some(
                         items[i + 1]
                             .as_string()
-                            .ok_or_else(|| CompileError::type_mismatch("string", format!("{:?}", items[i + 1])))?
+                            .ok_or_else(|| {
+                                CompileError::type_mismatch("string", format!("{:?}", items[i + 1]))
+                            })?
                             .to_string(),
                     );
                     i += 2;
@@ -299,7 +305,8 @@ mod tests {
 
     #[test]
     fn test_parse_part_from_sexpr_with_multiple_measures() {
-        let sexpr = parse("(part :name \"Piano\" (measure (note c4 :q)) (measure (note d4 :q)))").unwrap();
+        let sexpr =
+            parse("(part :name \"Piano\" (measure (note c4 :q)) (measure (note d4 :q)))").unwrap();
         let part = parse_part_from_sexpr(&sexpr, 0).unwrap();
         assert_eq!(part.measures.len(), 2);
         assert_eq!(part.measures[0].number, Some(1));

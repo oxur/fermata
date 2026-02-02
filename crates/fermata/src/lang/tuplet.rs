@@ -87,12 +87,16 @@ pub fn parse_tuplet_form(items: &[Sexpr]) -> CompileResult<FermataTuplet> {
                             MeasureElement::Rest(fermata_rest)
                         }
                         "chord" => {
-                            let fermata_chord = crate::lang::chord::parse_chord_form(&sub_items[1..])?;
+                            let fermata_chord =
+                                crate::lang::chord::parse_chord_form(&sub_items[1..])?;
                             MeasureElement::Chord(fermata_chord)
                         }
                         _ => {
                             return Err(CompileError::InvalidTuplet {
-                                reason: format!("unexpected element '{}' in tuplet, expected note, rest, or chord", head),
+                                reason: format!(
+                                    "unexpected element '{}' in tuplet, expected note, rest, or chord",
+                                    head
+                                ),
                             });
                         }
                     };
@@ -231,7 +235,11 @@ pub fn compile_fermata_tuplet(tuplet: &FermataTuplet) -> CompileResult<Vec<Note>
             // Add tuplet notation for first and last
             if is_first || is_last {
                 let tuplet_notation = create_tuplet_notation(
-                    if is_first { StartStop::Start } else { StartStop::Stop },
+                    if is_first {
+                        StartStop::Start
+                    } else {
+                        StartStop::Stop
+                    },
                     tuplet.actual,
                     tuplet.normal,
                 );
@@ -389,9 +397,21 @@ mod tests {
     fn test_parse_tuplet_form_simple() {
         let items = vec![
             Sexpr::symbol("3:2"),
-            Sexpr::list(vec![Sexpr::symbol("note"), Sexpr::symbol("c4"), Sexpr::keyword("8")]),
-            Sexpr::list(vec![Sexpr::symbol("note"), Sexpr::symbol("d4"), Sexpr::keyword("8")]),
-            Sexpr::list(vec![Sexpr::symbol("note"), Sexpr::symbol("e4"), Sexpr::keyword("8")]),
+            Sexpr::list(vec![
+                Sexpr::symbol("note"),
+                Sexpr::symbol("c4"),
+                Sexpr::keyword("8"),
+            ]),
+            Sexpr::list(vec![
+                Sexpr::symbol("note"),
+                Sexpr::symbol("d4"),
+                Sexpr::keyword("8"),
+            ]),
+            Sexpr::list(vec![
+                Sexpr::symbol("note"),
+                Sexpr::symbol("e4"),
+                Sexpr::keyword("8"),
+            ]),
         ];
         let tuplet = parse_tuplet_form(&items).unwrap();
         assert_eq!(tuplet.actual, 3);
@@ -403,9 +423,17 @@ mod tests {
     fn test_parse_tuplet_form_with_rest() {
         let items = vec![
             Sexpr::symbol("3:2"),
-            Sexpr::list(vec![Sexpr::symbol("note"), Sexpr::symbol("c4"), Sexpr::keyword("8")]),
+            Sexpr::list(vec![
+                Sexpr::symbol("note"),
+                Sexpr::symbol("c4"),
+                Sexpr::keyword("8"),
+            ]),
             Sexpr::list(vec![Sexpr::symbol("rest"), Sexpr::keyword("8")]),
-            Sexpr::list(vec![Sexpr::symbol("note"), Sexpr::symbol("e4"), Sexpr::keyword("8")]),
+            Sexpr::list(vec![
+                Sexpr::symbol("note"),
+                Sexpr::symbol("e4"),
+                Sexpr::keyword("8"),
+            ]),
         ];
         let tuplet = parse_tuplet_form(&items).unwrap();
         assert_eq!(tuplet.notes.len(), 3);
@@ -430,9 +458,21 @@ mod tests {
         let sexpr = Sexpr::list(vec![
             Sexpr::symbol("tuplet"),
             Sexpr::symbol("3:2"),
-            Sexpr::list(vec![Sexpr::symbol("note"), Sexpr::symbol("c4"), Sexpr::keyword("8")]),
-            Sexpr::list(vec![Sexpr::symbol("note"), Sexpr::symbol("d4"), Sexpr::keyword("8")]),
-            Sexpr::list(vec![Sexpr::symbol("note"), Sexpr::symbol("e4"), Sexpr::keyword("8")]),
+            Sexpr::list(vec![
+                Sexpr::symbol("note"),
+                Sexpr::symbol("c4"),
+                Sexpr::keyword("8"),
+            ]),
+            Sexpr::list(vec![
+                Sexpr::symbol("note"),
+                Sexpr::symbol("d4"),
+                Sexpr::keyword("8"),
+            ]),
+            Sexpr::list(vec![
+                Sexpr::symbol("note"),
+                Sexpr::symbol("e4"),
+                Sexpr::keyword("8"),
+            ]),
         ]);
         let notes = compile_tuplet(&sexpr).unwrap();
 
@@ -476,11 +516,31 @@ mod tests {
         let sexpr = Sexpr::list(vec![
             Sexpr::symbol("tuplet"),
             Sexpr::symbol("5:4"),
-            Sexpr::list(vec![Sexpr::symbol("note"), Sexpr::symbol("c4"), Sexpr::keyword("16")]),
-            Sexpr::list(vec![Sexpr::symbol("note"), Sexpr::symbol("d4"), Sexpr::keyword("16")]),
-            Sexpr::list(vec![Sexpr::symbol("note"), Sexpr::symbol("e4"), Sexpr::keyword("16")]),
-            Sexpr::list(vec![Sexpr::symbol("note"), Sexpr::symbol("f4"), Sexpr::keyword("16")]),
-            Sexpr::list(vec![Sexpr::symbol("note"), Sexpr::symbol("g4"), Sexpr::keyword("16")]),
+            Sexpr::list(vec![
+                Sexpr::symbol("note"),
+                Sexpr::symbol("c4"),
+                Sexpr::keyword("16"),
+            ]),
+            Sexpr::list(vec![
+                Sexpr::symbol("note"),
+                Sexpr::symbol("d4"),
+                Sexpr::keyword("16"),
+            ]),
+            Sexpr::list(vec![
+                Sexpr::symbol("note"),
+                Sexpr::symbol("e4"),
+                Sexpr::keyword("16"),
+            ]),
+            Sexpr::list(vec![
+                Sexpr::symbol("note"),
+                Sexpr::symbol("f4"),
+                Sexpr::keyword("16"),
+            ]),
+            Sexpr::list(vec![
+                Sexpr::symbol("note"),
+                Sexpr::symbol("g4"),
+                Sexpr::keyword("16"),
+            ]),
         ]);
         let notes = compile_tuplet(&sexpr).unwrap();
 
@@ -504,8 +564,16 @@ mod tests {
                 Sexpr::list(vec![Sexpr::symbol("c4"), Sexpr::symbol("e4")]),
                 Sexpr::keyword("8"),
             ]),
-            Sexpr::list(vec![Sexpr::symbol("note"), Sexpr::symbol("d4"), Sexpr::keyword("8")]),
-            Sexpr::list(vec![Sexpr::symbol("note"), Sexpr::symbol("e4"), Sexpr::keyword("8")]),
+            Sexpr::list(vec![
+                Sexpr::symbol("note"),
+                Sexpr::symbol("d4"),
+                Sexpr::keyword("8"),
+            ]),
+            Sexpr::list(vec![
+                Sexpr::symbol("note"),
+                Sexpr::symbol("e4"),
+                Sexpr::keyword("8"),
+            ]),
         ]);
         let notes = compile_tuplet(&sexpr).unwrap();
 
@@ -526,10 +594,7 @@ mod tests {
 
     #[test]
     fn test_compile_tuplet_wrong_head() {
-        let sexpr = Sexpr::list(vec![
-            Sexpr::symbol("note"),
-            Sexpr::symbol("c4"),
-        ]);
+        let sexpr = Sexpr::list(vec![Sexpr::symbol("note"), Sexpr::symbol("c4")]);
         assert!(compile_tuplet(&sexpr).is_err());
     }
 
@@ -548,7 +613,11 @@ mod tests {
             normal: 2,
             notes: vec![
                 MeasureElement::Note(FermataNote {
-                    pitch: FermataPitch { step: PitchStep::C, alter: None, octave: 4 },
+                    pitch: FermataPitch {
+                        step: PitchStep::C,
+                        alter: None,
+                        octave: 4,
+                    },
                     duration: FermataDuration::default(),
                     voice: None,
                     staff: None,
@@ -560,7 +629,11 @@ mod tests {
                     lyric: None,
                 }),
                 MeasureElement::Note(FermataNote {
-                    pitch: FermataPitch { step: PitchStep::D, alter: None, octave: 4 },
+                    pitch: FermataPitch {
+                        step: PitchStep::D,
+                        alter: None,
+                        octave: 4,
+                    },
                     duration: FermataDuration::default(),
                     voice: None,
                     staff: None,
@@ -593,7 +666,11 @@ mod tests {
             normal: 2,
             notes: vec![
                 MeasureElement::Note(FermataNote {
-                    pitch: FermataPitch { step: PitchStep::C, alter: None, octave: 4 },
+                    pitch: FermataPitch {
+                        step: PitchStep::C,
+                        alter: None,
+                        octave: 4,
+                    },
                     duration: FermataDuration::default(),
                     voice: None,
                     staff: None,
@@ -611,7 +688,11 @@ mod tests {
                     measure_rest: false,
                 }),
                 MeasureElement::Note(FermataNote {
-                    pitch: FermataPitch { step: PitchStep::E, alter: None, octave: 4 },
+                    pitch: FermataPitch {
+                        step: PitchStep::E,
+                        alter: None,
+                        octave: 4,
+                    },
                     duration: FermataDuration::default(),
                     voice: None,
                     staff: None,

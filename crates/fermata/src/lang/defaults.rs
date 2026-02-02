@@ -64,8 +64,8 @@ pub fn key_to_fifths(root: PitchStep, root_alter: Option<PitchAlter>, mode: &str
 
     // Adjust for accidentals on the root
     let alter_offset: i8 = match root_alter {
-        Some(PitchAlter::Sharp) => 7,     // F# major = 6 = F major (-1) + 7
-        Some(PitchAlter::Flat) => -7,     // Gb major = -6 = G major (1) - 7
+        Some(PitchAlter::Sharp) => 7, // F# major = 6 = F major (-1) + 7
+        Some(PitchAlter::Flat) => -7, // Gb major = -6 = G major (1) - 7
         Some(PitchAlter::DoubleSharp) => 14,
         Some(PitchAlter::DoubleFlat) => -14,
         _ => 0,
@@ -251,8 +251,10 @@ mod tests {
     #[test]
     fn test_duration_to_divisions_triple_dotted_quarter() {
         let triple_dotted = duration_to_divisions(NoteTypeValue::Quarter, 3);
-        let expected =
-            DEFAULT_DIVISIONS + DEFAULT_DIVISIONS / 2 + DEFAULT_DIVISIONS / 4 + DEFAULT_DIVISIONS / 8;
+        let expected = DEFAULT_DIVISIONS
+            + DEFAULT_DIVISIONS / 2
+            + DEFAULT_DIVISIONS / 4
+            + DEFAULT_DIVISIONS / 8;
         assert_eq!(triple_dotted, expected);
     }
 
@@ -265,10 +267,7 @@ mod tests {
     #[test]
     fn test_duration_to_divisions_dotted_eighth() {
         let dotted_eighth = duration_to_divisions(NoteTypeValue::Eighth, 1);
-        assert_eq!(
-            dotted_eighth,
-            DEFAULT_DIVISIONS / 2 + DEFAULT_DIVISIONS / 4
-        );
+        assert_eq!(dotted_eighth, DEFAULT_DIVISIONS / 2 + DEFAULT_DIVISIONS / 4);
     }
 
     // === key_to_fifths Tests ===

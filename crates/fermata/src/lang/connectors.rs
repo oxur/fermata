@@ -13,16 +13,20 @@ use crate::sexpr::Sexpr;
 ///
 /// Accepts "start" or "stop" (case insensitive).
 pub fn parse_slur_action(sexpr: &Sexpr) -> CompileResult<StartStop> {
-    let s = sexpr.as_symbol().or_else(|| sexpr.as_keyword()).ok_or_else(|| {
-        CompileError::InvalidNote(format!("expected slur action symbol, got {:?}", sexpr))
-    })?;
+    let s = sexpr
+        .as_symbol()
+        .or_else(|| sexpr.as_keyword())
+        .ok_or_else(|| {
+            CompileError::InvalidNote(format!("expected slur action symbol, got {:?}", sexpr))
+        })?;
 
     match s.to_lowercase().as_str() {
         "start" => Ok(StartStop::Start),
         "stop" => Ok(StartStop::Stop),
-        _ => Err(CompileError::InvalidNote(
-            format!("invalid slur action '{}', expected start or stop", s)
-        )),
+        _ => Err(CompileError::InvalidNote(format!(
+            "invalid slur action '{}', expected start or stop",
+            s
+        ))),
     }
 }
 
@@ -33,18 +37,20 @@ pub fn parse_u8(sexpr: &Sexpr) -> CompileResult<u8> {
     match sexpr {
         Sexpr::Integer(n) => {
             if *n < 0 || *n > 255 {
-                return Err(CompileError::InvalidNote(
-                    format!("slur number {} out of range (0-255)", n)
-                ));
+                return Err(CompileError::InvalidNote(format!(
+                    "slur number {} out of range (0-255)",
+                    n
+                )));
             }
             Ok(*n as u8)
         }
-        Sexpr::Symbol(s) => s.parse().map_err(|_| {
-            CompileError::InvalidNote(format!("invalid slur number '{}'", s))
-        }),
-        _ => Err(CompileError::InvalidNote(
-            format!("expected integer for slur number, got {:?}", sexpr)
-        )),
+        Sexpr::Symbol(s) => s
+            .parse()
+            .map_err(|_| CompileError::InvalidNote(format!("invalid slur number '{}'", s))),
+        _ => Err(CompileError::InvalidNote(format!(
+            "expected integer for slur number, got {:?}",
+            sexpr
+        ))),
     }
 }
 
@@ -109,7 +115,9 @@ pub fn create_slur(action: StartStop, number: u8) -> Slur {
 /// - number: optional slur number (defaults to 1)
 pub fn parse_slur_form(items: &[Sexpr]) -> CompileResult<SlurMark> {
     if items.is_empty() {
-        return Err(CompileError::InvalidNote("slur requires action (start/stop)".to_string()));
+        return Err(CompileError::InvalidNote(
+            "slur requires action (start/stop)".to_string(),
+        ));
     }
 
     let action = parse_slur_action(&items[0])?;
@@ -159,21 +167,42 @@ mod tests {
 
     #[test]
     fn test_parse_slur_action_start() {
-        assert_eq!(parse_slur_action(&Sexpr::symbol("start")).unwrap(), StartStop::Start);
-        assert_eq!(parse_slur_action(&Sexpr::symbol("START")).unwrap(), StartStop::Start);
-        assert_eq!(parse_slur_action(&Sexpr::symbol("Start")).unwrap(), StartStop::Start);
+        assert_eq!(
+            parse_slur_action(&Sexpr::symbol("start")).unwrap(),
+            StartStop::Start
+        );
+        assert_eq!(
+            parse_slur_action(&Sexpr::symbol("START")).unwrap(),
+            StartStop::Start
+        );
+        assert_eq!(
+            parse_slur_action(&Sexpr::symbol("Start")).unwrap(),
+            StartStop::Start
+        );
     }
 
     #[test]
     fn test_parse_slur_action_stop() {
-        assert_eq!(parse_slur_action(&Sexpr::symbol("stop")).unwrap(), StartStop::Stop);
-        assert_eq!(parse_slur_action(&Sexpr::symbol("STOP")).unwrap(), StartStop::Stop);
+        assert_eq!(
+            parse_slur_action(&Sexpr::symbol("stop")).unwrap(),
+            StartStop::Stop
+        );
+        assert_eq!(
+            parse_slur_action(&Sexpr::symbol("STOP")).unwrap(),
+            StartStop::Stop
+        );
     }
 
     #[test]
     fn test_parse_slur_action_keyword() {
-        assert_eq!(parse_slur_action(&Sexpr::keyword("start")).unwrap(), StartStop::Start);
-        assert_eq!(parse_slur_action(&Sexpr::keyword("stop")).unwrap(), StartStop::Stop);
+        assert_eq!(
+            parse_slur_action(&Sexpr::keyword("start")).unwrap(),
+            StartStop::Start
+        );
+        assert_eq!(
+            parse_slur_action(&Sexpr::keyword("stop")).unwrap(),
+            StartStop::Stop
+        );
     }
 
     #[test]
@@ -221,7 +250,10 @@ mod tests {
 
     #[test]
     fn test_compile_slur_marker_start() {
-        let mark = SlurMark { action: StartStop::Start, number: 1 };
+        let mark = SlurMark {
+            action: StartStop::Start,
+            number: 1,
+        };
         let slur = compile_slur_marker(&mark);
         assert_eq!(slur.r#type, StartStopContinue::Start);
         assert_eq!(slur.number, 1);
@@ -229,7 +261,10 @@ mod tests {
 
     #[test]
     fn test_compile_slur_marker_stop() {
-        let mark = SlurMark { action: StartStop::Stop, number: 2 };
+        let mark = SlurMark {
+            action: StartStop::Stop,
+            number: 2,
+        };
         let slur = compile_slur_marker(&mark);
         assert_eq!(slur.r#type, StartStopContinue::Stop);
         assert_eq!(slur.number, 2);
@@ -239,12 +274,18 @@ mod tests {
 
     #[test]
     fn test_start_stop_to_continue_start() {
-        assert_eq!(start_stop_to_continue(StartStop::Start), StartStopContinue::Start);
+        assert_eq!(
+            start_stop_to_continue(StartStop::Start),
+            StartStopContinue::Start
+        );
     }
 
     #[test]
     fn test_start_stop_to_continue_stop() {
-        assert_eq!(start_stop_to_continue(StartStop::Stop), StartStopContinue::Stop);
+        assert_eq!(
+            start_stop_to_continue(StartStop::Stop),
+            StartStopContinue::Stop
+        );
     }
 
     // === create_tied tests ===

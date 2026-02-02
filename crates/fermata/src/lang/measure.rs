@@ -4,15 +4,15 @@
 //! It dispatches each child element to the appropriate sub-compiler and
 //! gathers attributes into a single Attributes block emitted first.
 
-use crate::ir::attributes::{Attributes, Barline, BarStyle, Clef, Key, Repeat, Time};
+use crate::ir::attributes::{Attributes, BarStyle, Barline, Clef, Key, Repeat, Time};
 use crate::ir::common::{Editorial, RightLeftMiddle};
 use crate::ir::direction::Direction;
 use crate::ir::measure::{Measure, MusicDataElement};
 use crate::ir::note::Note;
 use crate::ir::voice::{Backup, Forward};
 use crate::lang::ast::{
-    BarlineSpec, ClefSpec, DynamicMark, EndingAction, FermataDirection, FermataMeasure,
-    KeySpec, MeasureElement, TempoMark, TimeSpec,
+    BarlineSpec, ClefSpec, DynamicMark, EndingAction, FermataDirection, FermataMeasure, KeySpec,
+    MeasureElement, TempoMark, TimeSpec,
 };
 use crate::lang::attributes::{compile_clef_spec, compile_key_spec, compile_time_spec};
 use crate::lang::chord::compile_fermata_chord;
@@ -133,7 +133,9 @@ fn parse_measure_element(sexpr: &Sexpr) -> CompileResult<Option<MeasureElement>>
         }
         "clef" => {
             if items.len() < 2 {
-                return Err(CompileError::InvalidClef("clef requires a type".to_string()));
+                return Err(CompileError::InvalidClef(
+                    "clef requires a type".to_string(),
+                ));
             }
             let clef_name = items[1].as_keyword().ok_or_else(|| {
                 CompileError::InvalidClef("expected clef type keyword".to_string())
@@ -222,7 +224,7 @@ fn parse_barline_form(args: &[Sexpr]) -> CompileResult<BarlineSpec> {
                     return Err(CompileError::UnknownForm(format!(
                         "unknown ending action: {}",
                         action_str
-                    )))
+                    )));
                 }
             };
             Ok(BarlineSpec::Ending { number, action })
@@ -261,9 +263,9 @@ fn parse_direction_form(head: &str, args: &[Sexpr]) -> CompileResult<FermataDire
             if args.is_empty() {
                 return Err(CompileError::MissingField("pedal type"));
             }
-            let pedal_type = args[0].as_keyword().ok_or_else(|| {
-                CompileError::type_mismatch("keyword", format!("{:?}", args[0]))
-            })?;
+            let pedal_type = args[0]
+                .as_keyword()
+                .ok_or_else(|| CompileError::type_mismatch("keyword", format!("{:?}", args[0])))?;
             match pedal_type.to_lowercase().as_str() {
                 "start" => Ok(FermataDirection::PedalStart),
                 "stop" => Ok(FermataDirection::PedalStop),
@@ -432,7 +434,10 @@ pub fn compile_fermata_measure(measure: &FermataMeasure) -> CompileResult<Measur
     }
 
     Ok(Measure {
-        number: measure.number.map(|n| n.to_string()).unwrap_or_else(|| "1".to_string()),
+        number: measure
+            .number
+            .map(|n| n.to_string())
+            .unwrap_or_else(|| "1".to_string()),
         implicit: None,
         non_controlling: None,
         width: None,
@@ -445,7 +450,11 @@ fn compile_barline_spec(spec: &BarlineSpec) -> CompileResult<Barline> {
     let (bar_style, location, repeat) = match spec {
         BarlineSpec::Regular => (Some(BarStyle::Regular), None, None),
         BarlineSpec::Double => (Some(BarStyle::LightLight), None, None),
-        BarlineSpec::Final => (Some(BarStyle::LightHeavy), Some(RightLeftMiddle::Right), None),
+        BarlineSpec::Final => (
+            Some(BarStyle::LightHeavy),
+            Some(RightLeftMiddle::Right),
+            None,
+        ),
         BarlineSpec::RepeatForward => (
             Some(BarStyle::HeavyLight),
             Some(RightLeftMiddle::Left),
@@ -473,7 +482,10 @@ fn compile_barline_spec(spec: &BarlineSpec) -> CompileResult<Barline> {
                 winged: None,
             }),
         ),
-        BarlineSpec::Ending { number: _, action: _ } => {
+        BarlineSpec::Ending {
+            number: _,
+            action: _,
+        } => {
             // Endings are more complex and would need additional IR support
             (Some(BarStyle::Regular), None, None)
         }
@@ -495,8 +507,8 @@ fn compile_barline_spec(spec: &BarlineSpec) -> CompileResult<Barline> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ir::pitch::Step as IrStep;
     use crate::ir::note::{NoteContent, PitchRestUnpitched};
+    use crate::ir::pitch::Step as IrStep;
     use crate::lang::ast::{FermataDuration, FermataNote, FermataPitch, FermataRest, PitchStep};
     use crate::sexpr::parse;
 
@@ -638,7 +650,8 @@ mod tests {
 
     #[test]
     fn test_parse_measure_from_sexpr_with_attributes() {
-        let sexpr = parse("(measure (key c :major) (time 4 4) (clef :treble) (note c4 :q))").unwrap();
+        let sexpr =
+            parse("(measure (key c :major) (time 4 4) (clef :treble) (note c4 :q))").unwrap();
         let measure = parse_measure_from_sexpr(&sexpr, 1).unwrap();
         assert_eq!(measure.content.len(), 4);
     }
@@ -704,10 +717,7 @@ mod tests {
 
         // Should have direction and note
         assert_eq!(measure.content.len(), 2);
-        assert!(matches!(
-            measure.content[0],
-            MusicDataElement::Direction(_)
-        ));
+        assert!(matches!(measure.content[0], MusicDataElement::Direction(_)));
     }
 
     #[test]

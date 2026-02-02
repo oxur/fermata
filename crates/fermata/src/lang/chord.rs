@@ -85,9 +85,12 @@ pub fn parse_chord_form(items: &[Sexpr]) -> CompileResult<FermataChord> {
             }
             let mut pitches = Vec::new();
             for pitch_item in pitch_items {
-                let pitch_str = pitch_item.as_symbol().ok_or_else(|| CompileError::InvalidChord {
-                    reason: format!("expected pitch symbol, got {:?}", pitch_item),
-                })?;
+                let pitch_str =
+                    pitch_item
+                        .as_symbol()
+                        .ok_or_else(|| CompileError::InvalidChord {
+                            reason: format!("expected pitch symbol, got {:?}", pitch_item),
+                        })?;
                 pitches.push(parse_pitch_str(pitch_str)?);
             }
             pitches
@@ -157,7 +160,10 @@ pub fn parse_chord_form(items: &[Sexpr]) -> CompileResult<FermataChord> {
                         // Just :arpeggiate without a direction means default (None direction)
                         arpeggiate = Some(ArpeggiateDirection::None);
                         i += 1;
-                    } else if let Some(dir_str) = items[i + 1].as_symbol().or_else(|| items[i + 1].as_keyword()) {
+                    } else if let Some(dir_str) = items[i + 1]
+                        .as_symbol()
+                        .or_else(|| items[i + 1].as_keyword())
+                    {
                         arpeggiate = Some(parse_arpeggiate_direction(dir_str)?);
                         i += 2;
                     } else {
@@ -226,7 +232,10 @@ fn parse_arpeggiate_direction(s: &str) -> CompileResult<ArpeggiateDirection> {
         "down" => Ok(ArpeggiateDirection::Down),
         "none" | "" => Ok(ArpeggiateDirection::None),
         _ => Err(CompileError::InvalidChord {
-            reason: format!("invalid arpeggiate direction '{}', expected up, down, or none", s),
+            reason: format!(
+                "invalid arpeggiate direction '{}', expected up, down, or none",
+                s
+            ),
         }),
     }
 }
@@ -237,10 +246,29 @@ fn is_duration_keyword(s: &str) -> bool {
     let s = s.trim_end_matches('.');
     matches!(
         s.to_lowercase().as_str(),
-        "q" | "h" | "w" | "8" | "16" | "32" | "64" | "128" | "256" | "512" | "1024"
-            | "quarter" | "half" | "whole" | "eighth" | "sixteenth"
-            | "crotchet" | "minim" | "semibreve" | "quaver" | "semiquaver"
-            | "breve" | "long" | "maxima"
+        "q" | "h"
+            | "w"
+            | "8"
+            | "16"
+            | "32"
+            | "64"
+            | "128"
+            | "256"
+            | "512"
+            | "1024"
+            | "quarter"
+            | "half"
+            | "whole"
+            | "eighth"
+            | "sixteenth"
+            | "crotchet"
+            | "minim"
+            | "semibreve"
+            | "quaver"
+            | "semiquaver"
+            | "breve"
+            | "long"
+            | "maxima"
     )
 }
 
@@ -345,12 +373,18 @@ fn compile_articulations(articulations: &[Articulation]) -> Option<Articulations
         .iter()
         .map(|a| match a {
             Articulation::Staccato => ArticulationElement::Staccato(EmptyPlacement::default()),
-            Articulation::Staccatissimo => ArticulationElement::Staccatissimo(EmptyPlacement::default()),
+            Articulation::Staccatissimo => {
+                ArticulationElement::Staccatissimo(EmptyPlacement::default())
+            }
             Articulation::Spiccato => ArticulationElement::Spiccato(EmptyPlacement::default()),
             Articulation::Accent => ArticulationElement::Accent(EmptyPlacement::default()),
-            Articulation::StrongAccent => ArticulationElement::StrongAccent(StrongAccent::default()),
+            Articulation::StrongAccent => {
+                ArticulationElement::StrongAccent(StrongAccent::default())
+            }
             Articulation::Tenuto => ArticulationElement::Tenuto(EmptyPlacement::default()),
-            Articulation::DetachedLegato => ArticulationElement::DetachedLegato(EmptyPlacement::default()),
+            Articulation::DetachedLegato => {
+                ArticulationElement::DetachedLegato(EmptyPlacement::default())
+            }
             Articulation::BreathMark => {
                 ArticulationElement::BreathMark(crate::ir::notation::BreathMark {
                     value: crate::ir::notation::BreathMarkValue::Comma,
@@ -358,13 +392,11 @@ fn compile_articulations(articulations: &[Articulation]) -> Option<Articulations
                     position: Position::default(),
                 })
             }
-            Articulation::Caesura => {
-                ArticulationElement::Caesura(crate::ir::notation::Caesura {
-                    value: crate::ir::notation::CaesuraValue::Normal,
-                    placement: None,
-                    position: Position::default(),
-                })
-            }
+            Articulation::Caesura => ArticulationElement::Caesura(crate::ir::notation::Caesura {
+                value: crate::ir::notation::CaesuraValue::Normal,
+                placement: None,
+                position: Position::default(),
+            }),
         })
         .collect();
 
@@ -396,19 +428,34 @@ mod tests {
 
     #[test]
     fn test_parse_arpeggiate_direction_up() {
-        assert_eq!(parse_arpeggiate_direction("up").unwrap(), ArpeggiateDirection::Up);
-        assert_eq!(parse_arpeggiate_direction("UP").unwrap(), ArpeggiateDirection::Up);
+        assert_eq!(
+            parse_arpeggiate_direction("up").unwrap(),
+            ArpeggiateDirection::Up
+        );
+        assert_eq!(
+            parse_arpeggiate_direction("UP").unwrap(),
+            ArpeggiateDirection::Up
+        );
     }
 
     #[test]
     fn test_parse_arpeggiate_direction_down() {
-        assert_eq!(parse_arpeggiate_direction("down").unwrap(), ArpeggiateDirection::Down);
+        assert_eq!(
+            parse_arpeggiate_direction("down").unwrap(),
+            ArpeggiateDirection::Down
+        );
     }
 
     #[test]
     fn test_parse_arpeggiate_direction_none() {
-        assert_eq!(parse_arpeggiate_direction("none").unwrap(), ArpeggiateDirection::None);
-        assert_eq!(parse_arpeggiate_direction("").unwrap(), ArpeggiateDirection::None);
+        assert_eq!(
+            parse_arpeggiate_direction("none").unwrap(),
+            ArpeggiateDirection::None
+        );
+        assert_eq!(
+            parse_arpeggiate_direction("").unwrap(),
+            ArpeggiateDirection::None
+        );
     }
 
     #[test]
@@ -511,7 +558,11 @@ mod tests {
     #[test]
     fn test_parse_chord_form_with_arpeggiate() {
         let items = vec![
-            Sexpr::list(vec![Sexpr::symbol("c4"), Sexpr::symbol("e4"), Sexpr::symbol("g4")]),
+            Sexpr::list(vec![
+                Sexpr::symbol("c4"),
+                Sexpr::symbol("e4"),
+                Sexpr::symbol("g4"),
+            ]),
             Sexpr::keyword("q"),
             Sexpr::keyword("arpeggiate"),
             Sexpr::symbol("up"),
@@ -612,10 +663,7 @@ mod tests {
     fn test_compile_chord_with_sharps() {
         let sexpr = Sexpr::list(vec![
             Sexpr::symbol("chord"),
-            Sexpr::list(vec![
-                Sexpr::symbol("c#4"),
-                Sexpr::symbol("f#4"),
-            ]),
+            Sexpr::list(vec![Sexpr::symbol("c#4"), Sexpr::symbol("f#4")]),
             Sexpr::keyword("h"),
         ]);
         let notes = compile_chord(&sexpr).unwrap();
@@ -653,7 +701,11 @@ mod tests {
     fn test_compile_chord_with_arpeggiate() {
         let sexpr = Sexpr::list(vec![
             Sexpr::symbol("chord"),
-            Sexpr::list(vec![Sexpr::symbol("c4"), Sexpr::symbol("e4"), Sexpr::symbol("g4")]),
+            Sexpr::list(vec![
+                Sexpr::symbol("c4"),
+                Sexpr::symbol("e4"),
+                Sexpr::symbol("g4"),
+            ]),
             Sexpr::keyword("q"),
             Sexpr::keyword("arpeggiate"),
             Sexpr::symbol("up"),
@@ -663,7 +715,9 @@ mod tests {
         // All notes should have arpeggiate notation
         for note in &notes {
             let has_arpeggiate = note.notations.iter().any(|n| {
-                n.content.iter().any(|c| matches!(c, NotationContent::Arpeggiate(_)))
+                n.content
+                    .iter()
+                    .any(|c| matches!(c, NotationContent::Arpeggiate(_)))
             });
             assert!(has_arpeggiate);
         }
@@ -683,7 +737,9 @@ mod tests {
         // All notes should have articulations
         for note in &notes {
             let has_articulations = note.notations.iter().any(|n| {
-                n.content.iter().any(|c| matches!(c, NotationContent::Articulations(_)))
+                n.content
+                    .iter()
+                    .any(|c| matches!(c, NotationContent::Articulations(_)))
             });
             assert!(has_articulations);
         }
@@ -697,10 +753,7 @@ mod tests {
 
     #[test]
     fn test_compile_chord_wrong_head() {
-        let sexpr = Sexpr::list(vec![
-            Sexpr::symbol("note"),
-            Sexpr::symbol("c4"),
-        ]);
+        let sexpr = Sexpr::list(vec![Sexpr::symbol("note"), Sexpr::symbol("c4")]);
         assert!(compile_chord(&sexpr).is_err());
     }
 
@@ -716,8 +769,16 @@ mod tests {
     fn test_compile_fermata_chord_basic() {
         let chord = FermataChord {
             pitches: vec![
-                FermataPitch { step: PitchStep::C, alter: None, octave: 4 },
-                FermataPitch { step: PitchStep::E, alter: None, octave: 4 },
+                FermataPitch {
+                    step: PitchStep::C,
+                    alter: None,
+                    octave: 4,
+                },
+                FermataPitch {
+                    step: PitchStep::E,
+                    alter: None,
+                    octave: 4,
+                },
             ],
             duration: FermataDuration::default(),
             voice: Some(1),

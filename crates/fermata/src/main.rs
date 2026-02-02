@@ -267,6 +267,9 @@ fn print_version() {
 
 /// Print help message
 fn print_help() {
-    println!("fermata {} - An S-expression DSL for music notation", fermata::VERSION);
+    println!(
+        "fermata {} - An S-expression DSL for music notation",
+        fermata::VERSION
+    );
     println!("{}", USAGE);
 }

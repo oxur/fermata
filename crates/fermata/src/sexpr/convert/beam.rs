@@ -368,7 +368,10 @@ mod tests {
 
     #[test]
     fn test_fan_from_sexpr() {
-        assert_eq!(Fan::from_sexpr(&Sexpr::symbol("accel")).unwrap(), Fan::Accel);
+        assert_eq!(
+            Fan::from_sexpr(&Sexpr::symbol("accel")).unwrap(),
+            Fan::Accel
+        );
         assert_eq!(Fan::from_sexpr(&Sexpr::symbol("rit")).unwrap(), Fan::Rit);
         assert_eq!(Fan::from_sexpr(&Sexpr::symbol("none")).unwrap(), Fan::None);
     }

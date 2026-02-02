@@ -32,7 +32,9 @@ pub fn compile_dynamic(sexpr: &Sexpr) -> CompileResult<Direction> {
         .ok_or_else(|| CompileError::type_mismatch("list", format!("{:?}", sexpr)))?;
 
     if args.is_empty() {
-        return Err(CompileError::InvalidDynamic("empty dynamic form".to_string()));
+        return Err(CompileError::InvalidDynamic(
+            "empty dynamic form".to_string(),
+        ));
     }
 
     // First element should be the dynamic name
@@ -312,7 +314,7 @@ pub fn parse_tempo_form(args: &[Sexpr]) -> CompileResult<TempoMark> {
                 return Err(CompileError::InvalidDuration(format!(
                     "unexpected tempo argument: {:?}",
                     args[i]
-                )))
+                )));
             }
         }
     }
@@ -343,7 +345,7 @@ fn parse_beat_unit_keyword(s: &str) -> CompileResult<(DurationBase, u8)> {
             return Err(CompileError::InvalidDuration(format!(
                 "unknown beat unit: {}",
                 s
-            )))
+            )));
         }
     };
 
@@ -443,7 +445,9 @@ pub fn compile_direction(sexpr: &Sexpr) -> CompileResult<Direction> {
         .ok_or_else(|| CompileError::type_mismatch("list", format!("{:?}", sexpr)))?;
 
     if args.is_empty() {
-        return Err(CompileError::UnknownForm("empty direction form".to_string()));
+        return Err(CompileError::UnknownForm(
+            "empty direction form".to_string(),
+        ));
     }
 
     let head = args
@@ -597,7 +601,7 @@ fn compile_pedal(args: &[Sexpr]) -> CompileResult<Direction> {
             return Err(CompileError::InvalidDynamic(format!(
                 "unknown pedal type: {}",
                 action
-            )))
+            )));
         }
     };
 
@@ -1295,7 +1299,8 @@ mod tests {
         // FermataDirection compilation tests
         #[test]
         fn test_compile_fermata_direction_words() {
-            let dir = compile_fermata_direction(&FermataDirection::Words("test".to_string())).unwrap();
+            let dir =
+                compile_fermata_direction(&FermataDirection::Words("test".to_string())).unwrap();
             if let DirectionTypeContent::Words(w) = &dir.direction_types[0].content {
                 assert_eq!(w[0].value, "test");
             } else {
@@ -1305,7 +1310,8 @@ mod tests {
 
         #[test]
         fn test_compile_fermata_direction_rehearsal() {
-            let dir = compile_fermata_direction(&FermataDirection::Rehearsal("B".to_string())).unwrap();
+            let dir =
+                compile_fermata_direction(&FermataDirection::Rehearsal("B".to_string())).unwrap();
             if let DirectionTypeContent::Rehearsal(r) = &dir.direction_types[0].content {
                 assert_eq!(r[0].value, "B");
             } else {

@@ -45,27 +45,29 @@ pub fn parse_pitch_str(s: &str) -> CompileResult<FermataPitch> {
     let mut chars = s.chars().peekable();
 
     // Parse the step (first character)
-    let step_char = chars.next().ok_or_else(|| {
-        CompileError::InvalidPitch("expected pitch letter".to_string())
-    })?;
+    let step_char = chars
+        .next()
+        .ok_or_else(|| CompileError::InvalidPitch("expected pitch letter".to_string()))?;
     let step = parse_step(step_char)?;
 
     // Collect remaining characters to analyze
     let remaining: String = chars.collect();
 
     if remaining.is_empty() {
-        return Err(CompileError::InvalidPitch(
-            format!("missing octave in pitch '{}'", s)
-        ));
+        return Err(CompileError::InvalidPitch(format!(
+            "missing octave in pitch '{}'",
+            s
+        )));
     }
 
     // Find where the octave number starts (first digit)
     let octave_pos = remaining.chars().position(|c| c.is_ascii_digit());
 
     if octave_pos.is_none() {
-        return Err(CompileError::InvalidPitch(
-            format!("missing octave number in pitch '{}'", s)
-        ));
+        return Err(CompileError::InvalidPitch(format!(
+            "missing octave number in pitch '{}'",
+            s
+        )));
     }
 
     let octave_pos = octave_pos.unwrap();
@@ -86,12 +88,17 @@ pub fn parse_pitch_str(s: &str) -> CompileResult<FermataPitch> {
 
     // Validate octave range (0-9 is the MusicXML standard)
     if octave > 9 {
-        return Err(CompileError::InvalidPitch(
-            format!("octave {} out of range (0-9) in pitch '{}'", octave, s)
-        ));
+        return Err(CompileError::InvalidPitch(format!(
+            "octave {} out of range (0-9) in pitch '{}'",
+            octave, s
+        )));
     }
 
-    Ok(FermataPitch { step, alter, octave })
+    Ok(FermataPitch {
+        step,
+        alter,
+        octave,
+    })
 }
 
 /// Parse a single character to a PitchStep.
@@ -104,9 +111,10 @@ pub fn parse_step(c: char) -> CompileResult<PitchStep> {
         'g' => Ok(PitchStep::G),
         'a' => Ok(PitchStep::A),
         'b' => Ok(PitchStep::B),
-        _ => Err(CompileError::InvalidPitch(
-            format!("invalid pitch letter '{}', expected a-g", c)
-        )),
+        _ => Err(CompileError::InvalidPitch(format!(
+            "invalid pitch letter '{}', expected a-g",
+            c
+        ))),
     }
 }
 
@@ -122,9 +130,10 @@ fn parse_alter(s: &str) -> CompileResult<PitchAlter> {
         "d" => Ok(PitchAlter::QuarterFlat),
         "+#" | "#+" => Ok(PitchAlter::ThreeQuarterSharp),
         "db" | "bd" => Ok(PitchAlter::ThreeQuarterFlat),
-        _ => Err(CompileError::InvalidPitch(
-            format!("invalid alteration '{}', expected #, b, ##, x, bb, n, +, or d", s)
-        )),
+        _ => Err(CompileError::InvalidPitch(format!(
+            "invalid alteration '{}', expected #, b, ##, x, bb, n, +, or d",
+            s
+        ))),
     }
 }
 
@@ -134,7 +143,11 @@ pub fn compile_pitch(pitch: &FermataPitch) -> CompileResult<IrPitch> {
     let alter: Option<Semitones> = pitch.alter.as_ref().map(|a| a.to_semitones());
     let octave = pitch.octave;
 
-    Ok(IrPitch { step, alter, octave })
+    Ok(IrPitch {
+        step,
+        alter,
+        octave,
+    })
 }
 
 /// Compile a PitchStep to an IR Step.
@@ -170,9 +183,10 @@ pub fn parse_pitch_sexpr(sexpr: &Sexpr) -> CompileResult<FermataPitch> {
 
             // Check for 'pitch' head
             if !items[0].is_symbol("pitch") {
-                return Err(CompileError::InvalidPitch(
-                    format!("expected 'pitch', got {:?}", items[0])
-                ));
+                return Err(CompileError::InvalidPitch(format!(
+                    "expected 'pitch', got {:?}",
+                    items[0]
+                )));
             }
 
             let mut step: Option<PitchStep> = None;
@@ -184,9 +198,10 @@ pub fn parse_pitch_sexpr(sexpr: &Sexpr) -> CompileResult<FermataPitch> {
             while i < items.len() {
                 if let Some(kw) = items[i].as_keyword() {
                     if i + 1 >= items.len() {
-                        return Err(CompileError::InvalidPitch(
-                            format!("missing value for keyword :{}", kw)
-                        ));
+                        return Err(CompileError::InvalidPitch(format!(
+                            "missing value for keyword :{}",
+                            kw
+                        )));
                     }
 
                     match kw {
@@ -200,33 +215,39 @@ pub fn parse_pitch_sexpr(sexpr: &Sexpr) -> CompileResult<FermataPitch> {
                             octave = Some(parse_octave_sexpr(&items[i + 1])?);
                         }
                         _ => {
-                            return Err(CompileError::InvalidPitch(
-                                format!("unknown pitch keyword :{}", kw)
-                            ));
+                            return Err(CompileError::InvalidPitch(format!(
+                                "unknown pitch keyword :{}",
+                                kw
+                            )));
                         }
                     }
                     i += 2;
                 } else {
-                    return Err(CompileError::InvalidPitch(
-                        format!("expected keyword, got {:?}", items[i])
-                    ));
+                    return Err(CompileError::InvalidPitch(format!(
+                        "expected keyword, got {:?}",
+                        items[i]
+                    )));
                 }
             }
 
             // Validate required fields
-            let step = step.ok_or_else(|| {
-                CompileError::InvalidPitch("missing :step in pitch".to_string())
-            })?;
+            let step = step
+                .ok_or_else(|| CompileError::InvalidPitch("missing :step in pitch".to_string()))?;
             let octave = octave.ok_or_else(|| {
                 CompileError::InvalidPitch("missing :octave in pitch".to_string())
             })?;
 
-            Ok(FermataPitch { step, alter, octave })
+            Ok(FermataPitch {
+                step,
+                alter,
+                octave,
+            })
         }
 
-        _ => Err(CompileError::InvalidPitch(
-            format!("expected pitch symbol or list, got {:?}", sexpr)
-        )),
+        _ => Err(CompileError::InvalidPitch(format!(
+            "expected pitch symbol or list, got {:?}",
+            sexpr
+        ))),
     }
 }
 
@@ -235,15 +256,17 @@ fn parse_step_sexpr(sexpr: &Sexpr) -> CompileResult<PitchStep> {
     match sexpr {
         Sexpr::Symbol(s) => {
             if s.len() != 1 {
-                return Err(CompileError::InvalidPitch(
-                    format!("step must be single letter, got '{}'", s)
-                ));
+                return Err(CompileError::InvalidPitch(format!(
+                    "step must be single letter, got '{}'",
+                    s
+                )));
             }
             parse_step(s.chars().next().unwrap())
         }
-        _ => Err(CompileError::InvalidPitch(
-            format!("expected step symbol, got {:?}", sexpr)
-        )),
+        _ => Err(CompileError::InvalidPitch(format!(
+            "expected step symbol, got {:?}",
+            sexpr
+        ))),
     }
 }
 
@@ -257,9 +280,10 @@ fn parse_alter_sexpr(sexpr: &Sexpr) -> CompileResult<PitchAlter> {
             0 => Ok(PitchAlter::Natural),
             1 => Ok(PitchAlter::Sharp),
             2 => Ok(PitchAlter::DoubleSharp),
-            _ => Err(CompileError::InvalidPitch(
-                format!("invalid alteration value {}, expected -2 to 2", n)
-            )),
+            _ => Err(CompileError::InvalidPitch(format!(
+                "invalid alteration value {}, expected -2 to 2",
+                n
+            ))),
         },
 
         // Float form for microtones
@@ -284,9 +308,10 @@ fn parse_alter_sexpr(sexpr: &Sexpr) -> CompileResult<PitchAlter> {
             } else if (semitones - 2.0).abs() < 0.01 {
                 Ok(PitchAlter::DoubleSharp)
             } else {
-                Err(CompileError::InvalidPitch(
-                    format!("unsupported microtone alteration {}", semitones)
-                ))
+                Err(CompileError::InvalidPitch(format!(
+                    "unsupported microtone alteration {}",
+                    semitones
+                )))
             }
         }
 
@@ -301,14 +326,16 @@ fn parse_alter_sexpr(sexpr: &Sexpr) -> CompileResult<PitchAlter> {
             "quarter-flat" | "d" => Ok(PitchAlter::QuarterFlat),
             "three-quarter-sharp" => Ok(PitchAlter::ThreeQuarterSharp),
             "three-quarter-flat" => Ok(PitchAlter::ThreeQuarterFlat),
-            _ => Err(CompileError::InvalidPitch(
-                format!("unknown alteration symbol '{}'", s)
-            )),
+            _ => Err(CompileError::InvalidPitch(format!(
+                "unknown alteration symbol '{}'",
+                s
+            ))),
         },
 
-        _ => Err(CompileError::InvalidPitch(
-            format!("expected alteration number or symbol, got {:?}", sexpr)
-        )),
+        _ => Err(CompileError::InvalidPitch(format!(
+            "expected alteration number or symbol, got {:?}",
+            sexpr
+        ))),
     }
 }
 
@@ -317,15 +344,17 @@ fn parse_octave_sexpr(sexpr: &Sexpr) -> CompileResult<u8> {
     match sexpr {
         Sexpr::Integer(n) => {
             if *n < 0 || *n > 9 {
-                return Err(CompileError::InvalidPitch(
-                    format!("octave {} out of range (0-9)", n)
-                ));
+                return Err(CompileError::InvalidPitch(format!(
+                    "octave {} out of range (0-9)",
+                    n
+                )));
             }
             Ok(*n as u8)
         }
-        _ => Err(CompileError::InvalidPitch(
-            format!("expected octave integer, got {:?}", sexpr)
-        )),
+        _ => Err(CompileError::InvalidPitch(format!(
+            "expected octave integer, got {:?}",
+            sexpr
+        ))),
     }
 }
 

@@ -23,13 +23,13 @@
 //! ```
 
 use nom::{
+    IResult,
     branch::alt,
     bytes::complete::{escaped, tag, take_while, take_while1},
     character::complete::{char, multispace0, none_of, one_of},
     combinator::{map, opt, recognize, value},
     multi::many0,
     sequence::{delimited, pair, preceded},
-    IResult,
 };
 
 use super::ast::Sexpr;
@@ -56,11 +56,10 @@ use super::error::{ParseError, ParseResult};
 ///
 /// Returns [`ParseError`] if the input contains invalid syntax.
 pub fn parse(input: &str) -> ParseResult<Sexpr> {
-    let (remaining, sexpr) =
-        preceded(skip_ws_and_comments, sexpr)(input).map_err(|e| match e {
-            nom::Err::Incomplete(_) => ParseError::UnexpectedEof,
-            nom::Err::Error(e) | nom::Err::Failure(e) => ParseError::Nom(format!("{:?}", e)),
-        })?;
+    let (remaining, sexpr) = preceded(skip_ws_and_comments, sexpr)(input).map_err(|e| match e {
+        nom::Err::Incomplete(_) => ParseError::UnexpectedEof,
+        nom::Err::Error(e) | nom::Err::Failure(e) => ParseError::Nom(format!("{:?}", e)),
+    })?;
 
     // Check for trailing content (allow whitespace/comments)
     let (remaining, _) = skip_ws_and_comments(remaining).map_err(|_| ParseError::UnexpectedEof)?;
@@ -95,12 +94,11 @@ pub fn parse(input: &str) -> ParseResult<Sexpr> {
 ///
 /// Returns [`ParseError`] if any expression contains invalid syntax.
 pub fn parse_all(input: &str) -> ParseResult<Vec<Sexpr>> {
-    let (remaining, sexprs) = many0(preceded(skip_ws_and_comments, sexpr))(input).map_err(
-        |e| match e {
+    let (remaining, sexprs) =
+        many0(preceded(skip_ws_and_comments, sexpr))(input).map_err(|e| match e {
             nom::Err::Incomplete(_) => ParseError::UnexpectedEof,
             nom::Err::Error(e) | nom::Err::Failure(e) => ParseError::Nom(format!("{:?}", e)),
-        },
-    )?;
+        })?;
 
     // Check for trailing content
     let (remaining, _) = skip_ws_and_comments(remaining).map_err(|_| ParseError::UnexpectedEof)?;
@@ -120,15 +118,7 @@ pub fn parse_all(input: &str) -> ParseResult<Vec<Sexpr>> {
 fn sexpr(input: &str) -> IResult<&str, Sexpr> {
     preceded(
         skip_ws_and_comments,
-        alt((
-            boolean,
-            nil,
-            string_literal,
-            number,
-            keyword,
-            symbol,
-            list,
-        )),
+        alt((boolean, nil, string_literal, number, keyword, symbol, list)),
     )(input)
 }
 
@@ -171,8 +161,23 @@ fn is_symbol_char(c: char) -> bool {
     c.is_alphanumeric()
         || matches!(
             c,
-            '-' | '_' | '+' | '*' | '/' | '=' | '<' | '>' | '!' | '?' | '.' | '#' | '@' | '$'
-                | '%' | '^' | '&' | '~'
+            '-' | '_'
+                | '+'
+                | '*'
+                | '/'
+                | '='
+                | '<'
+                | '>'
+                | '!'
+                | '?'
+                | '.'
+                | '#'
+                | '@'
+                | '$'
+                | '%'
+                | '^'
+                | '&'
+                | '~'
         )
 }
 
@@ -212,11 +217,9 @@ fn number(input: &str) -> IResult<&str, Sexpr> {
     ))(input)?;
 
     // Don't consume if followed by symbol chars (like "123abc")
-    if rest
-        .chars()
-        .next()
-        .map_or(false, |c| is_symbol_char(c) && !c.is_ascii_digit() && c != '.')
-    {
+    if rest.chars().next().map_or(false, |c| {
+        is_symbol_char(c) && !c.is_ascii_digit() && c != '.'
+    }) {
         return Err(nom::Err::Error(nom::error::Error::new(
             input,
             nom::error::ErrorKind::Digit,
@@ -224,14 +227,14 @@ fn number(input: &str) -> IResult<&str, Sexpr> {
     }
 
     if num_str.contains('.') {
-        let f: f64 = num_str
-            .parse()
-            .map_err(|_| nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Float)))?;
+        let f: f64 = num_str.parse().map_err(|_| {
+            nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Float))
+        })?;
         Ok((rest, Sexpr::Float(f)))
     } else {
-        let i: i64 = num_str
-            .parse()
-            .map_err(|_| nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Digit)))?;
+        let i: i64 = num_str.parse().map_err(|_| {
+            nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Digit))
+        })?;
         Ok((rest, Sexpr::Integer(i)))
     }
 }
@@ -475,10 +478,7 @@ mod tests {
     #[test]
     fn test_parse_list_single_symbol() {
         let result = parse("(foo)").unwrap();
-        assert_eq!(
-            result,
-            Sexpr::List(vec![Sexpr::Symbol("foo".to_string())])
-        );
+        assert_eq!(result, Sexpr::List(vec![Sexpr::Symbol("foo".to_string())]));
     }
 
     #[test]

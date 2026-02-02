@@ -349,11 +349,9 @@ impl ToSexpr for KeyContent {
     fn to_sexpr(&self) -> Sexpr {
         match self {
             KeyContent::Traditional(tk) => tk.to_sexpr(),
-            KeyContent::NonTraditional(steps) => {
-                ListBuilder::new("non-traditional-key")
-                    .kwarg_list("key-steps", steps)
-                    .build()
-            }
+            KeyContent::NonTraditional(steps) => ListBuilder::new("non-traditional-key")
+                .kwarg_list("key-steps", steps)
+                .build(),
         }
     }
 }
@@ -365,9 +363,7 @@ impl FromSexpr for KeyContent {
             .ok_or_else(|| ConvertError::type_mismatch("key-content", sexpr))?;
 
         match get_head(list)? {
-            "traditional-key" => {
-                Ok(KeyContent::Traditional(TraditionalKey::from_sexpr(sexpr)?))
-            }
+            "traditional-key" => Ok(KeyContent::Traditional(TraditionalKey::from_sexpr(sexpr)?)),
             "non-traditional-key" => {
                 let steps = optional_kwarg::<Vec<KeyStep>>(list, "key-steps")?.unwrap_or_default();
                 Ok(KeyContent::NonTraditional(steps))
@@ -500,8 +496,8 @@ impl FromSexpr for TimeContent {
 
         match get_head(list)? {
             "measured" => {
-                let signatures = optional_kwarg::<Vec<TimeSignature>>(list, "signatures")?
-                    .unwrap_or_default();
+                let signatures =
+                    optional_kwarg::<Vec<TimeSignature>>(list, "signatures")?.unwrap_or_default();
                 Ok(TimeContent::Measured { signatures })
             }
             "senza-misura" => {
@@ -784,12 +780,10 @@ impl ToSexpr for MeasureStyleContent {
                     .kwarg_opt("slashes", slashes)
                     .build()
             }
-            MeasureStyleContent::BeatRepeat { r#type, slashes } => {
-                ListBuilder::new("beat-repeat")
-                    .kwarg("type", r#type)
-                    .kwarg_opt("slashes", slashes)
-                    .build()
-            }
+            MeasureStyleContent::BeatRepeat { r#type, slashes } => ListBuilder::new("beat-repeat")
+                .kwarg("type", r#type)
+                .kwarg_opt("slashes", slashes)
+                .build(),
             MeasureStyleContent::Slash { r#type, use_stems } => ListBuilder::new("slash")
                 .kwarg("type", r#type)
                 .kwarg_opt("use-stems", use_stems)

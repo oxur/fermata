@@ -4566,7 +4566,14 @@ mod tests {
     #[test]
     fn test_all_modes() {
         let modes = [
-            "major", "minor", "dorian", "phrygian", "lydian", "mixolydian", "aeolian", "locrian",
+            "major",
+            "minor",
+            "dorian",
+            "phrygian",
+            "lydian",
+            "mixolydian",
+            "aeolian",
+            "locrian",
         ];
 
         for mode in modes {

@@ -14,11 +14,6 @@
 
 Fermata is a Lisp-like domain-specific language for describing musical notation.
 
-## Status
-
-**Core functionality is implemented.** The CLI supports compiling Fermata source to MusicXML,
-importing MusicXML to Fermata, and validating source files. The API may still change.
-
 ## Example
 
 ```lisp
@@ -116,32 +111,39 @@ cat score.musicxml | fermata import > score.fm
 ### As a Library
 
 ```rust,ignore
-use fermata::lang::{compile, check};
-use fermata::musicxml::{emit, parse};
+use fermata::{parse, compile, CompileOptions, Target};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Compile Fermata source to MusicXML
+    // Parse Fermata source to AST
     let source = r#"
-        (score
-          (part :id "P1" :name "Piano"
+        (score :title "My Song"
+          (part :piano
             (measure
-              (note C4 :q)
-              (note D4 :q)
-              (note E4 :q)
-              (note F4 :q))))
+              (note c4 :q)
+              (note d4 :q)
+              (note e4 :q)
+              (note f4 :q))))
     "#;
+    let score = parse(source)?;
 
-    let ir = compile(source)?;
-    let musicxml = emit(&ir)?;
-    std::fs::write("output.musicxml", musicxml)?;
+    // Compile to MusicXML (default)
+    let xml = compile(&score, CompileOptions::default())?;
+    std::fs::write("output.musicxml", &xml)?;
 
-    // Parse MusicXML to IR
-    let xml = std::fs::read_to_string("input.musicxml")?;
-    let score = parse(&xml)?;
+    // Or compile to S-expression format
+    let sexpr = compile(&score, CompileOptions::sexpr())?;
+    println!("{}", sexpr);
 
     Ok(())
 }
 ```
+
+For lower-level control, use the modules directly:
+
+- `fermata::lang` - Language parsing and compilation
+- `fermata::musicxml` - MusicXML parsing and emission
+- `fermata::sexpr` - S-expression parsing and printing
+- `fermata::ir` - MusicXML-faithful intermediate representation
 
 ## Language Reference
 

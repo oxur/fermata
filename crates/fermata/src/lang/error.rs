@@ -123,6 +123,10 @@ pub enum CompileError {
     #[error("IR conversion error: {0}")]
     IrConvert(#[from] ConvertError),
 
+    /// Error during output emission
+    #[error("Emit error: {0}")]
+    Emit(String),
+
     /// Error with source span information attached
     #[error("{message}")]
     WithSpan {
@@ -152,6 +156,11 @@ impl CompileError {
             expected,
             found: found.as_ref().to_string(),
         }
+    }
+
+    /// Create an emit error
+    pub fn emit(message: impl Into<String>) -> Self {
+        CompileError::Emit(message.into())
     }
 }
 

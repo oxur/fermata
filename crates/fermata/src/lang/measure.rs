@@ -505,7 +505,6 @@ fn compile_barline_spec(spec: &BarlineSpec) -> CompileResult<Barline> {
 mod tests {
     use super::*;
     use crate::ir::note::{NoteContent, PitchRestUnpitched};
-    use crate::ir::pitch::Step as IrStep;
     use crate::lang::ast::{FermataDuration, FermataNote, FermataPitch, FermataRest, PitchStep};
     use crate::sexpr::parse;
 

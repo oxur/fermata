@@ -9,131 +9,182 @@
 //! # Compile to MusicXML
 //! fermata compile score.fm -o score.musicxml
 //!
+//! # Show reference information
+//! fermata show durations
+//! fermata show targets --format json
+//!
 //! # Show version
 //! fermata --version
-//! fermata version
 //!
 //! # Show help
 //! fermata --help
-//! fermata help
 //! ```
 
-use std::env;
 use std::fs;
 use std::io::{self, Read, Write};
 use std::path::Path;
 use std::process::ExitCode;
 
+use clap::{Parser, Subcommand, ValueEnum};
+use owo_colors::OwoColorize;
+
 use fermata::lang::{check, compile};
 use fermata::musicxml::emit;
 
-const USAGE: &str = r#"
-USAGE:
-    fermata <COMMAND> [OPTIONS]
+mod show;
 
-COMMANDS:
-    compile <FILE>      Compile a .fm file to MusicXML
-    check <FILE>        Check if a .fm file is valid
-    version             Show version information
-    help                Show this help message
+/// An S-expression DSL for music notation
+#[derive(Parser)]
+#[command(name = "fermata", version, about, long_about = None)]
+#[command(propagate_version = true)]
+struct Cli {
+    /// Disable colored output
+    #[arg(long, global = true)]
+    no_color: bool,
 
-OPTIONS:
-    -o, --output <FILE>     Output file (default: stdout)
-    -h, --help              Show help for a command
-    -V, --version           Show version
+    #[command(subcommand)]
+    command: Option<Commands>,
+}
 
-EXAMPLES:
-    fermata compile score.fm -o score.musicxml
-    fermata check score.fm
-    cat score.fm | fermata compile -
-"#;
+#[derive(Subcommand)]
+enum Commands {
+    /// Compile a Fermata file to MusicXML
+    Compile {
+        /// Input file (use '-' for stdin)
+        #[arg(value_name = "FILE")]
+        file: Option<String>,
+
+        /// Output file (omit for stdout)
+        #[arg(short, long, value_name = "FILE")]
+        output: Option<String>,
+
+        /// Output format
+        #[arg(short, long, value_enum, default_value_t = OutputTarget::MusicXml)]
+        target: OutputTarget,
+    },
+
+    /// Check if a Fermata file is valid
+    Check {
+        /// Input file (use '-' for stdin)
+        #[arg(value_name = "FILE")]
+        file: Option<String>,
+    },
+
+    /// Display reference information
+    Show {
+        /// Topic to display
+        #[command(subcommand)]
+        topic: ShowTopic,
+
+        /// Output format
+        #[arg(long, value_enum, default_value_t = OutputFormat::Text, global = true)]
+        format: OutputFormat,
+    },
+}
+
+/// Output target format for compilation
+#[derive(Clone, ValueEnum)]
+enum OutputTarget {
+    /// MusicXML format
+    #[value(alias = "xml")]
+    MusicXml,
+    /// LilyPond format (not yet implemented)
+    #[value(alias = "ly")]
+    LilyPond,
+}
+
+/// Output format for show commands
+#[derive(Clone, Copy, ValueEnum, Default)]
+pub enum OutputFormat {
+    /// Human-readable text with colors
+    #[default]
+    Text,
+    /// Machine-readable JSON
+    Json,
+}
+
+/// Topics for the show command
+#[derive(Clone, Subcommand)]
+pub enum ShowTopic {
+    /// Supported output formats
+    Targets,
+    /// Quick syntax reference
+    Syntax,
+    /// Duration symbols (:w, :h, :q, :8, etc.)
+    Durations,
+    /// Pitch notation (C4, D#5, Bb3, etc.)
+    Pitches,
+    /// Available clefs
+    Clefs,
+    /// Key signatures and modes
+    Keys,
+    /// Dynamic markings (pp, p, mp, mf, f, ff, etc.)
+    Dynamics,
+    /// Articulation types
+    Articulations,
+    /// Ornament types
+    Ornaments,
+    /// Instrument shortcuts
+    Instruments,
+    /// Barline types
+    Barlines,
+    /// Accidental variations
+    Accidentals,
+    /// Notehead shapes
+    Noteheads,
+    /// Fermata shapes
+    Fermatas,
+}
 
 /// Entry point
 fn main() -> ExitCode {
-    let args: Vec<String> = env::args().collect();
+    let cli = Cli::parse();
 
-    if args.len() < 2 {
-        print_help();
-        return ExitCode::SUCCESS;
-    }
+    // Determine if colors should be used
+    let use_colors = !cli.no_color && std::env::var("NO_COLOR").is_err();
 
-    let command = &args[1];
-
-    match command.as_str() {
-        "compile" => cmd_compile(&args[2..]),
-        "check" => cmd_check(&args[2..]),
-        "version" | "-V" | "--version" => {
-            print_version();
+    match cli.command {
+        Some(Commands::Compile {
+            file,
+            output,
+            target,
+        }) => cmd_compile(file.as_deref(), output.as_deref(), target, use_colors),
+        Some(Commands::Check { file }) => cmd_check(file.as_deref(), use_colors),
+        Some(Commands::Show { topic, format }) => show::run(topic, format, use_colors),
+        None => {
+            // No subcommand provided - show help
+            use clap::CommandFactory;
+            Cli::command().print_help().unwrap();
+            println!();
             ExitCode::SUCCESS
-        }
-        "help" | "-h" | "--help" => {
-            print_help();
-            ExitCode::SUCCESS
-        }
-        _ => {
-            eprintln!("Unknown command: {}", command);
-            eprintln!("Run 'fermata help' for usage information.");
-            ExitCode::FAILURE
         }
     }
 }
 
-/// Compile command
-fn cmd_compile(args: &[String]) -> ExitCode {
-    let mut input_file: Option<&str> = None;
-    let mut output_file: Option<&str> = None;
-
-    let mut i = 0;
-    while i < args.len() {
-        match args[i].as_str() {
-            "-o" | "--output" => {
-                if i + 1 >= args.len() {
-                    eprintln!("Error: --output requires a file path");
-                    return ExitCode::FAILURE;
-                }
-                output_file = Some(&args[i + 1]);
-                i += 2;
-            }
-            "-h" | "--help" => {
-                println!("Compile a Fermata file to MusicXML.");
-                println!();
-                println!("USAGE:");
-                println!("    fermata compile <FILE> [OPTIONS]");
-                println!();
-                println!("ARGS:");
-                println!("    <FILE>    Input file (use '-' for stdin)");
-                println!();
-                println!("OPTIONS:");
-                println!("    -o, --output <FILE>    Output file (default: stdout)");
-                println!("    -h, --help             Show this help");
-                return ExitCode::SUCCESS;
-            }
-            _ => {
-                if input_file.is_none() {
-                    input_file = Some(&args[i]);
-                } else {
-                    eprintln!("Error: unexpected argument '{}'", args[i]);
-                    return ExitCode::FAILURE;
-                }
-                i += 1;
-            }
-        }
+/// Print an error message with optional coloring.
+fn print_error(label: &str, message: &str, use_colors: bool) {
+    if use_colors {
+        eprintln!("{}: {}", label.red(), message);
+    } else {
+        eprintln!("{}: {}", label, message);
     }
+}
 
-    let input_file = match input_file {
-        Some(f) => f,
-        None => {
-            eprintln!("Error: no input file specified");
-            eprintln!("Run 'fermata compile --help' for usage information.");
-            return ExitCode::FAILURE;
-        }
-    };
+/// Compile command
+fn cmd_compile(
+    file: Option<&str>,
+    output: Option<&str>,
+    target: OutputTarget,
+    use_colors: bool,
+) -> ExitCode {
+    // Default to stdin if no file specified
+    let input_path = file.unwrap_or("-");
 
     // Read input
-    let source = match read_input(input_file) {
+    let source = match read_input(input_path) {
         Ok(s) => s,
         Err(e) => {
-            eprintln!("Error reading input: {}", e);
+            print_error("Error reading input", &e.to_string(), use_colors);
             return ExitCode::FAILURE;
         }
     };
@@ -142,76 +193,50 @@ fn cmd_compile(args: &[String]) -> ExitCode {
     let score = match compile(&source) {
         Ok(s) => s,
         Err(e) => {
-            eprintln!("Compilation error: {}", e);
+            print_error("Compilation error", &e.to_string(), use_colors);
             return ExitCode::FAILURE;
         }
     };
 
-    // Emit MusicXML
-    let xml = match emit(&score) {
-        Ok(x) => x,
-        Err(e) => {
-            eprintln!("MusicXML generation error: {}", e);
+    // Generate output based on target
+    let output_content = match target {
+        OutputTarget::MusicXml => match emit(&score) {
+            Ok(x) => x,
+            Err(e) => {
+                print_error("MusicXML generation error", &e.to_string(), use_colors);
+                return ExitCode::FAILURE;
+            }
+        },
+        OutputTarget::LilyPond => {
+            print_error(
+                "Error",
+                "LilyPond output is not yet implemented",
+                use_colors,
+            );
             return ExitCode::FAILURE;
         }
     };
 
     // Write output
-    match write_output(output_file, &xml) {
+    match write_output(output, &output_content) {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
-            eprintln!("Error writing output: {}", e);
+            print_error("Error writing output", &e.to_string(), use_colors);
             ExitCode::FAILURE
         }
     }
 }
 
 /// Check command
-fn cmd_check(args: &[String]) -> ExitCode {
-    let mut input_file: Option<&str> = None;
-
-    let mut i = 0;
-    while i < args.len() {
-        match args[i].as_str() {
-            "-h" | "--help" => {
-                println!("Check if a Fermata file is valid.");
-                println!();
-                println!("USAGE:");
-                println!("    fermata check <FILE>");
-                println!();
-                println!("ARGS:");
-                println!("    <FILE>    Input file (use '-' for stdin)");
-                println!();
-                println!("OPTIONS:");
-                println!("    -h, --help    Show this help");
-                return ExitCode::SUCCESS;
-            }
-            _ => {
-                if input_file.is_none() {
-                    input_file = Some(&args[i]);
-                } else {
-                    eprintln!("Error: unexpected argument '{}'", args[i]);
-                    return ExitCode::FAILURE;
-                }
-                i += 1;
-            }
-        }
-    }
-
-    let input_file = match input_file {
-        Some(f) => f,
-        None => {
-            eprintln!("Error: no input file specified");
-            eprintln!("Run 'fermata check --help' for usage information.");
-            return ExitCode::FAILURE;
-        }
-    };
+fn cmd_check(file: Option<&str>, use_colors: bool) -> ExitCode {
+    // Default to stdin if no file specified
+    let input_path = file.unwrap_or("-");
 
     // Read input
-    let source = match read_input(input_file) {
+    let source = match read_input(input_path) {
         Ok(s) => s,
         Err(e) => {
-            eprintln!("Error reading input: {}", e);
+            print_error("Error reading input", &e.to_string(), use_colors);
             return ExitCode::FAILURE;
         }
     };
@@ -219,11 +244,19 @@ fn cmd_check(args: &[String]) -> ExitCode {
     // Check
     match check(&source) {
         Ok(()) => {
-            println!("OK: {} is valid", input_file);
+            if use_colors {
+                println!("{}: {} is valid", "OK".green(), input_path);
+            } else {
+                println!("OK: {} is valid", input_path);
+            }
             ExitCode::SUCCESS
         }
         Err(e) => {
-            eprintln!("Error in {}: {}", input_file, e);
+            if use_colors {
+                eprintln!("{} in {}: {}", "Error".red(), input_path, e);
+            } else {
+                eprintln!("Error in {}: {}", input_path, e);
+            }
             ExitCode::FAILURE
         }
     }
@@ -243,6 +276,11 @@ fn read_input(path: &str) -> io::Result<String> {
 /// Write output to file or stdout
 fn write_output(path: Option<&str>, content: &str) -> io::Result<()> {
     match path {
+        Some("-") | None => {
+            let mut stdout = io::stdout().lock();
+            stdout.write_all(content.as_bytes())?;
+            stdout.flush()
+        }
         Some(p) => {
             // Create parent directories if needed
             if let Some(parent) = Path::new(p).parent() {
@@ -252,24 +290,5 @@ fn write_output(path: Option<&str>, content: &str) -> io::Result<()> {
             }
             fs::write(p, content)
         }
-        None => {
-            let mut stdout = io::stdout().lock();
-            stdout.write_all(content.as_bytes())?;
-            stdout.flush()
-        }
     }
-}
-
-/// Print version information
-fn print_version() {
-    println!("fermata {}", fermata::VERSION);
-}
-
-/// Print help message
-fn print_help() {
-    println!(
-        "fermata {} - An S-expression DSL for music notation",
-        fermata::VERSION
-    );
-    println!("{}", USAGE);
 }

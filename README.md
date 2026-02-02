@@ -204,8 +204,8 @@ at your option.
 
 [logo]: assets/images/logo/v1-x250.png
 [logo-large]: assets/images/logo/v1.png
-[build]: https://github.com/oxur/fermata/actions/workflows/ci.yml
-[build-badge]: https://github.com/oxur/fermata/actions/workflows/ci.yml/badge.svg
+[build]: https://github.com/oxur/fermata/actions/workflows/cicd.yml
+[build-badge]: https://github.com/oxur/fermata/actions/workflows/cicd.yml/badge.svg
 [crate]: https://crates.io/crates/fermata
 [crate-badge]: https://img.shields.io/crates/v/fermata.svg
 [docs]: https://docs.rs/fermata/

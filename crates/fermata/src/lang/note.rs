@@ -492,6 +492,12 @@ pub fn compile_rest(sexpr: &Sexpr) -> CompileResult<Note> {
     }
 }
 
+/// Parse a note form from S-expression items directly to AST.
+/// This is the public wrapper for external use.
+pub fn parse_note_form_to_ast(items: &[Sexpr]) -> CompileResult<FermataNote> {
+    parse_note_form(items)
+}
+
 /// Parse rest arguments from S-expression items.
 ///
 /// Expected format: `duration [keywords...]`
@@ -557,6 +563,12 @@ pub fn parse_rest_form(items: &[Sexpr]) -> CompileResult<FermataRest> {
         staff,
         measure_rest,
     })
+}
+
+/// Parse a rest form from S-expression items directly to AST.
+/// This is the public wrapper for external use.
+pub fn parse_rest_form_to_ast(items: &[Sexpr]) -> CompileResult<FermataRest> {
+    parse_rest_form(items)
 }
 
 /// Compile a FermataRest to an IR Note (with Rest content).

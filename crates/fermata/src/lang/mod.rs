@@ -23,10 +23,12 @@
 pub mod ast;
 pub mod attributes;
 pub mod chord;
+pub mod connectors;
 pub mod defaults;
 pub mod direction;
 pub mod duration;
 pub mod error;
+pub mod grace;
 pub mod measure;
 pub mod note;
 pub mod part;

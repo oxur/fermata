@@ -56,10 +56,13 @@ use super::error::{ParseError, ParseResult};
 ///
 /// Returns [`ParseError`] if the input contains invalid syntax.
 pub fn parse(input: &str) -> ParseResult<Sexpr> {
-    let (remaining, sexpr) = preceded(skip_ws_and_comments, sexpr).parse(input).map_err(|e| match e {
-        nom::Err::Incomplete(_) => ParseError::UnexpectedEof,
-        nom::Err::Error(e) | nom::Err::Failure(e) => ParseError::Nom(format!("{:?}", e)),
-    })?;
+    let (remaining, sexpr) =
+        preceded(skip_ws_and_comments, sexpr)
+            .parse(input)
+            .map_err(|e| match e {
+                nom::Err::Incomplete(_) => ParseError::UnexpectedEof,
+                nom::Err::Error(e) | nom::Err::Failure(e) => ParseError::Nom(format!("{:?}", e)),
+            })?;
 
     // Check for trailing content (allow whitespace/comments)
     let (remaining, _) = skip_ws_and_comments(remaining).map_err(|_| ParseError::UnexpectedEof)?;
@@ -94,8 +97,9 @@ pub fn parse(input: &str) -> ParseResult<Sexpr> {
 ///
 /// Returns [`ParseError`] if any expression contains invalid syntax.
 pub fn parse_all(input: &str) -> ParseResult<Vec<Sexpr>> {
-    let (remaining, sexprs) =
-        many0(preceded(skip_ws_and_comments, sexpr)).parse(input).map_err(|e| match e {
+    let (remaining, sexprs) = many0(preceded(skip_ws_and_comments, sexpr))
+        .parse(input)
+        .map_err(|e| match e {
             nom::Err::Incomplete(_) => ParseError::UnexpectedEof,
             nom::Err::Error(e) | nom::Err::Failure(e) => ParseError::Nom(format!("{:?}", e)),
         })?;
@@ -119,7 +123,8 @@ fn sexpr(input: &str) -> IResult<&str, Sexpr> {
     preceded(
         skip_ws_and_comments,
         alt((boolean, nil, string_literal, number, keyword, symbol, list)),
-    ).parse(input)
+    )
+    .parse(input)
 }
 
 /// Skip whitespace and comments.
@@ -145,7 +150,8 @@ fn skip_ws_and_comments(input: &str) -> IResult<&str, ()> {
 fn symbol(input: &str) -> IResult<&str, Sexpr> {
     map(take_while1(is_symbol_char), |s: &str| {
         Sexpr::Symbol(s.to_string())
-    }).parse(input)
+    })
+    .parse(input)
 }
 
 /// Parse a keyword (colon-prefixed identifier).
@@ -153,7 +159,8 @@ fn keyword(input: &str) -> IResult<&str, Sexpr> {
     map(
         preceded(char(':'), take_while1(is_keyword_char)),
         |s: &str| Sexpr::Keyword(s.to_string()),
-    ).parse(input)
+    )
+    .parse(input)
 }
 
 /// Check if a character is valid in a symbol.
@@ -191,7 +198,8 @@ fn boolean(input: &str) -> IResult<&str, Sexpr> {
     alt((
         value(Sexpr::Bool(true), tag("#t")),
         value(Sexpr::Bool(false), tag("#f")),
-    )).parse(input)
+    ))
+    .parse(input)
 }
 
 /// Parse nil.
@@ -214,7 +222,8 @@ fn number(input: &str) -> IResult<&str, Sexpr> {
             take_while1(|c: char| c.is_ascii_digit()),
             opt(pair(char('.'), take_while(|c: char| c.is_ascii_digit()))),
         ),
-    )).parse(input)?;
+    ))
+    .parse(input)?;
 
     // Don't consume if followed by symbol chars (like "123abc")
     if rest
@@ -256,7 +265,8 @@ fn string_literal(input: &str) -> IResult<&str, Sexpr> {
             ),
             |s: &str| Sexpr::String(unescape_string(s)),
         ),
-    )).parse(input)
+    ))
+    .parse(input)
 }
 
 /// Unescape a string (process escape sequences).
@@ -293,7 +303,8 @@ fn list(input: &str) -> IResult<&str, Sexpr> {
             preceded(skip_ws_and_comments, char(')')),
         ),
         Sexpr::List,
-    ).parse(input)
+    )
+    .parse(input)
 }
 
 #[cfg(test)]

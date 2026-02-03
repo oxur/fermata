@@ -346,10 +346,13 @@ mod tests {
         "#;
         let score = compile(source).unwrap();
 
-        // First measure should have direction (dynamics) and note
+        // First measure should have: default attributes, direction (dynamics), and note
         let measure = &score.parts[0].measures[0];
-        assert!(measure.content.len() >= 2);
-        assert!(matches!(measure.content[0], MusicDataElement::Direction(_)));
+        assert!(measure.content.len() >= 3);
+        // Default attributes are auto-added at position 0
+        assert!(matches!(measure.content[0], MusicDataElement::Attributes(_)));
+        // Direction is at position 1
+        assert!(matches!(measure.content[1], MusicDataElement::Direction(_)));
     }
 
     #[test]
@@ -362,8 +365,9 @@ mod tests {
         "#;
         let score = compile(source).unwrap();
 
-        // Chord should expand to 3 notes
+        // Chord should expand to 3 notes, plus auto-added default attributes
         let measure = &score.parts[0].measures[0];
-        assert_eq!(measure.content.len(), 3);
+        assert_eq!(measure.content.len(), 4); // 1 attributes + 3 notes
+        assert!(matches!(measure.content[0], MusicDataElement::Attributes(_)));
     }
 }

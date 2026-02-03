@@ -4,11 +4,15 @@
 //! It generates both the Part (containing measures) and ScorePart (metadata)
 //! for use in the part-list.
 
-use crate::ir::common::PrintStyle;
-use crate::ir::measure::Measure;
+use crate::ir::attributes::{
+    Attributes, Clef, ClefSign, Key, KeyContent, Mode, Time, TimeContent, TimeSignature,
+    TraditionalKey,
+};
+use crate::ir::common::{Editorial, PrintStyle};
+use crate::ir::measure::{Measure, MusicDataElement};
 use crate::ir::part::{Part, PartListElement, PartName, ScorePart};
 use crate::lang::ast::{FermataMeasure, FermataPart};
-use crate::lang::defaults::generate_part_id;
+use crate::lang::defaults::{generate_part_id, DEFAULT_DIVISIONS};
 use crate::lang::error::{CompileError, CompileResult};
 use crate::lang::measure::{compile_fermata_measure, parse_measure_from_sexpr};
 use crate::sexpr::Sexpr;
@@ -208,11 +212,14 @@ pub fn compile_fermata_part(part: &FermataPart, index: usize) -> CompileResult<C
     let part_id = part.id.clone().unwrap_or_else(|| generate_part_id(index));
 
     // Compile measures
-    let ir_measures: Vec<Measure> = part
+    let mut ir_measures: Vec<Measure> = part
         .measures
         .iter()
         .map(compile_fermata_measure)
         .collect::<CompileResult<Vec<_>>>()?;
+
+    // Ensure the first measure has attributes (required by Verovio)
+    ensure_first_measure_has_attributes(&mut ir_measures);
 
     // Build Part
     let ir_part = Part {
@@ -253,6 +260,74 @@ pub fn compile_fermata_part(part: &FermataPart, index: usize) -> CompileResult<C
 /// Create a PartListElement from a ScorePart.
 pub fn score_part_to_list_element(score_part: ScorePart) -> PartListElement {
     PartListElement::ScorePart(score_part)
+}
+
+/// Ensure the first measure has an attributes element.
+///
+/// MusicXML renderers like Verovio require the first measure to have an `<attributes>`
+/// element containing at minimum: divisions, clef, key, and time signature.
+/// If the first measure doesn't have attributes, this function prepends default ones.
+fn ensure_first_measure_has_attributes(measures: &mut [Measure]) {
+    if measures.is_empty() {
+        return;
+    }
+
+    let first_measure = &mut measures[0];
+
+    // Check if first measure already has attributes
+    let has_attributes = first_measure
+        .content
+        .iter()
+        .any(|e| matches!(e, MusicDataElement::Attributes(_)));
+
+    if has_attributes {
+        return;
+    }
+
+    // Create default attributes: treble clef, 4/4 time, C major
+    let default_attributes = Attributes {
+        editorial: Editorial::default(),
+        divisions: Some(DEFAULT_DIVISIONS as u64),
+        keys: vec![Key {
+            content: KeyContent::Traditional(TraditionalKey {
+                cancel: None,
+                fifths: 0, // C major
+                mode: Some(Mode::Major),
+            }),
+            number: None,
+            print_object: None,
+        }],
+        times: vec![Time {
+            content: TimeContent::Measured {
+                signatures: vec![TimeSignature {
+                    beats: "4".to_string(),
+                    beat_type: "4".to_string(),
+                }],
+            },
+            number: None,
+            symbol: None,
+            print_object: None,
+        }],
+        staves: None,
+        part_symbol: None,
+        instruments: None,
+        clefs: vec![Clef {
+            sign: ClefSign::G,
+            line: Some(2), // Treble clef
+            octave_change: None,
+            number: None,
+            size: None,
+            print_object: None,
+        }],
+        staff_details: vec![],
+        transpose: vec![],
+        measure_styles: vec![],
+    };
+
+    // Prepend attributes to measure content
+    first_measure
+        .content
+        .insert(0, MusicDataElement::Attributes(Box::new(default_attributes)));
 }
 
 #[cfg(test)]
@@ -562,5 +637,173 @@ mod tests {
         } else {
             panic!("Expected ScorePart");
         }
+    }
+
+    // === ensure_first_measure_has_attributes tests ===
+
+    #[test]
+    fn test_ensure_first_measure_has_attributes_empty_measures() {
+        let mut measures: Vec<Measure> = vec![];
+        ensure_first_measure_has_attributes(&mut measures);
+        assert!(measures.is_empty());
+    }
+
+    #[test]
+    fn test_ensure_first_measure_has_attributes_adds_default() {
+        let mut measures = vec![Measure {
+            number: "1".to_string(),
+            implicit: None,
+            non_controlling: None,
+            width: None,
+            content: vec![], // No attributes
+        }];
+
+        ensure_first_measure_has_attributes(&mut measures);
+
+        // Should now have attributes as first element
+        assert_eq!(measures[0].content.len(), 1);
+        assert!(matches!(
+            measures[0].content[0],
+            MusicDataElement::Attributes(_)
+        ));
+
+        // Verify attributes content
+        if let MusicDataElement::Attributes(attrs) = &measures[0].content[0] {
+            assert!(attrs.divisions.is_some());
+            assert!(!attrs.clefs.is_empty());
+            assert!(!attrs.times.is_empty());
+            assert!(!attrs.keys.is_empty());
+        }
+    }
+
+    #[test]
+    fn test_ensure_first_measure_has_attributes_does_not_duplicate() {
+        use crate::ir::attributes::Attributes;
+
+        // Create measure with existing attributes
+        let existing_attrs = Attributes {
+            editorial: Editorial::default(),
+            divisions: Some(480), // Different from default
+            keys: vec![],
+            times: vec![],
+            staves: None,
+            part_symbol: None,
+            instruments: None,
+            clefs: vec![],
+            staff_details: vec![],
+            transpose: vec![],
+            measure_styles: vec![],
+        };
+
+        let mut measures = vec![Measure {
+            number: "1".to_string(),
+            implicit: None,
+            non_controlling: None,
+            width: None,
+            content: vec![MusicDataElement::Attributes(Box::new(existing_attrs))],
+        }];
+
+        ensure_first_measure_has_attributes(&mut measures);
+
+        // Should still only have one attributes element
+        assert_eq!(measures[0].content.len(), 1);
+
+        // Divisions should still be 480, not DEFAULT_DIVISIONS
+        if let MusicDataElement::Attributes(attrs) = &measures[0].content[0] {
+            assert_eq!(attrs.divisions, Some(480));
+        }
+    }
+
+    #[test]
+    fn test_ensure_first_measure_has_attributes_prepends() {
+        // Compile a real part with a note but no explicit attributes
+        let sexpr = parse("(part :piano (measure (note c4 :q)))").unwrap();
+        let compiled = compile_part(&sexpr, 0).unwrap();
+
+        let first_measure = &compiled.part.measures[0];
+
+        // First element should be attributes (auto-added)
+        assert!(matches!(
+            first_measure.content[0],
+            MusicDataElement::Attributes(_)
+        ));
+
+        // Second element should be the note
+        assert!(matches!(
+            first_measure.content[1],
+            MusicDataElement::Note(_)
+        ));
+    }
+
+    #[test]
+    fn test_ensure_first_measure_attributes_have_required_fields() {
+        // Compile a part with no explicit attributes
+        let sexpr = parse("(part :piano (measure (note c4 :q)))").unwrap();
+        let compiled = compile_part(&sexpr, 0).unwrap();
+
+        // Get the auto-generated attributes
+        if let MusicDataElement::Attributes(attrs) = &compiled.part.measures[0].content[0] {
+            // Verify divisions is set
+            assert!(attrs.divisions.is_some());
+
+            // Verify clef is set (treble clef)
+            assert_eq!(attrs.clefs.len(), 1);
+            assert_eq!(attrs.clefs[0].sign, ClefSign::G);
+            assert_eq!(attrs.clefs[0].line, Some(2));
+
+            // Verify time signature is set (4/4)
+            assert_eq!(attrs.times.len(), 1);
+            if let TimeContent::Measured { signatures } = &attrs.times[0].content {
+                assert_eq!(signatures[0].beats, "4");
+                assert_eq!(signatures[0].beat_type, "4");
+            } else {
+                panic!("Expected measured time");
+            }
+
+            // Verify key is set (C major)
+            assert_eq!(attrs.keys.len(), 1);
+            if let KeyContent::Traditional(key) = &attrs.keys[0].content {
+                assert_eq!(key.fifths, 0);
+                assert_eq!(key.mode, Some(Mode::Major));
+            } else {
+                panic!("Expected traditional key");
+            }
+        } else {
+            panic!("Expected Attributes element");
+        }
+    }
+
+    #[test]
+    fn test_explicit_attributes_not_overridden() {
+        // Compile a part with explicit attributes (G major, 3/4, bass clef)
+        let sexpr = parse("(part :piano (measure (key g :major) (time 3 4) (clef :bass) (note c4 :q)))").unwrap();
+        let compiled = compile_part(&sexpr, 0).unwrap();
+
+        // Get the attributes (should be the explicit ones, not defaults)
+        if let MusicDataElement::Attributes(attrs) = &compiled.part.measures[0].content[0] {
+            // Verify key is G major (1 sharp)
+            if let KeyContent::Traditional(key) = &attrs.keys[0].content {
+                assert_eq!(key.fifths, 1); // G major = 1 sharp
+            }
+
+            // Verify time is 3/4
+            if let TimeContent::Measured { signatures } = &attrs.times[0].content {
+                assert_eq!(signatures[0].beats, "3");
+                assert_eq!(signatures[0].beat_type, "4");
+            }
+
+            // Verify bass clef
+            assert_eq!(attrs.clefs[0].sign, ClefSign::F);
+        } else {
+            panic!("Expected Attributes element");
+        }
+
+        // Should only have one Attributes element (no duplicate)
+        let attr_count = compiled.part.measures[0]
+            .content
+            .iter()
+            .filter(|e| matches!(e, MusicDataElement::Attributes(_)))
+            .count();
+        assert_eq!(attr_count, 1);
     }
 }

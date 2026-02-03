@@ -64,8 +64,40 @@ fn cmd_set(args: &str, session: &mut ReplSession) -> ReplResult<CommandResult> {
                 )))
             }
         }
+        "dark-mode" | "darkmode" | "dark" => {
+            if value.is_empty() {
+                let current = match session.dark_mode() {
+                    None => "auto",
+                    Some(true) => "on",
+                    Some(false) => "off",
+                };
+                Ok(CommandResult::Output(format!(
+                    "Current dark mode: {}\nUsage: :set dark-mode <on|off|auto>",
+                    current
+                )))
+            } else {
+                match value.to_lowercase().as_str() {
+                    "on" | "true" | "yes" | "1" => {
+                        session.set_dark_mode(Some(true));
+                        Ok(CommandResult::Output("Dark mode: on".to_string()))
+                    }
+                    "off" | "false" | "no" | "0" => {
+                        session.set_dark_mode(Some(false));
+                        Ok(CommandResult::Output("Dark mode: off".to_string()))
+                    }
+                    "auto" | "detect" => {
+                        session.set_dark_mode(None);
+                        Ok(CommandResult::Output("Dark mode: auto-detect".to_string()))
+                    }
+                    _ => Ok(CommandResult::Output(format!(
+                        "Invalid dark mode value: '{}'\nValid values: on, off, auto",
+                        value
+                    ))),
+                }
+            }
+        }
         "" => Ok(CommandResult::Output(
-            "Usage: :set <setting> <value>\n\nSettings:\n  display <mode>  Set output display mode (sexpr, musicxml, png, silent)".to_string()
+            "Usage: :set <setting> <value>\n\nSettings:\n  display <mode>    Set output display mode (sexpr, musicxml, png, silent)\n  dark-mode <mode>  Set dark mode (on, off, auto)".to_string()
         )),
         other => Ok(CommandResult::Output(format!(
             "Unknown setting: '{}'\nType :set for available settings.",
@@ -77,9 +109,15 @@ fn cmd_set(args: &str, session: &mut ReplSession) -> ReplResult<CommandResult> {
 /// Display current settings.
 fn cmd_settings(session: &ReplSession) -> CommandResult {
     let render_opts = session.render_options();
+    let dark_mode = match session.dark_mode() {
+        None => "auto",
+        Some(true) => "on",
+        Some(false) => "off",
+    };
     let output = format!(
-        "Current Settings:\n  display mode:  {}\n  render width:  {} px\n  render page:   {}\n  show page info: {}",
+        "Current Settings:\n  display mode:   {}\n  dark mode:      {}\n  render width:   {} px\n  render page:    {}\n  show page info: {}",
         session.display_mode().name(),
+        dark_mode,
         render_opts.width,
         render_opts.page,
         if render_opts.show_page_info { "yes" } else { "no" }

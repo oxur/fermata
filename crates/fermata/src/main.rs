@@ -44,6 +44,10 @@ struct Cli {
     #[arg(long, global = true)]
     no_color: bool,
 
+    /// Set log level (error, warn, info, debug, trace). Use 'debug' for verbose output; 'trace' includes noisy dependency logs.
+    #[arg(short = 'l', long, global = true, default_value = "warn")]
+    log_level: String,
+
     #[command(subcommand)]
     command: Option<Commands>,
 }
@@ -158,6 +162,22 @@ fn main() -> ExitCode {
 
     // Determine if colors should be used
     let use_colors = !cli.no_color && std::env::var("NO_COLOR").is_err();
+
+    // Initialize logging (stderr to avoid interleaving with REPL output)
+    let log_level: twyg::LogLevel = cli.log_level.parse().unwrap_or(twyg::LogLevel::Warn);
+    if let Ok(log_opts) = twyg::OptsBuilder::new()
+        .coloured(use_colors)
+        .output(twyg::Output::Stderr)
+        .level(log_level)
+        .report_caller(false)
+        .build()
+    {
+        // Ignore InitError (logger already set, e.g. in tests)
+        match twyg::setup(log_opts) {
+            Ok(_) | Err(twyg::TwygError::InitError) => {}
+            Err(e) => eprintln!("Warning: Failed to initialize logger: {:?}", e),
+        }
+    }
 
     match cli.command {
         Some(Commands::Compile {

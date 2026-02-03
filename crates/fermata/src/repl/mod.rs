@@ -119,6 +119,11 @@ impl Repl {
         // Print banner
         println!("{}", format_banner(self.use_colors));
 
+        // Flush stdout and stderr before reedline takes over terminal
+        use std::io::Write;
+        let _ = std::io::stdout().flush();
+        let _ = std::io::stderr().flush();
+
         let prompt = FermataPrompt::new();
 
         loop {
@@ -199,7 +204,7 @@ impl Repl {
                 // Display the result based on current display mode
                 let mode = self.session.display_mode();
                 let options = self.session.render_options();
-                if let Some(output) = format_result_for_mode(&score, mode, self.use_colors, options) {
+                if let Some(output) = format_result_for_mode(&score, mode, self.use_colors, &options) {
                     println!("{}", output);
                 }
             }
@@ -216,7 +221,7 @@ impl Repl {
                 // Display result based on current display mode
                 let mode = self.session.display_mode();
                 let options = self.session.render_options();
-                if let Some(output) = format_result_for_mode(&score, mode, self.use_colors, options) {
+                if let Some(output) = format_result_for_mode(&score, mode, self.use_colors, &options) {
                     println!("{}", output);
                 }
             }

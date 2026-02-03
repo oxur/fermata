@@ -63,6 +63,8 @@ pub struct RenderOptions {
     pub page: u32,
     /// Whether to show page number for multi-page scores
     pub show_page_info: bool,
+    /// Dark mode override: None = auto-detect, Some(true/false) = manual
+    pub dark_mode: Option<bool>,
 }
 
 impl Default for RenderOptions {
@@ -71,6 +73,7 @@ impl Default for RenderOptions {
             width: 800,
             page: 1,
             show_page_info: true,
+            dark_mode: None, // Auto-detect by default
         }
     }
 }
@@ -122,6 +125,8 @@ pub struct ReplSession {
     display_mode: DisplayMode,
     /// Render options for PNG output
     render_options: RenderOptions,
+    /// Dark mode override: None = auto-detect, Some(true/false) = manual
+    dark_mode: Option<bool>,
     /// Last 3 evaluated results: [0]=*, [1]=**, [2]=***
     results: [Option<ScorePartwise>; 3],
     /// Last 3 input expressions: [0]=+, [1]=++, [2]=+++
@@ -142,6 +147,7 @@ impl ReplSession {
         Self {
             display_mode: DisplayMode::default(),
             render_options: RenderOptions::default(),
+            dark_mode: None, // Auto-detect by default
             results: [None, None, None],
             expressions: [None, None, None],
             warned_terminal_support: false,
@@ -158,9 +164,11 @@ impl ReplSession {
         self.display_mode = mode;
     }
 
-    /// Get the current render options.
-    pub fn render_options(&self) -> &RenderOptions {
-        &self.render_options
+    /// Get the current render options (with dark_mode synced from session).
+    pub fn render_options(&self) -> RenderOptions {
+        let mut opts = self.render_options.clone();
+        opts.dark_mode = self.dark_mode;
+        opts
     }
 
     /// Get mutable render options.
@@ -176,6 +184,16 @@ impl ReplSession {
     /// Mark that we've warned about terminal support.
     pub fn set_warned_terminal_support(&mut self) {
         self.warned_terminal_support = true;
+    }
+
+    /// Get the dark mode setting (None = auto, Some(true/false) = override).
+    pub fn dark_mode(&self) -> Option<bool> {
+        self.dark_mode
+    }
+
+    /// Set dark mode: None = auto-detect, Some(true) = on, Some(false) = off.
+    pub fn set_dark_mode(&mut self, mode: Option<bool>) {
+        self.dark_mode = mode;
     }
 
     /// Store a new result, rotating the history.

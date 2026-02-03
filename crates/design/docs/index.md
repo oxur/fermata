@@ -6,7 +6,8 @@ This index is automatically generated. Do not edit manually.
 
 | Number | Title | State | Updated |
 |--------|-------|-------|----------|
-| 0007 | Fermata CLI Redesign Plan | Active | 2026-02-02 |
+| 0008 | REPL Image Rendering Architecture | Active | 2026-02-02 |
+| 0007 | Fermata CLI Redesign Plan | Final | 2026-02-02 |
 | 0006 | Fermata Crate Architecture | Final | 2026-02-01 |
 | 0005 | REPL, Session Management, and Collaborative Architecture | Active | 2026-02-01 |
 | 0004 | Fermata IR S-Expression Format Reference | Final | 2026-02-01 |
@@ -18,11 +19,12 @@ This index is automatically generated. Do not edit manually.
 
 ### Active
 
-- [0007 - Fermata CLI Redesign Plan](05-active/0007-fermata-cli-redesign-plan.md)
+- [0008 - REPL Image Rendering Architecture](05-active/0008-repl-image-rendering-architecture.md)
 - [0005 - REPL, Session Management, and Collaborative Architecture](05-active/0005-repl-session-management-and-collaborative-architecture.md)
 
 ### Final
 
+- [0007 - Fermata CLI Redesign Plan](06-final/0007-fermata-cli-redesign-plan.md)
 - [0006 - Fermata Crate Architecture](06-final/0006-fermata-crate-architecture.md)
 - [0004 - Fermata IR S-Expression Format Reference](06-final/0004-fermata-ir-s-expression-format-reference.md)
 - [0003 - MusicXML Schema Triage for Fermata](06-final/0003-musicxml-schema-triage-for-fermata.md)

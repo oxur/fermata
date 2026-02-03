@@ -6,7 +6,7 @@ component: All
 tags: [change-me]
 created: 2026-02-02
 updated: 2026-02-02
-state: Active
+state: Final
 supersedes: null
 superseded-by: null
 version: 1.0

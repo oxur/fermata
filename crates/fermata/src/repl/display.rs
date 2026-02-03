@@ -18,7 +18,9 @@ pub fn format_result_for_mode(
     match mode {
         DisplayMode::Sexpr => Some(format_as_sexpr(score, use_colors)),
         DisplayMode::MusicXml => Some(format_as_musicxml(score, use_colors)),
-        DisplayMode::Png => Some(format_png_placeholder(use_colors)),
+        DisplayMode::Mei => Some(format_render_placeholder("MEI", use_colors)),
+        DisplayMode::Midi => Some(format_render_placeholder("MIDI", use_colors)),
+        DisplayMode::Png => Some(format_render_placeholder("PNG", use_colors)),
         DisplayMode::Silent => None,
     }
 }
@@ -56,13 +58,13 @@ pub fn format_as_musicxml(score: &ScorePartwise, use_colors: bool) -> String {
     }
 }
 
-/// Placeholder for PNG rendering (requires 'render' feature).
-fn format_png_placeholder(use_colors: bool) -> String {
-    let msg = "(PNG rendering not yet implemented - use :set display sexpr)";
+/// Placeholder for verovio-based rendering (requires 'render' feature).
+fn format_render_placeholder(format: &str, use_colors: bool) -> String {
+    let msg = format!("({} rendering requires 'render' feature - use :set display sexpr)", format);
     if use_colors {
         format!("{}", msg.yellow())
     } else {
-        msg.to_string()
+        msg
     }
 }
 
@@ -251,11 +253,27 @@ mod tests {
     }
 
     #[test]
+    fn test_format_result_for_mode_mei() {
+        let score = test_score();
+        let result = format_result_for_mode(&score, DisplayMode::Mei, false);
+        assert!(result.is_some());
+        assert!(result.unwrap().contains("MEI"));
+    }
+
+    #[test]
+    fn test_format_result_for_mode_midi() {
+        let score = test_score();
+        let result = format_result_for_mode(&score, DisplayMode::Midi, false);
+        assert!(result.is_some());
+        assert!(result.unwrap().contains("MIDI"));
+    }
+
+    #[test]
     fn test_format_result_for_mode_png() {
         let score = test_score();
         let result = format_result_for_mode(&score, DisplayMode::Png, false);
         assert!(result.is_some());
-        assert!(result.unwrap().contains("not yet implemented"));
+        assert!(result.unwrap().contains("PNG"));
     }
 
     #[test]

@@ -17,6 +17,10 @@ pub enum DisplayMode {
     Sexpr,
     /// MusicXML output (interchange format)
     MusicXml,
+    /// MEI (Music Encoding Initiative) output - requires `render` feature
+    Mei,
+    /// MIDI output (base64-encoded) - requires `render` feature
+    Midi,
     /// Rendered PNG in terminal (via viuer) - requires `render` feature
     Png,
     /// No automatic display (value stored for later use)
@@ -29,6 +33,8 @@ impl DisplayMode {
         match s.to_lowercase().as_str() {
             "sexpr" | "sexp" | "s" => Some(Self::Sexpr),
             "musicxml" | "xml" | "x" => Some(Self::MusicXml),
+            "mei" | "m" => Some(Self::Mei),
+            "midi" | "mid" => Some(Self::Midi),
             "png" | "p" | "render" | "r" => Some(Self::Png),
             "silent" | "quiet" | "q" => Some(Self::Silent),
             _ => None,
@@ -40,6 +46,8 @@ impl DisplayMode {
         match self {
             Self::Sexpr => "sexpr",
             Self::MusicXml => "musicxml",
+            Self::Mei => "mei",
+            Self::Midi => "midi",
             Self::Png => "png",
             Self::Silent => "silent",
         }
@@ -286,6 +294,10 @@ mod tests {
         assert_eq!(DisplayMode::parse("s"), Some(DisplayMode::Sexpr));
         assert_eq!(DisplayMode::parse("musicxml"), Some(DisplayMode::MusicXml));
         assert_eq!(DisplayMode::parse("xml"), Some(DisplayMode::MusicXml));
+        assert_eq!(DisplayMode::parse("mei"), Some(DisplayMode::Mei));
+        assert_eq!(DisplayMode::parse("m"), Some(DisplayMode::Mei));
+        assert_eq!(DisplayMode::parse("midi"), Some(DisplayMode::Midi));
+        assert_eq!(DisplayMode::parse("mid"), Some(DisplayMode::Midi));
         assert_eq!(DisplayMode::parse("png"), Some(DisplayMode::Png));
         assert_eq!(DisplayMode::parse("render"), Some(DisplayMode::Png));
         assert_eq!(DisplayMode::parse("silent"), Some(DisplayMode::Silent));
@@ -297,6 +309,8 @@ mod tests {
     fn test_display_mode_parse_case_insensitive() {
         assert_eq!(DisplayMode::parse("SEXPR"), Some(DisplayMode::Sexpr));
         assert_eq!(DisplayMode::parse("MusicXML"), Some(DisplayMode::MusicXml));
+        assert_eq!(DisplayMode::parse("MEI"), Some(DisplayMode::Mei));
+        assert_eq!(DisplayMode::parse("MIDI"), Some(DisplayMode::Midi));
         assert_eq!(DisplayMode::parse("PNG"), Some(DisplayMode::Png));
     }
 
@@ -304,6 +318,8 @@ mod tests {
     fn test_display_mode_name() {
         assert_eq!(DisplayMode::Sexpr.name(), "sexpr");
         assert_eq!(DisplayMode::MusicXml.name(), "musicxml");
+        assert_eq!(DisplayMode::Mei.name(), "mei");
+        assert_eq!(DisplayMode::Midi.name(), "midi");
         assert_eq!(DisplayMode::Png.name(), "png");
         assert_eq!(DisplayMode::Silent.name(), "silent");
     }

@@ -51,7 +51,7 @@ fn cmd_set(args: &str, session: &mut ReplSession) -> ReplResult<CommandResult> {
         "display" | "d" => {
             if value.is_empty() {
                 Ok(CommandResult::Output(format!(
-                    "Current display mode: {}\nUsage: :set display <mode>\nModes: sexpr, musicxml, png, silent",
+                    "Current display mode: {}\nUsage: :set display <mode>\nModes: sexpr, musicxml, mei, midi, png, silent",
                     session.display_mode().name()
                 )))
             } else if let Some(mode) = DisplayMode::parse(value) {
@@ -59,7 +59,7 @@ fn cmd_set(args: &str, session: &mut ReplSession) -> ReplResult<CommandResult> {
                 Ok(CommandResult::DisplayModeChanged(mode))
             } else {
                 Ok(CommandResult::Output(format!(
-                    "Unknown display mode: '{}'\nValid modes: sexpr, musicxml, png, silent",
+                    "Unknown display mode: '{}'\nValid modes: sexpr, musicxml, mei, midi, png, silent",
                     value
                 )))
             }
@@ -146,6 +146,8 @@ Commands start with ':' and control the REPL itself.
 DISPLAY MODES:
   sexpr     S-expression output (default, for debugging)
   musicxml  MusicXML output (interchange format)
+  mei       MEI output (requires 'render' feature)
+  midi      MIDI output (requires 'render' feature)
   png       Rendered notation in terminal (requires 'render' feature)
   silent    No output (value stored for later use)
 

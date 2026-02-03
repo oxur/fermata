@@ -4,11 +4,27 @@ use owo_colors::OwoColorize;
 
 use crate::ir::score::ScorePartwise;
 use crate::lang::error::CompileError;
+use crate::musicxml;
 use crate::sexpr::{ToSexpr, print_sexpr};
 
-/// Format a successful evaluation result.
-pub fn format_eval_result(score: &ScorePartwise, use_colors: bool) -> String {
-    // For now, show the S-expression representation
+use super::session::DisplayMode;
+
+/// Format a successful evaluation result based on display mode.
+pub fn format_result_for_mode(
+    score: &ScorePartwise,
+    mode: DisplayMode,
+    use_colors: bool,
+) -> Option<String> {
+    match mode {
+        DisplayMode::Sexpr => Some(format_as_sexpr(score, use_colors)),
+        DisplayMode::MusicXml => Some(format_as_musicxml(score, use_colors)),
+        DisplayMode::Png => Some(format_png_placeholder(use_colors)),
+        DisplayMode::Silent => None,
+    }
+}
+
+/// Format a score as S-expression.
+pub fn format_as_sexpr(score: &ScorePartwise, use_colors: bool) -> String {
     let sexpr = score.to_sexpr();
     let output = print_sexpr(&sexpr);
 
@@ -17,6 +33,42 @@ pub fn format_eval_result(score: &ScorePartwise, use_colors: bool) -> String {
     } else {
         output
     }
+}
+
+/// Format a score as MusicXML.
+pub fn format_as_musicxml(score: &ScorePartwise, use_colors: bool) -> String {
+    match musicxml::emit(score) {
+        Ok(xml) => {
+            if use_colors {
+                format!("{}", xml.cyan())
+            } else {
+                xml
+            }
+        }
+        Err(e) => {
+            let msg = format!("Failed to emit MusicXML: {}", e);
+            if use_colors {
+                format!("{}: {}", "Error".red(), msg)
+            } else {
+                format!("Error: {}", msg)
+            }
+        }
+    }
+}
+
+/// Placeholder for PNG rendering (requires 'render' feature).
+fn format_png_placeholder(use_colors: bool) -> String {
+    let msg = "(PNG rendering not yet implemented - use :set display sexpr)";
+    if use_colors {
+        format!("{}", msg.yellow())
+    } else {
+        msg.to_string()
+    }
+}
+
+/// Format a successful evaluation result (legacy, defaults to sexpr).
+pub fn format_eval_result(score: &ScorePartwise, use_colors: bool) -> String {
+    format_as_sexpr(score, use_colors)
 }
 
 /// Format a compilation error.
@@ -176,5 +228,54 @@ mod tests {
     fn test_format_chat_stub_with_colors() {
         let result = format_chat_stub("emote", "thinks", true);
         assert!(result.contains("thinks"));
+    }
+
+    // === Display mode tests ===
+
+    #[test]
+    fn test_format_result_for_mode_sexpr() {
+        let score = test_score();
+        let result = format_result_for_mode(&score, DisplayMode::Sexpr, false);
+        assert!(result.is_some());
+        assert!(result.unwrap().contains("score"));
+    }
+
+    #[test]
+    fn test_format_result_for_mode_musicxml() {
+        let score = test_score();
+        let result = format_result_for_mode(&score, DisplayMode::MusicXml, false);
+        assert!(result.is_some());
+        let xml = result.unwrap();
+        assert!(xml.contains("<?xml"));
+        assert!(xml.contains("score-partwise"));
+    }
+
+    #[test]
+    fn test_format_result_for_mode_png() {
+        let score = test_score();
+        let result = format_result_for_mode(&score, DisplayMode::Png, false);
+        assert!(result.is_some());
+        assert!(result.unwrap().contains("not yet implemented"));
+    }
+
+    #[test]
+    fn test_format_result_for_mode_silent() {
+        let score = test_score();
+        let result = format_result_for_mode(&score, DisplayMode::Silent, false);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_format_as_sexpr() {
+        let score = test_score();
+        let result = format_as_sexpr(&score, false);
+        assert!(result.contains("score"));
+    }
+
+    #[test]
+    fn test_format_as_musicxml() {
+        let score = test_score();
+        let result = format_as_musicxml(&score, false);
+        assert!(result.contains("score-partwise"));
     }
 }

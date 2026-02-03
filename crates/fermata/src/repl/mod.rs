@@ -40,7 +40,7 @@ pub use input::{ChatKind, InputKind};
 pub use session::{DisplayMode, HistoryValue, RenderOptions, ReplSession};
 
 use commands::CommandResult;
-use display::{format_banner, format_chat_stub, format_compile_error, format_eval_result};
+use display::{format_banner, format_chat_stub, format_compile_error, format_result_for_mode};
 use input::classify;
 use prompt::FermataPrompt;
 use validator::FermataValidator;
@@ -194,8 +194,11 @@ impl Repl {
                 self.session.push_expression(sexpr);
                 self.session.push_result(score.clone());
 
-                // Display the result
-                println!("{}", format_eval_result(&score, self.use_colors));
+                // Display the result based on current display mode
+                let mode = self.session.display_mode();
+                if let Some(output) = format_result_for_mode(&score, mode, self.use_colors) {
+                    println!("{}", output);
+                }
             }
             Err(e) => {
                 println!("{}", format_compile_error(&e, self.use_colors));
@@ -207,10 +210,14 @@ impl Repl {
     fn display_history_value(&self, symbol: &str) {
         match self.session.get_history_value(symbol) {
             Some(HistoryValue::Result(score)) => {
-                println!("{}", format_eval_result(&score, self.use_colors));
+                // Display result based on current display mode
+                let mode = self.session.display_mode();
+                if let Some(output) = format_result_for_mode(&score, mode, self.use_colors) {
+                    println!("{}", output);
+                }
             }
             Some(HistoryValue::Expression(sexpr)) => {
-                // Display the expression as S-expression
+                // Expressions are always displayed as S-expressions (they ARE data)
                 let output = print_sexpr(&sexpr);
                 if self.use_colors {
                     use owo_colors::OwoColorize;

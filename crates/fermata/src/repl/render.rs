@@ -2,6 +2,11 @@
 //!
 //! This module provides integration with verovioxide for rendering
 //! music notation to various formats (PNG, MEI, MIDI).
+//!
+//! The Verovio toolkit is cached to avoid expensive re-initialization
+//! on every render call.
+
+use std::sync::Mutex;
 
 use crate::ir::score::ScorePartwise;
 use crate::musicxml;
@@ -10,6 +15,25 @@ use super::error::{ReplError, ReplResult};
 use super::session::RenderOptions;
 
 use verovioxide::{Toolkit, Options as VerovioOptions, Mei, Midi, Png};
+
+/// Global cached toolkit wrapped in a Mutex for thread-safe access.
+/// Using Mutex instead of OnceLock because we need mutable access to the Toolkit.
+static CACHED_TOOLKIT: Mutex<Option<Toolkit>> = Mutex::new(None);
+
+/// Get or initialize the cached toolkit.
+fn get_or_init_toolkit() -> ReplResult<std::sync::MutexGuard<'static, Option<Toolkit>>> {
+    let mut guard = CACHED_TOOLKIT
+        .lock()
+        .map_err(|e| ReplError::render(format!("Failed to lock toolkit: {}", e)))?;
+
+    if guard.is_none() {
+        let toolkit = Toolkit::new()
+            .map_err(|e| ReplError::render(format!("Failed to initialize verovio: {}", e)))?;
+        *guard = Some(toolkit);
+    }
+
+    Ok(guard)
+}
 
 /// Terminal image protocol support level.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -184,12 +208,7 @@ pub fn display_png_in_terminal(png_bytes: &[u8], _options: &RenderOptions) -> Re
 
 /// Format a score as MEI (actual rendering).
 pub fn format_as_mei(score: &ScorePartwise, use_colors: bool) -> String {
-    let mut renderer = match Renderer::new() {
-        Ok(r) => r,
-        Err(e) => return format_render_error(&e, use_colors),
-    };
-
-    match renderer.render_mei(score) {
+    match render_mei_cached(score) {
         Ok(mei) => {
             if use_colors {
                 use owo_colors::OwoColorize;
@@ -202,14 +221,26 @@ pub fn format_as_mei(score: &ScorePartwise, use_colors: bool) -> String {
     }
 }
 
+/// Render MEI using the cached toolkit.
+fn render_mei_cached(score: &ScorePartwise) -> ReplResult<String> {
+    let xml = musicxml::emit(score)
+        .map_err(|e| ReplError::render(format!("Failed to emit MusicXML: {}", e)))?;
+
+    let mut guard = get_or_init_toolkit()?;
+    let toolkit = guard.as_mut().unwrap();
+
+    toolkit
+        .load_data(&xml)
+        .map_err(|e| ReplError::render(format!("Failed to load score: {}", e)))?;
+
+    toolkit
+        .render(Mei)
+        .map_err(|e| ReplError::render(format!("Failed to render MEI: {}", e)))
+}
+
 /// Format a score as MIDI (base64, actual rendering).
 pub fn format_as_midi(score: &ScorePartwise, use_colors: bool) -> String {
-    let mut renderer = match Renderer::new() {
-        Ok(r) => r,
-        Err(e) => return format_render_error(&e, use_colors),
-    };
-
-    match renderer.render_midi(score) {
+    match render_midi_cached(score) {
         Ok(midi_b64) => {
             let output = format!("MIDI (base64):\n{}", midi_b64);
             if use_colors {
@@ -223,26 +254,37 @@ pub fn format_as_midi(score: &ScorePartwise, use_colors: bool) -> String {
     }
 }
 
+/// Render MIDI using the cached toolkit.
+fn render_midi_cached(score: &ScorePartwise) -> ReplResult<String> {
+    let xml = musicxml::emit(score)
+        .map_err(|e| ReplError::render(format!("Failed to emit MusicXML: {}", e)))?;
+
+    let mut guard = get_or_init_toolkit()?;
+    let toolkit = guard.as_mut().unwrap();
+
+    toolkit
+        .load_data(&xml)
+        .map_err(|e| ReplError::render(format!("Failed to load score: {}", e)))?;
+
+    toolkit
+        .render(Midi)
+        .map_err(|e| ReplError::render(format!("Failed to render MIDI: {}", e)))
+}
+
 /// Render and display a score as PNG in the terminal.
 pub fn display_as_png(
     score: &ScorePartwise,
     options: &RenderOptions,
     use_colors: bool,
 ) -> Option<String> {
-    let mut renderer = match Renderer::new() {
-        Ok(r) => r,
-        Err(e) => return Some(format_render_error(&e, use_colors)),
-    };
-
-    match renderer.render_png(score, options) {
-        Ok(png_bytes) => {
+    match render_png_cached(score, options) {
+        Ok((png_bytes, page_count)) => {
             // Display the image
             if let Err(e) = display_png_in_terminal(&png_bytes, options) {
                 return Some(format_render_error(&e, use_colors));
             }
 
             // Show page info if enabled and multi-page
-            let page_count = renderer.page_count();
             if options.show_page_info && page_count > 1 {
                 let info = format!("Page {} of {}", options.page, page_count);
                 if use_colors {
@@ -257,6 +299,43 @@ pub fn display_as_png(
         }
         Err(e) => Some(format_render_error(&e, use_colors)),
     }
+}
+
+/// Render PNG using the cached toolkit.
+fn render_png_cached(score: &ScorePartwise, options: &RenderOptions) -> ReplResult<(Vec<u8>, u32)> {
+    let xml = musicxml::emit(score)
+        .map_err(|e| ReplError::render(format!("Failed to emit MusicXML: {}", e)))?;
+
+    let mut guard = get_or_init_toolkit()?;
+    let toolkit = guard.as_mut().unwrap();
+
+    // Configure options BEFORE loading (verovio requirement)
+    let verovio_options = VerovioOptions::builder()
+        .page_width(options.width.max(1200))  // Reduced from 1500 for faster rendering
+        .adjust_page_height(true)
+        .scale(100)
+        .build();
+
+    toolkit
+        .set_options(&verovio_options)
+        .map_err(|e| ReplError::render(format!("Failed to set options: {}", e)))?;
+
+    toolkit
+        .load_data(&xml)
+        .map_err(|e| ReplError::render(format!("Failed to load score: {}", e)))?;
+
+    let page_count = toolkit.page_count();
+
+    // Use 2x scale instead of 4x for faster rendering while maintaining reasonable quality
+    let png_bytes = toolkit
+        .render(
+            Png::page(options.page)
+                .scale(2.0)
+                .white_background()
+        )
+        .map_err(|e| ReplError::render(format!("Failed to render PNG: {}", e)))?;
+
+    Ok((png_bytes, page_count))
 }
 
 /// Format a render error.

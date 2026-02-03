@@ -50,6 +50,7 @@
 pub mod ir;
 pub mod lang;
 pub mod musicxml;
+pub mod repl;
 pub mod sexpr;
 
 // Re-export AST types with cleaner names

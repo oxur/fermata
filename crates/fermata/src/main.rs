@@ -30,6 +30,7 @@ use owo_colors::OwoColorize;
 
 use fermata::lang::{check, compile};
 use fermata::musicxml::{emit, parse};
+use fermata::repl::Repl;
 use fermata::sexpr::{ToSexpr, print_sexpr};
 
 mod show;
@@ -92,6 +93,9 @@ enum Commands {
         #[arg(long, value_enum, default_value_t = OutputFormat::Text, global = true)]
         format: OutputFormat,
     },
+
+    /// Start the interactive REPL
+    Repl,
 }
 
 /// Output target format for compilation
@@ -166,12 +170,26 @@ fn main() -> ExitCode {
             cmd_import(file.as_deref(), output.as_deref(), use_colors)
         }
         Some(Commands::Show { topic, format }) => show::run(topic, format, use_colors),
-        None => {
-            // No subcommand provided - show help
-            use clap::CommandFactory;
-            Cli::command().print_help().unwrap();
-            println!();
-            ExitCode::SUCCESS
+        Some(Commands::Repl) | None => {
+            // Launch the interactive REPL (default when no command given)
+            cmd_repl(use_colors)
+        }
+    }
+}
+
+/// REPL command - start interactive session
+fn cmd_repl(use_colors: bool) -> ExitCode {
+    match Repl::new(use_colors) {
+        Ok(mut repl) => match repl.run() {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(e) => {
+                eprintln!("REPL error: {}", e);
+                ExitCode::FAILURE
+            }
+        },
+        Err(e) => {
+            eprintln!("Failed to start REPL: {}", e);
+            ExitCode::FAILURE
         }
     }
 }

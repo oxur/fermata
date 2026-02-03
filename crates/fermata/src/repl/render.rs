@@ -89,8 +89,10 @@ impl Renderer {
 
     /// Configure rendering options.
     fn configure(&mut self, options: &RenderOptions) -> ReplResult<()> {
+        // Use larger page width for better resolution
+        // Scale 100 = 100% of the page width
         let verovio_options = VerovioOptions::builder()
-            .page_width(options.width)
+            .page_width(options.width.max(1500))  // Minimum 1500 for decent resolution
             .adjust_page_height(true)
             .scale(100)
             .build();
@@ -113,16 +115,17 @@ impl Renderer {
         score: &ScorePartwise,
         options: &RenderOptions,
     ) -> ReplResult<Vec<u8>> {
-        self.load_score(score)?;
+        // Configure BEFORE loading (verovio requirement)
         self.configure(options)?;
+        self.load_score(score)?;
 
-        // Use 3x scale for higher resolution terminal display
+        // Use 4x scale for higher resolution terminal display
         // Add white background for better visibility in terminals
         let png_bytes = self
             .toolkit
             .render(
                 Png::page(options.page)
-                    .scale(3.0)
+                    .scale(4.0)
                     .white_background()
             )
             .map_err(|e| ReplError::render(format!("Failed to render PNG: {}", e)))?;

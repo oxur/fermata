@@ -29,6 +29,7 @@ pub fn dispatch(cmd: &str, session: &mut ReplSession) -> ReplResult<CommandResul
     match name.to_lowercase().as_str() {
         "help" | "h" | "?" => Ok(cmd_help(args)),
         "quit" | "exit" | "q" => Ok(CommandResult::Exit),
+        "clear" | "cls" => Ok(cmd_clear()),
         "set" => cmd_set(args, session),
         "settings" => Ok(cmd_settings(session)),
         "" => Ok(CommandResult::Continue),
@@ -106,6 +107,14 @@ fn cmd_set(args: &str, session: &mut ReplSession) -> ReplResult<CommandResult> {
     }
 }
 
+/// Clear the terminal screen.
+fn cmd_clear() -> CommandResult {
+    // ANSI escape: clear screen and move cursor to top-left
+    print!("\x1b[2J\x1b[H");
+    let _ = std::io::Write::flush(&mut std::io::stdout());
+    CommandResult::Continue
+}
+
 /// Display current settings.
 fn cmd_settings(session: &ReplSession) -> CommandResult {
     let render_opts = session.render_options();
@@ -153,6 +162,7 @@ USAGE:
 COMMANDS:
   :help, :h, :?         Show this help
   :quit, :exit, :q      Exit the REPL
+  :clear, :cls          Clear the screen
   :set display <mode>   Set display mode (sexpr, musicxml, png, silent)
   :settings             Show current settings
 
@@ -178,6 +188,7 @@ Commands start with ':' and control the REPL itself.
   :help, :h, :?         Show help
   :help <topic>         Show help on a specific topic
   :quit, :exit, :q      Exit the REPL
+  :clear, :cls          Clear the screen
   :set display <mode>   Set output display mode
   :settings             Show current settings
 

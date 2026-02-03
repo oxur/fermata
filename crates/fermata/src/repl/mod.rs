@@ -22,6 +22,7 @@
 pub mod commands;
 pub mod display;
 pub mod error;
+pub mod highlighter;
 pub mod input;
 pub mod prompt;
 #[cfg(feature = "render")]
@@ -64,7 +65,7 @@ impl Repl {
     ///
     /// Returns an error if the history file cannot be created.
     pub fn new(use_colors: bool) -> ReplResult<Self> {
-        let editor = Self::create_editor()?;
+        let editor = Self::create_editor(use_colors)?;
         Ok(Self {
             editor,
             use_colors,
@@ -82,8 +83,8 @@ impl Repl {
         &mut self.session
     }
 
-    /// Create the reedline editor with history and validation.
-    fn create_editor() -> ReplResult<Reedline> {
+    /// Create the reedline editor with history, validation, and syntax highlighting.
+    fn create_editor(use_colors: bool) -> ReplResult<Reedline> {
         // Set up history file
         let history_path = Self::history_path()?;
 
@@ -99,6 +100,7 @@ impl Repl {
 
         let editor = Reedline::create()
             .with_validator(Box::new(FermataValidator::new()))
+            .with_highlighter(Box::new(highlighter::FermataHighlighter::new(use_colors)))
             .with_history(history);
 
         Ok(editor)

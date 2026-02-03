@@ -350,7 +350,10 @@ mod tests {
         let measure = &score.parts[0].measures[0];
         assert!(measure.content.len() >= 3);
         // Default attributes are auto-added at position 0
-        assert!(matches!(measure.content[0], MusicDataElement::Attributes(_)));
+        assert!(matches!(
+            measure.content[0],
+            MusicDataElement::Attributes(_)
+        ));
         // Direction is at position 1
         assert!(matches!(measure.content[1], MusicDataElement::Direction(_)));
     }
@@ -368,6 +371,9 @@ mod tests {
         // Chord should expand to 3 notes, plus auto-added default attributes
         let measure = &score.parts[0].measures[0];
         assert_eq!(measure.content.len(), 4); // 1 attributes + 3 notes
-        assert!(matches!(measure.content[0], MusicDataElement::Attributes(_)));
+        assert!(matches!(
+            measure.content[0],
+            MusicDataElement::Attributes(_)
+        ));
     }
 }

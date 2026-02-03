@@ -5,9 +5,9 @@ use std::borrow::Cow;
 use reedline::{Prompt, PromptEditMode, PromptHistorySearch, PromptHistorySearchStatus};
 
 /// Primary prompt shown for new input.
-const PRIMARY_PROMPT: &str = "fermata> ";
+const PRIMARY_PROMPT: &str = " 𝄐 N ❱ ";
 /// Continuation prompt for multi-line input.
-const CONTINUATION_PROMPT: &str = "      .. ";
+const CONTINUATION_PROMPT: &str = "  ───▷  ";
 
 /// Custom prompt for the Fermata REPL.
 #[derive(Debug, Default)]
@@ -71,7 +71,7 @@ mod tests {
     #[test]
     fn test_prompt_left() {
         let prompt = FermataPrompt::new();
-        assert_eq!(prompt.render_prompt_left(), "fermata> ");
+        assert_eq!(prompt.render_prompt_left(), PRIMARY_PROMPT);
     }
 
     #[test]
@@ -83,7 +83,10 @@ mod tests {
     #[test]
     fn test_prompt_multiline_indicator() {
         let prompt = FermataPrompt::new();
-        assert_eq!(prompt.render_prompt_multiline_indicator(), "      .. ");
+        assert_eq!(
+            prompt.render_prompt_multiline_indicator(),
+            CONTINUATION_PROMPT
+        );
     }
 
     #[test]

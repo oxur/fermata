@@ -254,7 +254,8 @@ impl ReplSession {
         if let Some(result) = self.get_result(symbol) {
             Some(HistoryValue::Result(Box::new(result.clone())))
         } else {
-            self.get_expression(symbol).map(|e| HistoryValue::Expression(e.clone()))
+            self.get_expression(symbol)
+                .map(|e| HistoryValue::Expression(e.clone()))
         }
     }
 
@@ -295,7 +296,11 @@ mod tests {
 
     // Helper to create a test Sexpr
     fn test_sexpr(name: &str) -> Sexpr {
-        Sexpr::List(vec![Sexpr::symbol("score"), Sexpr::keyword("title"), Sexpr::String(name.to_string())])
+        Sexpr::List(vec![
+            Sexpr::symbol("score"),
+            Sexpr::keyword("title"),
+            Sexpr::String(name.to_string()),
+        ])
     }
 
     // === DisplayMode tests ===
@@ -396,9 +401,18 @@ mod tests {
         let star_star = session.get_result("**").unwrap();
         let star_star_star = session.get_result("***").unwrap();
 
-        assert_eq!(star.work.as_ref().unwrap().work_title, Some("Third".to_string()));
-        assert_eq!(star_star.work.as_ref().unwrap().work_title, Some("Second".to_string()));
-        assert_eq!(star_star_star.work.as_ref().unwrap().work_title, Some("First".to_string()));
+        assert_eq!(
+            star.work.as_ref().unwrap().work_title,
+            Some("Third".to_string())
+        );
+        assert_eq!(
+            star_star.work.as_ref().unwrap().work_title,
+            Some("Second".to_string())
+        );
+        assert_eq!(
+            star_star_star.work.as_ref().unwrap().work_title,
+            Some("First".to_string())
+        );
     }
 
     #[test]
@@ -413,8 +427,14 @@ mod tests {
         let star = session.get_result("*").unwrap();
         let star_star_star = session.get_result("***").unwrap();
 
-        assert_eq!(star.work.as_ref().unwrap().work_title, Some("Fourth".to_string()));
-        assert_eq!(star_star_star.work.as_ref().unwrap().work_title, Some("Second".to_string()));
+        assert_eq!(
+            star.work.as_ref().unwrap().work_title,
+            Some("Fourth".to_string())
+        );
+        assert_eq!(
+            star_star_star.work.as_ref().unwrap().work_title,
+            Some("Second".to_string())
+        );
     }
 
     // === ReplSession expression history tests ===

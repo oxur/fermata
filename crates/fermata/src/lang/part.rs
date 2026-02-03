@@ -12,7 +12,7 @@ use crate::ir::common::{Editorial, PrintStyle};
 use crate::ir::measure::{Measure, MusicDataElement};
 use crate::ir::part::{Part, PartListElement, PartName, ScorePart};
 use crate::lang::ast::{FermataMeasure, FermataPart};
-use crate::lang::defaults::{generate_part_id, DEFAULT_DIVISIONS};
+use crate::lang::defaults::{DEFAULT_DIVISIONS, generate_part_id};
 use crate::lang::error::{CompileError, CompileResult};
 use crate::lang::measure::{compile_fermata_measure, parse_measure_from_sexpr};
 use crate::sexpr::Sexpr;
@@ -325,9 +325,10 @@ fn ensure_first_measure_has_attributes(measures: &mut [Measure]) {
     };
 
     // Prepend attributes to measure content
-    first_measure
-        .content
-        .insert(0, MusicDataElement::Attributes(Box::new(default_attributes)));
+    first_measure.content.insert(
+        0,
+        MusicDataElement::Attributes(Box::new(default_attributes)),
+    );
 }
 
 #[cfg(test)]
@@ -776,7 +777,9 @@ mod tests {
     #[test]
     fn test_explicit_attributes_not_overridden() {
         // Compile a part with explicit attributes (G major, 3/4, bass clef)
-        let sexpr = parse("(part :piano (measure (key g :major) (time 3 4) (clef :bass) (note c4 :q)))").unwrap();
+        let sexpr =
+            parse("(part :piano (measure (key g :major) (time 3 4) (clef :bass) (note c4 :q)))")
+                .unwrap();
         let compiled = compile_part(&sexpr, 0).unwrap();
 
         // Get the attributes (should be the explicit ones, not defaults)

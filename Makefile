@@ -245,7 +245,7 @@ check-deps: ensure-binstall
 		echo "$(YELLOW)→ Installing cargo-outdated...$(RESET)"; \
 		cargo binstall -y cargo-outdated; \
 	}
-	@OUTPUT=$$(cargo outdated --root-deps-only); \
+	@OUTPUT=$$(cargo outdated --root-deps-only --ignore-external-rel 2>/dev/null); \
 	echo "$$OUTPUT"; \
 	echo ""; \
 	if echo "$$OUTPUT" | grep -E "^[a-z0-9_-]+\s+" | grep -v "^----" | awk '{print $$3}' | grep -v "^---$$" | grep -v "^Compat$$" | grep -E "^[0-9]" | grep -q .; then \

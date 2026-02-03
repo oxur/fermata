@@ -2,8 +2,8 @@
 //!
 //! Provides rainbow parentheses and keyword highlighting for S-expressions.
 
-use reedline::{Highlighter, StyledText};
 use nu_ansi_term::{Color, Style};
+use reedline::{Highlighter, StyledText};
 
 /// Rainbow colors for nested parentheses.
 const RAINBOW_COLORS: [Color; 6] = [
@@ -157,10 +157,29 @@ fn style_for_word(word: &str) -> Style {
 fn is_keyword(word: &str) -> bool {
     matches!(
         word.to_lowercase().as_str(),
-        "score" | "part" | "measure" | "note" | "rest" | "chord"
-            | "key" | "time" | "clef" | "barline"
-            | "p" | "pp" | "ppp" | "f" | "ff" | "fff" | "mp" | "mf" | "sfz" | "fp"
-            | "transpose" | "invert" | "retrograde"
+        "score"
+            | "part"
+            | "measure"
+            | "note"
+            | "rest"
+            | "chord"
+            | "key"
+            | "time"
+            | "clef"
+            | "barline"
+            | "p"
+            | "pp"
+            | "ppp"
+            | "f"
+            | "ff"
+            | "fff"
+            | "mp"
+            | "mf"
+            | "sfz"
+            | "fp"
+            | "transpose"
+            | "invert"
+            | "retrograde"
     )
 }
 

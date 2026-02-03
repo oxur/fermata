@@ -83,7 +83,10 @@ pub fn format_as_musicxml(score: &ScorePartwise, use_colors: bool) -> String {
 /// Placeholder for verovio-based rendering (requires 'render' feature).
 #[cfg(not(feature = "render"))]
 fn format_render_placeholder(format: &str, use_colors: bool) -> String {
-    let msg = format!("({} rendering requires 'render' feature - use :set display sexpr)", format);
+    let msg = format!(
+        "({} rendering requires 'render' feature - use :set display sexpr)",
+        format
+    );
     if use_colors {
         format!("{}", msg.yellow())
     } else {
@@ -126,19 +129,22 @@ pub fn format_warning(message: &str, use_colors: bool) -> String {
 }
 
 /// Format the REPL banner shown at startup.
-pub fn format_banner(use_colors: bool) -> String {
+pub fn format_banner(banner_text: &str, use_colors: bool) -> String {
     let version = crate::VERSION;
-    let banner = format!(
-        r#"Fermata {} - Interactive music notation
-Type :help for help, :quit to exit.
-"#,
-        version
-    );
 
     if use_colors {
-        format!("{}", banner.bold())
+        format!(
+            "{}  {}\n  Type {} for help, {} to exit.\n",
+            banner_text.bold(),
+            format!("v{}", version).bold(),
+            ":help".cyan(),
+            ":quit".cyan()
+        )
     } else {
-        banner
+        format!(
+            "{}\nFermata {} - Interactive music notation\nType :help for help, :quit to exit.\n",
+            banner_text, version
+        )
     }
 }
 
@@ -230,7 +236,8 @@ mod tests {
 
     #[test]
     fn test_format_banner_no_colors() {
-        let result = format_banner(false);
+        let result = format_banner("Test Banner", false);
+        assert!(result.contains("Test Banner"));
         assert!(result.contains("Fermata"));
         assert!(result.contains(":help"));
         assert!(result.contains(":quit"));
@@ -238,8 +245,9 @@ mod tests {
 
     #[test]
     fn test_format_banner_with_colors() {
-        let result = format_banner(true);
-        assert!(result.contains("Fermata"));
+        let result = format_banner("Test Banner", true);
+        assert!(result.contains("Test Banner"));
+        assert!(result.contains(":help"));
     }
 
     #[test]

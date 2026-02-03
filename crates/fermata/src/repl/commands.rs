@@ -1,5 +1,7 @@
 //! REPL command dispatch.
 
+use owo_colors::OwoColorize;
+
 use super::error::ReplResult;
 use super::session::{DisplayMode, ReplSession};
 
@@ -14,12 +16,18 @@ pub enum CommandResult {
     Output(String),
     /// Display mode was changed.
     DisplayModeChanged(DisplayMode),
+    /// Show the banner.
+    ShowBanner,
 }
 
 /// Dispatch and execute a REPL command.
 ///
 /// The `cmd` parameter is the command string without the leading `:`.
-pub fn dispatch(cmd: &str, session: &mut ReplSession) -> ReplResult<CommandResult> {
+pub fn dispatch(
+    cmd: &str,
+    session: &mut ReplSession,
+    use_colors: bool,
+) -> ReplResult<CommandResult> {
     let trimmed = cmd.trim();
     let (name, args) = match trimmed.split_once(char::is_whitespace) {
         Some((n, a)) => (n, a.trim()),
@@ -27,9 +35,10 @@ pub fn dispatch(cmd: &str, session: &mut ReplSession) -> ReplResult<CommandResul
     };
 
     match name.to_lowercase().as_str() {
-        "help" | "h" | "?" => Ok(cmd_help(args)),
+        "help" | "h" | "?" => Ok(cmd_help(args, use_colors)),
         "quit" | "exit" | "q" => Ok(CommandResult::Exit),
         "clear" | "cls" => Ok(cmd_clear()),
+        "banner" => Ok(CommandResult::ShowBanner),
         "set" => cmd_set(args, session),
         "settings" => Ok(cmd_settings(session)),
         "" => Ok(CommandResult::Continue),
@@ -129,20 +138,24 @@ fn cmd_settings(session: &ReplSession) -> CommandResult {
         dark_mode,
         render_opts.width,
         render_opts.page,
-        if render_opts.show_page_info { "yes" } else { "no" }
+        if render_opts.show_page_info {
+            "yes"
+        } else {
+            "no"
+        }
     );
     CommandResult::Output(output)
 }
 
 /// Display help information.
-fn cmd_help(topic: &str) -> CommandResult {
+fn cmd_help(topic: &str, use_colors: bool) -> CommandResult {
     let output = if topic.is_empty() {
-        GENERAL_HELP.to_string()
+        general_help(use_colors)
     } else {
         match topic.to_lowercase().as_str() {
-            "commands" | "cmd" => COMMANDS_HELP.to_string(),
-            "expressions" | "expr" => EXPRESSIONS_HELP.to_string(),
-            "chat" => CHAT_HELP.to_string(),
+            "commands" | "cmd" => commands_help(use_colors),
+            "expressions" | "expr" => expressions_help(use_colors),
+            "chat" => chat_help(use_colors),
             _ => format!(
                 "Unknown help topic: {}\n\nAvailable topics: commands, expressions, chat",
                 topic
@@ -152,106 +165,221 @@ fn cmd_help(topic: &str) -> CommandResult {
     CommandResult::Output(output)
 }
 
-const GENERAL_HELP: &str = r#"Fermata REPL - Interactive music notation
+/// Format a header (bright yellow, bold).
+fn header(text: &str, use_colors: bool) -> String {
+    if use_colors {
+        format!("{}", text.bright_yellow().bold())
+    } else {
+        text.to_string()
+    }
+}
 
-USAGE:
-  (expression)    Evaluate a Fermata expression
-  :command        Execute a REPL command
-  /message        Send a chat message (future: Claude integration)
+/// Format a command (cyan).
+fn cmd(text: &str, use_colors: bool) -> String {
+    if use_colors {
+        format!("{}", text.cyan())
+    } else {
+        text.to_string()
+    }
+}
 
-COMMANDS:
-  :help, :h, :?         Show this help
-  :quit, :exit, :q      Exit the REPL
-  :clear, :cls          Clear the screen
-  :set display <mode>   Set display mode (sexpr, musicxml, png, silent)
-  :settings             Show current settings
+/// Format a title (blue).
+fn title(text: &str, use_colors: bool) -> String {
+    if use_colors {
+        format!("{}", text.blue())
+    } else {
+        text.to_string()
+    }
+}
 
-HISTORY VARIABLES:
-  *, **, ***      Last 1-3 evaluated results
-  +, ++, +++      Last 1-3 input expressions (as data)
+/// Generate general help text.
+fn general_help(use_colors: bool) -> String {
+    format!(
+        r#"{}
+{}
 
-HELP TOPICS:
-  :help commands    Available REPL commands
-  :help expressions Fermata expression syntax
-  :help chat        Chat message syntax
+{}
+  {}    Evaluate a Fermata expression
+  {}        Execute a REPL command
+  {}        Send a chat message (future: Claude integration)
 
-EXAMPLES:
+{}
+  {}         Show this help
+  {}      Exit the REPL
+  {}          Clear the screen
+  {}   Set display mode (sexpr, musicxml, png, silent)
+  {}             Show current settings
+
+{}
+  {}      Last 1-3 evaluated results
+  {}      Last 1-3 input expressions (as data)
+
+{}
+  {}    Available REPL commands
+  {} Fermata expression syntax
+  {}        Chat message syntax
+
+{}
   (score :title "My Song")
   (note c4 :q)
   (chord :q c4 e4 g4)
-"#;
+"#,
+        title("\nFermata REPL - Interactive music notation", use_colors),
+        title("------------   --------------------------", use_colors),
+        header("USAGE:", use_colors),
+        cmd("(expression)", use_colors),
+        cmd(":command", use_colors),
+        cmd("/message", use_colors),
+        header("COMMANDS:", use_colors),
+        cmd(":help, :h, :?", use_colors),
+        cmd(":quit, :exit, :q", use_colors),
+        cmd(":clear, :cls", use_colors),
+        cmd(":set display <mode>", use_colors),
+        cmd(":settings", use_colors),
+        header("HISTORY VARIABLES:", use_colors),
+        cmd("*, **, ***", use_colors),
+        cmd("+, ++, +++", use_colors),
+        header("HELP TOPICS:", use_colors),
+        cmd(":help commands", use_colors),
+        cmd(":help expressions", use_colors),
+        cmd(":help chat", use_colors),
+        header("EXAMPLES:", use_colors),
+    )
+}
 
-const COMMANDS_HELP: &str = r#"REPL Commands
+/// Generate commands help text.
+fn commands_help(use_colors: bool) -> String {
+    format!(
+        r#"{}
 
 Commands start with ':' and control the REPL itself.
 
-  :help, :h, :?         Show help
-  :help <topic>         Show help on a specific topic
-  :quit, :exit, :q      Exit the REPL
-  :clear, :cls          Clear the screen
-  :set display <mode>   Set output display mode
-  :settings             Show current settings
+  {}         Show help
+  {}         Show help on a specific topic
+  {}      Exit the REPL
+  {}          Clear the screen
+  {}   Set output display mode
+  {}             Show current settings
 
-DISPLAY MODES:
-  sexpr     S-expression output (default, for debugging)
-  musicxml  MusicXML output (interchange format)
-  mei       MEI output (requires 'render' feature)
-  midi      MIDI output (requires 'render' feature)
-  png       Rendered notation in terminal (requires 'render' feature)
-  silent    No output (value stored for later use)
+{}
+  {}     S-expression output (default, for debugging)
+  {}  MusicXML output (interchange format)
+  {}       MEI output (requires 'render' feature)
+  {}      MIDI output (requires 'render' feature)
+  {}       Rendered notation in terminal (requires 'render' feature)
+  {}    No output (value stored for later use)
 
-Future commands (Phase 6a-M2+):
-  :render             Render last result as PNG
-  :render page N      Render specific page
-  :export <file>      Export to file
-"#;
+{}
+  {}             Render last result as PNG
+  {}      Render specific page
+  {}      Export to file
+"#,
+        header("REPL Commands", use_colors),
+        cmd(":help, :h, :?", use_colors),
+        cmd(":help <topic>", use_colors),
+        cmd(":quit, :exit, :q", use_colors),
+        cmd(":clear, :cls", use_colors),
+        cmd(":set display <mode>", use_colors),
+        cmd(":settings", use_colors),
+        header("DISPLAY MODES:", use_colors),
+        cmd("sexpr", use_colors),
+        cmd("musicxml", use_colors),
+        cmd("mei", use_colors),
+        cmd("midi", use_colors),
+        cmd("png", use_colors),
+        cmd("silent", use_colors),
+        header("Future commands (Phase 6a-M2+):", use_colors),
+        cmd(":render", use_colors),
+        cmd(":render page N", use_colors),
+        cmd(":export <file>", use_colors),
+    )
+}
 
-const EXPRESSIONS_HELP: &str = r#"Fermata Expressions
+/// Generate expressions help text.
+fn expressions_help(use_colors: bool) -> String {
+    format!(
+        r#"{}
 
 Expressions start with '(' and are evaluated as Fermata notation.
 
-BASIC FORMS:
-  (score ...)           Define a complete score
-  (part :instrument ...) Define a part
-  (measure ...)         Define a measure
-  (note <pitch> <dur>)  Define a note
-  (rest <dur>)          Define a rest
-  (chord <dur> <pitches>...) Define a chord
+{}
+  {}           Define a complete score
+  {} Define a part
+  {}         Define a measure
+  {}  Define a note
+  {}          Define a rest
+  {} Define a chord
 
-PITCHES:
-  c4, d4, e4...   Natural notes (middle C = c4)
-  c#4, db4        Sharps and flats
-  C4, D4          Case-insensitive
+{}
+  {}   Natural notes (middle C = c4)
+  {}        Sharps and flats
+  {}          Case-insensitive
 
-DURATIONS:
-  :w    Whole note
-  :h    Half note
-  :q    Quarter note
-  :8    Eighth note
-  :16   Sixteenth note
+{}
+  {}    Whole note
+  {}    Half note
+  {}    Quarter note
+  {}    Eighth note
+  {}   Sixteenth note
 
-EXAMPLES:
-  (note c4 :q)                    Quarter note middle C
-  (chord :h c4 e4 g4)             Half note C major chord
-  (measure (note c4 :q) (rest :q)) Measure with note and rest
-"#;
+{}
+  {}                    Quarter note middle C
+  {}             Half note C major chord
+  {} Measure with note and rest
+"#,
+        header("Fermata Expressions", use_colors),
+        header("BASIC FORMS:", use_colors),
+        cmd("(score ...)", use_colors),
+        cmd("(part :instrument ...)", use_colors),
+        cmd("(measure ...)", use_colors),
+        cmd("(note <pitch> <dur>)", use_colors),
+        cmd("(rest <dur>)", use_colors),
+        cmd("(chord <dur> <pitches>...)", use_colors),
+        header("PITCHES:", use_colors),
+        cmd("c4, d4, e4...", use_colors),
+        cmd("c#4, db4", use_colors),
+        cmd("C4, D4", use_colors),
+        header("DURATIONS:", use_colors),
+        cmd(":w", use_colors),
+        cmd(":h", use_colors),
+        cmd(":q", use_colors),
+        cmd(":8", use_colors),
+        cmd(":16", use_colors),
+        header("EXAMPLES:", use_colors),
+        cmd("(note c4 :q)", use_colors),
+        cmd("(chord :h c4 e4 g4)", use_colors),
+        cmd("(measure (note c4 :q) (rest :q))", use_colors),
+    )
+}
 
-const CHAT_HELP: &str = r#"Chat Messages
+/// Generate chat help text.
+fn chat_help(use_colors: bool) -> String {
+    format!(
+        r#"{}
 
 Chat messages start with '/' and are used for communication
 (future: with Claude AI assistant).
 
-SYNTAX:
-  /message          Say something
-  /say message      Explicit say
-  /em action        Emote (describe an action)
-  /me action        Alias for /em
+{}
+  {}          Say something
+  {}      Explicit say
+  {}        Emote (describe an action)
+  {}        Alias for /em
 
-EXAMPLES:
+{}
   /what key is this in?
   /em scratches head
   /me is confused about the time signature
-"#;
+"#,
+        header("Chat Messages", use_colors),
+        header("SYNTAX:", use_colors),
+        cmd("/message", use_colors),
+        cmd("/say message", use_colors),
+        cmd("/em action", use_colors),
+        cmd("/me action", use_colors),
+        header("EXAMPLES:", use_colors),
+    )
+}
 
 #[cfg(test)]
 mod tests {
@@ -260,7 +388,7 @@ mod tests {
     #[test]
     fn test_dispatch_help() {
         let mut session = ReplSession::new();
-        let result = dispatch("help", &mut session).unwrap();
+        let result = dispatch("help", &mut session, false).unwrap();
         match result {
             CommandResult::Output(s) => assert!(s.contains("Fermata REPL")),
             _ => panic!("Expected Output"),
@@ -270,21 +398,21 @@ mod tests {
     #[test]
     fn test_dispatch_help_alias_h() {
         let mut session = ReplSession::new();
-        let result = dispatch("h", &mut session).unwrap();
+        let result = dispatch("h", &mut session, false).unwrap();
         assert!(matches!(result, CommandResult::Output(_)));
     }
 
     #[test]
     fn test_dispatch_help_alias_question() {
         let mut session = ReplSession::new();
-        let result = dispatch("?", &mut session).unwrap();
+        let result = dispatch("?", &mut session, false).unwrap();
         assert!(matches!(result, CommandResult::Output(_)));
     }
 
     #[test]
     fn test_dispatch_help_topic_commands() {
         let mut session = ReplSession::new();
-        let result = dispatch("help commands", &mut session).unwrap();
+        let result = dispatch("help commands", &mut session, false).unwrap();
         match result {
             CommandResult::Output(s) => assert!(s.contains("REPL Commands")),
             _ => panic!("Expected Output"),
@@ -294,7 +422,7 @@ mod tests {
     #[test]
     fn test_dispatch_help_topic_expressions() {
         let mut session = ReplSession::new();
-        let result = dispatch("help expr", &mut session).unwrap();
+        let result = dispatch("help expr", &mut session, false).unwrap();
         match result {
             CommandResult::Output(s) => assert!(s.contains("Fermata Expressions")),
             _ => panic!("Expected Output"),
@@ -304,7 +432,7 @@ mod tests {
     #[test]
     fn test_dispatch_help_topic_chat() {
         let mut session = ReplSession::new();
-        let result = dispatch("help chat", &mut session).unwrap();
+        let result = dispatch("help chat", &mut session, false).unwrap();
         match result {
             CommandResult::Output(s) => assert!(s.contains("Chat Messages")),
             _ => panic!("Expected Output"),
@@ -314,7 +442,7 @@ mod tests {
     #[test]
     fn test_dispatch_help_unknown_topic() {
         let mut session = ReplSession::new();
-        let result = dispatch("help xyz", &mut session).unwrap();
+        let result = dispatch("help xyz", &mut session, false).unwrap();
         match result {
             CommandResult::Output(s) => assert!(s.contains("Unknown help topic")),
             _ => panic!("Expected Output"),
@@ -324,42 +452,42 @@ mod tests {
     #[test]
     fn test_dispatch_quit() {
         let mut session = ReplSession::new();
-        let result = dispatch("quit", &mut session).unwrap();
+        let result = dispatch("quit", &mut session, false).unwrap();
         assert_eq!(result, CommandResult::Exit);
     }
 
     #[test]
     fn test_dispatch_exit() {
         let mut session = ReplSession::new();
-        let result = dispatch("exit", &mut session).unwrap();
+        let result = dispatch("exit", &mut session, false).unwrap();
         assert_eq!(result, CommandResult::Exit);
     }
 
     #[test]
     fn test_dispatch_q() {
         let mut session = ReplSession::new();
-        let result = dispatch("q", &mut session).unwrap();
+        let result = dispatch("q", &mut session, false).unwrap();
         assert_eq!(result, CommandResult::Exit);
     }
 
     #[test]
     fn test_dispatch_empty() {
         let mut session = ReplSession::new();
-        let result = dispatch("", &mut session).unwrap();
+        let result = dispatch("", &mut session, false).unwrap();
         assert_eq!(result, CommandResult::Continue);
     }
 
     #[test]
     fn test_dispatch_whitespace() {
         let mut session = ReplSession::new();
-        let result = dispatch("   ", &mut session).unwrap();
+        let result = dispatch("   ", &mut session, false).unwrap();
         assert_eq!(result, CommandResult::Continue);
     }
 
     #[test]
     fn test_dispatch_unknown() {
         let mut session = ReplSession::new();
-        let result = dispatch("foobar", &mut session).unwrap();
+        let result = dispatch("foobar", &mut session, false).unwrap();
         match result {
             CommandResult::Output(s) => {
                 assert!(s.contains("Unknown command"));
@@ -372,17 +500,17 @@ mod tests {
     #[test]
     fn test_dispatch_case_insensitive() {
         let mut session = ReplSession::new();
-        let result = dispatch("HELP", &mut session).unwrap();
+        let result = dispatch("HELP", &mut session, false).unwrap();
         assert!(matches!(result, CommandResult::Output(_)));
 
-        let result = dispatch("QUIT", &mut session).unwrap();
+        let result = dispatch("QUIT", &mut session, false).unwrap();
         assert_eq!(result, CommandResult::Exit);
     }
 
     #[test]
     fn test_dispatch_with_leading_whitespace() {
         let mut session = ReplSession::new();
-        let result = dispatch("  help", &mut session).unwrap();
+        let result = dispatch("  help", &mut session, false).unwrap();
         assert!(matches!(result, CommandResult::Output(_)));
     }
 
@@ -407,15 +535,18 @@ mod tests {
         let mut session = ReplSession::new();
         session.set_display_mode(DisplayMode::Png); // Start with non-default
 
-        let result = dispatch("set display sexpr", &mut session).unwrap();
-        assert_eq!(result, CommandResult::DisplayModeChanged(DisplayMode::Sexpr));
+        let result = dispatch("set display sexpr", &mut session, false).unwrap();
+        assert_eq!(
+            result,
+            CommandResult::DisplayModeChanged(DisplayMode::Sexpr)
+        );
         assert_eq!(session.display_mode(), DisplayMode::Sexpr);
     }
 
     #[test]
     fn test_dispatch_set_display_png() {
         let mut session = ReplSession::new();
-        let result = dispatch("set display png", &mut session).unwrap();
+        let result = dispatch("set display png", &mut session, false).unwrap();
         assert_eq!(result, CommandResult::DisplayModeChanged(DisplayMode::Png));
         assert_eq!(session.display_mode(), DisplayMode::Png);
     }
@@ -423,30 +554,36 @@ mod tests {
     #[test]
     fn test_dispatch_set_display_musicxml() {
         let mut session = ReplSession::new();
-        let result = dispatch("set display xml", &mut session).unwrap();
-        assert_eq!(result, CommandResult::DisplayModeChanged(DisplayMode::MusicXml));
+        let result = dispatch("set display xml", &mut session, false).unwrap();
+        assert_eq!(
+            result,
+            CommandResult::DisplayModeChanged(DisplayMode::MusicXml)
+        );
         assert_eq!(session.display_mode(), DisplayMode::MusicXml);
     }
 
     #[test]
     fn test_dispatch_set_display_silent() {
         let mut session = ReplSession::new();
-        let result = dispatch("set display silent", &mut session).unwrap();
-        assert_eq!(result, CommandResult::DisplayModeChanged(DisplayMode::Silent));
+        let result = dispatch("set display silent", &mut session, false).unwrap();
+        assert_eq!(
+            result,
+            CommandResult::DisplayModeChanged(DisplayMode::Silent)
+        );
         assert_eq!(session.display_mode(), DisplayMode::Silent);
     }
 
     #[test]
     fn test_dispatch_set_display_alias_d() {
         let mut session = ReplSession::new();
-        let result = dispatch("set d png", &mut session).unwrap();
+        let result = dispatch("set d png", &mut session, false).unwrap();
         assert_eq!(result, CommandResult::DisplayModeChanged(DisplayMode::Png));
     }
 
     #[test]
     fn test_dispatch_set_display_no_value() {
         let mut session = ReplSession::new();
-        let result = dispatch("set display", &mut session).unwrap();
+        let result = dispatch("set display", &mut session, false).unwrap();
         match result {
             CommandResult::Output(s) => {
                 assert!(s.contains("Current display mode"));
@@ -459,7 +596,7 @@ mod tests {
     #[test]
     fn test_dispatch_set_display_invalid() {
         let mut session = ReplSession::new();
-        let result = dispatch("set display invalid", &mut session).unwrap();
+        let result = dispatch("set display invalid", &mut session, false).unwrap();
         match result {
             CommandResult::Output(s) => {
                 assert!(s.contains("Unknown display mode"));
@@ -472,7 +609,7 @@ mod tests {
     #[test]
     fn test_dispatch_set_no_args() {
         let mut session = ReplSession::new();
-        let result = dispatch("set", &mut session).unwrap();
+        let result = dispatch("set", &mut session, false).unwrap();
         match result {
             CommandResult::Output(s) => {
                 assert!(s.contains("Usage:"));
@@ -485,7 +622,7 @@ mod tests {
     #[test]
     fn test_dispatch_set_unknown_setting() {
         let mut session = ReplSession::new();
-        let result = dispatch("set foo bar", &mut session).unwrap();
+        let result = dispatch("set foo bar", &mut session, false).unwrap();
         match result {
             CommandResult::Output(s) => {
                 assert!(s.contains("Unknown setting"));
@@ -500,7 +637,7 @@ mod tests {
     #[test]
     fn test_dispatch_settings() {
         let mut session = ReplSession::new();
-        let result = dispatch("settings", &mut session).unwrap();
+        let result = dispatch("settings", &mut session, false).unwrap();
         match result {
             CommandResult::Output(s) => {
                 assert!(s.contains("Current Settings"));
@@ -519,7 +656,7 @@ mod tests {
         session.set_display_mode(DisplayMode::Png);
         session.render_options_mut().width = 1200;
 
-        let result = dispatch("settings", &mut session).unwrap();
+        let result = dispatch("settings", &mut session, false).unwrap();
         match result {
             CommandResult::Output(s) => {
                 assert!(s.contains("png"));

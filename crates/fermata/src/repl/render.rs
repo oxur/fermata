@@ -19,7 +19,7 @@ use crate::musicxml;
 use super::error::{ReplError, ReplResult};
 use super::session::RenderOptions;
 
-use verovioxide::{Toolkit, Options as VerovioOptions, Mei, Midi, Png};
+use verovioxide::{Mei, Midi, Options as VerovioOptions, Png, Toolkit};
 
 /// Global cached toolkit wrapped in a Mutex for thread-safe access.
 /// Using Mutex instead of OnceLock because we need mutable access to the Toolkit.
@@ -95,7 +95,11 @@ impl TerminalSupport {
 }
 
 /// Display a PNG image in the terminal.
-pub fn display_png_in_terminal(png_bytes: &[u8], options: &RenderOptions, dark_mode: bool) -> ReplResult<()> {
+pub fn display_png_in_terminal(
+    png_bytes: &[u8],
+    options: &RenderOptions,
+    dark_mode: bool,
+) -> ReplResult<()> {
     use std::time::Instant;
 
     let t0 = Instant::now();
@@ -110,11 +114,9 @@ pub fn display_png_in_terminal(png_bytes: &[u8], options: &RenderOptions, dark_m
         TerminalSupport::Sixel | TerminalSupport::BlockChars => {
             display_block_characters(png_bytes, options.width, dark_mode)
         }
-        TerminalSupport::None => {
-            Err(ReplError::render(
-                "Terminal does not support image display. Try ':set display mei' for text output."
-            ))
-        }
+        TerminalSupport::None => Err(ReplError::render(
+            "Terminal does not support image display. Try ':set display mei' for text output.",
+        )),
     };
 
     let elapsed = t0.elapsed();
@@ -145,13 +147,14 @@ fn display_iterm2_inline(png_bytes: &[u8], dark_mode: bool) -> ReplResult<()> {
 
     // iTerm2 inline image escape sequence
     let mut stdout = std::io::stdout().lock();
-    write!(
+    writeln!(
         stdout,
-        "\x1b]1337;File=inline=1;preserveAspectRatio=1:{}\x07\n",
+        "\x1b]1337;File=inline=1;preserveAspectRatio=1:{}\x07",
         encoded
     )
     .map_err(|e| ReplError::render(format!("Failed to write iTerm2 sequence: {}", e)))?;
-    stdout.flush()
+    stdout
+        .flush()
         .map_err(|e| ReplError::render(format!("Failed to flush: {}", e)))?;
 
     Ok(())
@@ -175,7 +178,9 @@ fn display_kitty_inline(png_bytes: &[u8], dark_mode: bool) -> ReplResult<()> {
 
     // Kitty protocol sends data in chunks
     let chunk_size = 4096;
-    let chunks: Vec<&str> = encoded.as_bytes().chunks(chunk_size)
+    let chunks: Vec<&str> = encoded
+        .as_bytes()
+        .chunks(chunk_size)
         .map(|c| std::str::from_utf8(c).unwrap_or(""))
         .collect();
 
@@ -202,9 +207,9 @@ fn display_kitty_inline(png_bytes: &[u8], dark_mode: bool) -> ReplResult<()> {
         }
     }
 
-    writeln!(stdout)
-        .map_err(|e| ReplError::render(format!("Failed to write newline: {}", e)))?;
-    stdout.flush()
+    writeln!(stdout).map_err(|e| ReplError::render(format!("Failed to write newline: {}", e)))?;
+    stdout
+        .flush()
         .map_err(|e| ReplError::render(format!("Failed to flush: {}", e)))?;
 
     Ok(())
@@ -262,8 +267,8 @@ fn get_terminal_width() -> u32 {
 /// Invert colors in a PNG image for dark mode display.
 /// Inverts RGB values while preserving alpha.
 fn invert_png_colors(png_bytes: &[u8]) -> ReplResult<Vec<u8>> {
-    use image::codecs::png::{CompressionType, FilterType, PngEncoder};
     use image::ImageEncoder;
+    use image::codecs::png::{CompressionType, FilterType, PngEncoder};
 
     let img = image::load_from_memory(png_bytes)
         .map_err(|e| ReplError::render(format!("Failed to decode PNG for inversion: {}", e)))?;
@@ -280,7 +285,8 @@ fn invert_png_colors(png_bytes: &[u8]) -> ReplResult<Vec<u8>> {
 
     // Re-encode as PNG with fast compression (speed over size)
     let mut output = Vec::with_capacity(png_bytes.len());
-    let encoder = PngEncoder::new_with_quality(&mut output, CompressionType::Fast, FilterType::NoFilter);
+    let encoder =
+        PngEncoder::new_with_quality(&mut output, CompressionType::Fast, FilterType::NoFilter);
     encoder
         .write_image(
             rgba.as_raw(),
@@ -297,7 +303,7 @@ fn invert_png_colors(png_bytes: &[u8]) -> ReplResult<Vec<u8>> {
 /// Index by: (top_left << 3) | (top_right << 2) | (bottom_left << 1) | bottom_right
 /// Where 1 = foreground color, 0 = background color
 const QUARTER_BLOCKS: [char; 16] = [
-    ' ',  // 0000 - all background
+    ' ', // 0000 - all background
     '▗', // 0001 - bottom right
     '▖', // 0010 - bottom left
     '▄', // 0011 - bottom half
@@ -361,11 +367,23 @@ fn display_block_characters(png_bytes: &[u8], _max_width: u32, dark_mode: bool) 
     let scale = pixel_width as f32 / orig_w as f32;
     let pixel_height = (orig_h as f32 * scale).ceil() as u32;
     // Round to multiples of 2 for quarter-block rendering
-    let pixel_width = if pixel_width % 2 == 0 { pixel_width } else { pixel_width + 1 };
-    let pixel_height = if pixel_height % 2 == 0 { pixel_height } else { pixel_height + 1 };
+    let pixel_width = if pixel_width % 2 == 0 {
+        pixel_width
+    } else {
+        pixel_width + 1
+    };
+    let pixel_height = if pixel_height % 2 == 0 {
+        pixel_height
+    } else {
+        pixel_height + 1
+    };
 
     // Resize using Lanczos3 for sharper downscaling
-    let img = img.resize_exact(pixel_width, pixel_height, image::imageops::FilterType::Lanczos3);
+    let img = img.resize_exact(
+        pixel_width,
+        pixel_height,
+        image::imageops::FilterType::Lanczos3,
+    );
     let (w, h) = img.dimensions();
 
     debug!(
@@ -405,9 +423,7 @@ fn display_block_characters(png_bytes: &[u8], _max_width: u32, dark_mode: bool) 
             let _ = write!(
                 output,
                 "\x1b[38;2;{};{};{}m\x1b[48;2;{};{};{}m{}",
-                fg.0, fg.1, fg.2,
-                bg.0, bg.1, bg.2,
-                QUARTER_BLOCKS[pattern as usize]
+                fg.0, fg.1, fg.2, bg.0, bg.1, bg.2, QUARTER_BLOCKS[pattern as usize]
             );
         }
         output.push_str("\x1b[0m\n"); // Reset colors and newline
@@ -415,9 +431,11 @@ fn display_block_characters(png_bytes: &[u8], _max_width: u32, dark_mode: bool) 
 
     // Write all at once
     let mut stdout = std::io::stdout().lock();
-    stdout.write_all(output.as_bytes())
+    stdout
+        .write_all(output.as_bytes())
         .map_err(|e| ReplError::render(format!("Failed to write block characters: {}", e)))?;
-    stdout.flush()
+    stdout
+        .flush()
         .map_err(|e| ReplError::render(format!("Failed to flush: {}", e)))?;
 
     Ok(())
@@ -612,7 +630,10 @@ pub fn display_as_png(
 }
 
 /// Render PNG using the cached toolkit.
-fn render_png_cached(score: &ScorePartwise, options: &RenderOptions) -> ReplResult<(Vec<u8>, u32, bool)> {
+fn render_png_cached(
+    score: &ScorePartwise,
+    options: &RenderOptions,
+) -> ReplResult<(Vec<u8>, u32, bool)> {
     use std::time::Instant;
 
     let t0 = Instant::now();
@@ -654,10 +675,7 @@ fn render_png_cached(score: &ScorePartwise, options: &RenderOptions) -> ReplResu
     // Use 2x scale for good quality while maintaining reasonable performance
     // Skip white_background() to get transparency
     let png_bytes = toolkit
-        .render(
-            Png::page(options.page)
-                .scale(2.0)
-        )
+        .render(Png::page(options.page).scale(2.0))
         .map_err(|e| ReplError::render(format!("Failed to render PNG: {}", e)))?;
 
     let t5 = Instant::now();

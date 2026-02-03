@@ -4,10 +4,10 @@
 
 ## Backlog
 
-- [ ] Add banner support
 - [ ] Add auto-complete support
 - [ ] Add the ability to assign values to variables
 - [ ] Add the ability to create functions and compose them
+- [ ] Add sunset colours to fermata banner
 
 ## Completed
 
@@ -17,3 +17,4 @@
 - [x] Add support for rendering PNGs in-terminal
 - [x] Add a `clear` command
 - [x] Add syntax highlighting + rainbow parens
+- [x] Add banner support

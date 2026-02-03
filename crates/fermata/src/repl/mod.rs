@@ -20,6 +20,7 @@
 //! ```
 
 pub mod commands;
+pub mod config;
 pub mod display;
 pub mod error;
 pub mod highlighter;
@@ -36,13 +37,14 @@ use reedline::{FileBackedHistory, Reedline, Signal};
 
 use crate::lang::compile;
 use crate::sexpr::parser::parse as parse_sexpr;
-use crate::sexpr::{print_sexpr, Sexpr};
+use crate::sexpr::{Sexpr, print_sexpr};
 
 pub use error::{ReplError, ReplResult};
 pub use input::{ChatKind, InputKind};
 pub use session::{DisplayMode, HistoryValue, RenderOptions, ReplSession};
 
 use commands::CommandResult;
+use config::ReplConfig;
 use display::{format_banner, format_chat_stub, format_compile_error, format_result_for_mode};
 use input::classify;
 use prompt::FermataPrompt;
@@ -56,6 +58,8 @@ pub struct Repl {
     use_colors: bool,
     /// Session state (history, display mode, etc.)
     session: ReplSession,
+    /// Configuration
+    config: ReplConfig,
 }
 
 impl Repl {
@@ -66,10 +70,12 @@ impl Repl {
     /// Returns an error if the history file cannot be created.
     pub fn new(use_colors: bool) -> ReplResult<Self> {
         let editor = Self::create_editor(use_colors)?;
+        let config = ReplConfig::load()?;
         Ok(Self {
             editor,
             use_colors,
             session: ReplSession::new(),
+            config,
         })
     }
 
@@ -119,7 +125,7 @@ impl Repl {
     /// Returns an error if there's an unrecoverable I/O error.
     pub fn run(&mut self) -> ReplResult<()> {
         // Print banner
-        println!("{}", format_banner(self.use_colors));
+        self.print_banner();
 
         // Flush stdout and stderr before reedline takes over terminal
         use std::io::Write;
@@ -206,7 +212,9 @@ impl Repl {
                 // Display the result based on current display mode
                 let mode = self.session.display_mode();
                 let options = self.session.render_options();
-                if let Some(output) = format_result_for_mode(&score, mode, self.use_colors, &options) {
+                if let Some(output) =
+                    format_result_for_mode(&score, mode, self.use_colors, &options)
+                {
                     println!("{}", output);
                 }
             }
@@ -223,7 +231,9 @@ impl Repl {
                 // Display result based on current display mode
                 let mode = self.session.display_mode();
                 let options = self.session.render_options();
-                if let Some(output) = format_result_for_mode(&score, mode, self.use_colors, &options) {
+                if let Some(output) =
+                    format_result_for_mode(&score, mode, self.use_colors, &options)
+                {
                     println!("{}", output);
                 }
             }
@@ -248,7 +258,7 @@ impl Repl {
     ///
     /// Returns `true` if the REPL should exit.
     fn handle_command(&mut self, cmd: &str, use_colors: bool) -> ReplResult<bool> {
-        match commands::dispatch(cmd, &mut self.session)? {
+        match commands::dispatch(cmd, &mut self.session, use_colors)? {
             CommandResult::Continue => Ok(false),
             CommandResult::Exit => Ok(true),
             CommandResult::Output(msg) => {
@@ -260,7 +270,17 @@ impl Repl {
                 println!("{}", display::format_info(&msg, use_colors));
                 Ok(false)
             }
+            CommandResult::ShowBanner => {
+                self.print_banner();
+                Ok(false)
+            }
         }
+    }
+
+    /// Print the banner.
+    fn print_banner(&self) {
+        let banner_text = self.config.banner_text();
+        println!("{}", format_banner(&banner_text, self.use_colors));
     }
 
     /// Handle a chat message (stub for Phase 6b).

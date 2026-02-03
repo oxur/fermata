@@ -30,6 +30,7 @@ nu-ansi-term = "0.50"
 dirs = "6"
 log = "0.4"
 twyg = "0.6"
+confyg = "0.3"
 
 # Rendering dependencies (optional, enabled with 'render' feature)
 verovioxide = { path = "../../../verovioxide/crates/verovioxide", optional = true }

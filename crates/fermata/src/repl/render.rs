@@ -116,9 +116,15 @@ impl Renderer {
         self.load_score(score)?;
         self.configure(options)?;
 
+        // Use 3x scale for higher resolution terminal display
+        // Add white background for better visibility in terminals
         let png_bytes = self
             .toolkit
-            .render(Png::page(options.page))
+            .render(
+                Png::page(options.page)
+                    .scale(3.0)
+                    .white_background()
+            )
             .map_err(|e| ReplError::render(format!("Failed to render PNG: {}", e)))?;
 
         Ok(png_bytes)
@@ -154,11 +160,16 @@ pub fn display_png_in_terminal(png_bytes: &[u8], _options: &RenderOptions) -> Re
     let img = image::load_from_memory(png_bytes)
         .map_err(|e| ReplError::render(format!("Failed to decode PNG: {}", e)))?;
 
+    // Let viuer auto-detect the best protocol and size
+    // Don't constrain width - let it use available terminal width
     let config = viuer::Config {
-        // Use terminal width, respect aspect ratio
-        width: Some(80),
-        height: None,
         absolute_offset: false,
+        // These None values let viuer choose optimal sizing
+        width: None,
+        height: None,
+        // Try to use native terminal graphics if available
+        use_kitty: true,
+        use_iterm: true,
         ..Default::default()
     };
 

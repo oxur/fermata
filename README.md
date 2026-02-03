@@ -7,7 +7,7 @@
 
 [![][logo]][logo-large]
 
-**An S-expression DSL for working with MusicXML**
+*An S-expression DSL for working with MusicXML*
 
 > *In music, a fermata (𝄐) indicates that a note should be held longer than its written value —
 > a pause, a moment of expressiveness left to the performer's discretion.*

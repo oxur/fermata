@@ -2,7 +2,15 @@
 
 ## Active
 
+- [ ] Add support for rendering PNGs in-terminal
+
 ## Backlog
+
+- [ ] Add banner support
+- [ ] Add auto-complete support
+- [ ] Add syntax highlighting
+- [ ] Add the ability to assign values to variables
+- [ ] Add the ability to create functions and compose them
 
 ## Completed
 

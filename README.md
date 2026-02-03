@@ -163,16 +163,16 @@ fermata show keys          # Key signatures and modes
 
 ```lisp
 ;; Notes with pitch and duration
-(note C4 :q)              ; C4 quarter note
-(note D#5 :h)             ; D#5 half note
-(note Bb3 :8)             ; Bb3 eighth note
+(note c4 :q)              ; C4 quarter note
+(note d#5 :h)             ; D#5 half note
+(note bb3 :8)             ; Bb3 eighth note
 
 ;; Rests
 (rest :q)                 ; quarter rest
 (rest :w)                 ; whole rest
 
-;; Chords
-(chord :q C4 E4 G4)       ; C major triad, quarter
+;; Chords (pitches in nested list, then duration)
+(chord (c4 e4 g4) :q)     ; C major triad, quarter
 
 ;; Durations
 :w                        ; whole
@@ -186,19 +186,31 @@ fermata show keys          # Key signatures and modes
 (score
   :title "Title"
   :composer "Composer"
-  (part :id "P1" :name "Piano"
+  (part :piano                    ; or :name "Piano"
     (measure
-      :time (4 4)
-      :clef :treble
-      :key 0                ; 0 = C major, 1 = G major, -1 = F major
-      (note C4 :q)
-      ...)))
+      (time 4 4)                  ; time signature
+      (clef :treble)              ; clef
+      (key c :major)              ; key signature
+      (note c4 :q)
+      (note d4 :q)
+      (note e4 :h))))
 
-;; Dynamics (planned)
-:pp :p :mp :mf :f :ff
+;; Dynamics
+(p) (pp) (ppp)            ; piano variants
+(f) (ff) (fff)            ; forte variants
+(mp) (mf)                 ; mezzo variants
+(sfz) (fp)                ; accents
 
-;; Articulations (planned)
-:staccato :accent :tenuto :fermata
+;; Articulations (on notes)
+(note c4 :q :staccato)
+(note c4 :q :accent)
+(note c4 :q :tenuto)
+
+;; Barlines
+(barline :final)          ; end barline
+(barline :double)         ; double barline
+(barline :repeat-forward) ; repeat start
+(barline :repeat-backward); repeat end
 
 ;; Theory macros (planned)
 (scale c :major)          ; => (c4 d4 e4 f4 g4 a4 b4 c5)

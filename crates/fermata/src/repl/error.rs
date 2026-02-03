@@ -19,6 +19,10 @@ pub enum ReplError {
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
 
+    /// Rendering error (verovio/viuer).
+    #[error("Render error: {0}")]
+    Render(String),
+
     /// Generic message error.
     #[error("{0}")]
     Message(String),
@@ -33,6 +37,11 @@ impl ReplError {
     /// Create a reedline error.
     pub fn reedline(msg: impl Into<String>) -> Self {
         Self::Reedline(msg.into())
+    }
+
+    /// Create a render error.
+    pub fn render(msg: impl Into<String>) -> Self {
+        Self::Render(msg.into())
     }
 }
 

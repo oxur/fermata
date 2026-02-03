@@ -24,6 +24,8 @@ pub mod display;
 pub mod error;
 pub mod input;
 pub mod prompt;
+#[cfg(feature = "render")]
+pub mod render;
 pub mod session;
 pub mod validator;
 
@@ -196,7 +198,8 @@ impl Repl {
 
                 // Display the result based on current display mode
                 let mode = self.session.display_mode();
-                if let Some(output) = format_result_for_mode(&score, mode, self.use_colors) {
+                let options = self.session.render_options();
+                if let Some(output) = format_result_for_mode(&score, mode, self.use_colors, options) {
                     println!("{}", output);
                 }
             }
@@ -212,7 +215,8 @@ impl Repl {
             Some(HistoryValue::Result(score)) => {
                 // Display result based on current display mode
                 let mode = self.session.display_mode();
-                if let Some(output) = format_result_for_mode(&score, mode, self.use_colors) {
+                let options = self.session.render_options();
+                if let Some(output) = format_result_for_mode(&score, mode, self.use_colors, options) {
                     println!("{}", output);
                 }
             }

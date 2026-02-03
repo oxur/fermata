@@ -7,13 +7,15 @@ use crate::lang::error::CompileError;
 use crate::musicxml;
 use crate::sexpr::{ToSexpr, print_sexpr};
 
-use super::session::DisplayMode;
+use super::session::{DisplayMode, RenderOptions};
 
 /// Format a successful evaluation result based on display mode.
+#[cfg(not(feature = "render"))]
 pub fn format_result_for_mode(
     score: &ScorePartwise,
     mode: DisplayMode,
     use_colors: bool,
+    _options: &RenderOptions,
 ) -> Option<String> {
     match mode {
         DisplayMode::Sexpr => Some(format_as_sexpr(score, use_colors)),
@@ -21,6 +23,26 @@ pub fn format_result_for_mode(
         DisplayMode::Mei => Some(format_render_placeholder("MEI", use_colors)),
         DisplayMode::Midi => Some(format_render_placeholder("MIDI", use_colors)),
         DisplayMode::Png => Some(format_render_placeholder("PNG", use_colors)),
+        DisplayMode::Silent => None,
+    }
+}
+
+/// Format a successful evaluation result based on display mode (with rendering).
+#[cfg(feature = "render")]
+pub fn format_result_for_mode(
+    score: &ScorePartwise,
+    mode: DisplayMode,
+    use_colors: bool,
+    options: &RenderOptions,
+) -> Option<String> {
+    use super::render;
+
+    match mode {
+        DisplayMode::Sexpr => Some(format_as_sexpr(score, use_colors)),
+        DisplayMode::MusicXml => Some(format_as_musicxml(score, use_colors)),
+        DisplayMode::Mei => Some(render::format_as_mei(score, use_colors)),
+        DisplayMode::Midi => Some(render::format_as_midi(score, use_colors)),
+        DisplayMode::Png => render::display_as_png(score, options, use_colors),
         DisplayMode::Silent => None,
     }
 }
@@ -59,6 +81,7 @@ pub fn format_as_musicxml(score: &ScorePartwise, use_colors: bool) -> String {
 }
 
 /// Placeholder for verovio-based rendering (requires 'render' feature).
+#[cfg(not(feature = "render"))]
 fn format_render_placeholder(format: &str, use_colors: bool) -> String {
     let msg = format!("({} rendering requires 'render' feature - use :set display sexpr)", format);
     if use_colors {
@@ -234,10 +257,15 @@ mod tests {
 
     // === Display mode tests ===
 
+    fn default_options() -> RenderOptions {
+        RenderOptions::default()
+    }
+
     #[test]
     fn test_format_result_for_mode_sexpr() {
         let score = test_score();
-        let result = format_result_for_mode(&score, DisplayMode::Sexpr, false);
+        let opts = default_options();
+        let result = format_result_for_mode(&score, DisplayMode::Sexpr, false, &opts);
         assert!(result.is_some());
         assert!(result.unwrap().contains("score"));
     }
@@ -245,33 +273,41 @@ mod tests {
     #[test]
     fn test_format_result_for_mode_musicxml() {
         let score = test_score();
-        let result = format_result_for_mode(&score, DisplayMode::MusicXml, false);
+        let opts = default_options();
+        let result = format_result_for_mode(&score, DisplayMode::MusicXml, false, &opts);
         assert!(result.is_some());
         let xml = result.unwrap();
         assert!(xml.contains("<?xml"));
         assert!(xml.contains("score-partwise"));
     }
 
+    // MEI/MIDI/PNG tests only check placeholder when render feature is disabled
+    #[cfg(not(feature = "render"))]
     #[test]
     fn test_format_result_for_mode_mei() {
         let score = test_score();
-        let result = format_result_for_mode(&score, DisplayMode::Mei, false);
+        let opts = default_options();
+        let result = format_result_for_mode(&score, DisplayMode::Mei, false, &opts);
         assert!(result.is_some());
         assert!(result.unwrap().contains("MEI"));
     }
 
+    #[cfg(not(feature = "render"))]
     #[test]
     fn test_format_result_for_mode_midi() {
         let score = test_score();
-        let result = format_result_for_mode(&score, DisplayMode::Midi, false);
+        let opts = default_options();
+        let result = format_result_for_mode(&score, DisplayMode::Midi, false, &opts);
         assert!(result.is_some());
         assert!(result.unwrap().contains("MIDI"));
     }
 
+    #[cfg(not(feature = "render"))]
     #[test]
     fn test_format_result_for_mode_png() {
         let score = test_score();
-        let result = format_result_for_mode(&score, DisplayMode::Png, false);
+        let opts = default_options();
+        let result = format_result_for_mode(&score, DisplayMode::Png, false, &opts);
         assert!(result.is_some());
         assert!(result.unwrap().contains("PNG"));
     }
@@ -279,7 +315,8 @@ mod tests {
     #[test]
     fn test_format_result_for_mode_silent() {
         let score = test_score();
-        let result = format_result_for_mode(&score, DisplayMode::Silent, false);
+        let opts = default_options();
+        let result = format_result_for_mode(&score, DisplayMode::Silent, false, &opts);
         assert!(result.is_none());
     }
 

@@ -24,6 +24,7 @@ pub mod display;
 pub mod error;
 pub mod input;
 pub mod prompt;
+pub mod session;
 pub mod validator;
 
 use std::path::PathBuf;
@@ -31,9 +32,12 @@ use std::path::PathBuf;
 use reedline::{FileBackedHistory, Reedline, Signal};
 
 use crate::lang::compile;
+use crate::sexpr::parser::parse as parse_sexpr;
+use crate::sexpr::{print_sexpr, Sexpr};
 
 pub use error::{ReplError, ReplResult};
 pub use input::{ChatKind, InputKind};
+pub use session::{DisplayMode, HistoryValue, RenderOptions, ReplSession};
 
 use commands::CommandResult;
 use display::{format_banner, format_chat_stub, format_compile_error, format_eval_result};
@@ -47,6 +51,8 @@ pub struct Repl {
     editor: Reedline,
     /// Whether colors are enabled.
     use_colors: bool,
+    /// Session state (history, display mode, etc.)
+    session: ReplSession,
 }
 
 impl Repl {
@@ -57,7 +63,21 @@ impl Repl {
     /// Returns an error if the history file cannot be created.
     pub fn new(use_colors: bool) -> ReplResult<Self> {
         let editor = Self::create_editor()?;
-        Ok(Self { editor, use_colors })
+        Ok(Self {
+            editor,
+            use_colors,
+            session: ReplSession::new(),
+        })
+    }
+
+    /// Get a reference to the session.
+    pub fn session(&self) -> &ReplSession {
+        &self.session
+    }
+
+    /// Get a mutable reference to the session.
+    pub fn session_mut(&mut self) -> &mut ReplSession {
+        &mut self.session
     }
 
     /// Create the reedline editor with history and validation.
@@ -137,7 +157,10 @@ impl Repl {
                 self.eval_expression(&expr);
                 Ok(false)
             }
-            InputKind::Command(cmd) => self.handle_command(&cmd),
+            InputKind::Command(cmd) => {
+                let use_colors = self.use_colors;
+                self.handle_command(&cmd, use_colors)
+            }
             InputKind::Chat(chat) => {
                 self.handle_chat(&chat);
                 Ok(false)
@@ -146,9 +169,32 @@ impl Repl {
     }
 
     /// Evaluate a Fermata expression and display the result.
-    fn eval_expression(&self, source: &str) {
+    fn eval_expression(&mut self, source: &str) {
+        // Step 1: Parse the source to get the Sexpr
+        let sexpr = match parse_sexpr(source) {
+            Ok(s) => s,
+            Err(e) => {
+                println!("{}", format_compile_error(&e.into(), self.use_colors));
+                return;
+            }
+        };
+
+        // Step 2: Check if it's a bare history symbol
+        if let Sexpr::Symbol(sym) = &sexpr {
+            if ReplSession::is_history_symbol(sym) {
+                self.display_history_value(sym);
+                return;
+            }
+        }
+
+        // Step 3: Compile the expression
         match compile(source) {
             Ok(score) => {
+                // Store the expression and result in history
+                self.session.push_expression(sexpr);
+                self.session.push_result(score.clone());
+
+                // Display the result
                 println!("{}", format_eval_result(&score, self.use_colors));
             }
             Err(e) => {
@@ -157,15 +203,43 @@ impl Repl {
         }
     }
 
+    /// Display a history value (*, **, ***, +, ++, +++)
+    fn display_history_value(&self, symbol: &str) {
+        match self.session.get_history_value(symbol) {
+            Some(HistoryValue::Result(score)) => {
+                println!("{}", format_eval_result(&score, self.use_colors));
+            }
+            Some(HistoryValue::Expression(sexpr)) => {
+                // Display the expression as S-expression
+                let output = print_sexpr(&sexpr);
+                if self.use_colors {
+                    use owo_colors::OwoColorize;
+                    println!("{}", output.cyan());
+                } else {
+                    println!("{}", output);
+                }
+            }
+            None => {
+                let msg = format!("No value for '{}' (history is empty)", symbol);
+                println!("{}", display::format_warning(&msg, self.use_colors));
+            }
+        }
+    }
+
     /// Handle a REPL command.
     ///
     /// Returns `true` if the REPL should exit.
-    fn handle_command(&self, cmd: &str) -> ReplResult<bool> {
-        match commands::dispatch(cmd)? {
+    fn handle_command(&mut self, cmd: &str, use_colors: bool) -> ReplResult<bool> {
+        match commands::dispatch(cmd, &mut self.session)? {
             CommandResult::Continue => Ok(false),
             CommandResult::Exit => Ok(true),
             CommandResult::Output(msg) => {
                 println!("{}", msg);
+                Ok(false)
+            }
+            CommandResult::DisplayModeChanged(mode) => {
+                let msg = format!("Display mode set to: {}", mode.name());
+                println!("{}", display::format_info(&msg, use_colors));
                 Ok(false)
             }
         }

@@ -1,6 +1,7 @@
 //! REPL command dispatch.
 
 use super::error::ReplResult;
+use super::session::{DisplayMode, ReplSession};
 
 /// Result of executing a command.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -11,12 +12,14 @@ pub enum CommandResult {
     Exit,
     /// Display output to the user.
     Output(String),
+    /// Display mode was changed.
+    DisplayModeChanged(DisplayMode),
 }
 
 /// Dispatch and execute a REPL command.
 ///
 /// The `cmd` parameter is the command string without the leading `:`.
-pub fn dispatch(cmd: &str) -> ReplResult<CommandResult> {
+pub fn dispatch(cmd: &str, session: &mut ReplSession) -> ReplResult<CommandResult> {
     let trimmed = cmd.trim();
     let (name, args) = match trimmed.split_once(char::is_whitespace) {
         Some((n, a)) => (n, a.trim()),
@@ -26,12 +29,62 @@ pub fn dispatch(cmd: &str) -> ReplResult<CommandResult> {
     match name.to_lowercase().as_str() {
         "help" | "h" | "?" => Ok(cmd_help(args)),
         "quit" | "exit" | "q" => Ok(CommandResult::Exit),
+        "set" => cmd_set(args, session),
+        "settings" => Ok(cmd_settings(session)),
         "" => Ok(CommandResult::Continue),
         other => Ok(CommandResult::Output(format!(
             "Unknown command: :{}\nType :help for available commands.",
             other
         ))),
     }
+}
+
+/// Handle the :set command.
+fn cmd_set(args: &str, session: &mut ReplSession) -> ReplResult<CommandResult> {
+    let trimmed = args.trim();
+    let (setting, value) = match trimmed.split_once(char::is_whitespace) {
+        Some((s, v)) => (s, v.trim()),
+        None => (trimmed, ""),
+    };
+
+    match setting.to_lowercase().as_str() {
+        "display" | "d" => {
+            if value.is_empty() {
+                Ok(CommandResult::Output(format!(
+                    "Current display mode: {}\nUsage: :set display <mode>\nModes: sexpr, musicxml, png, silent",
+                    session.display_mode().name()
+                )))
+            } else if let Some(mode) = DisplayMode::parse(value) {
+                session.set_display_mode(mode);
+                Ok(CommandResult::DisplayModeChanged(mode))
+            } else {
+                Ok(CommandResult::Output(format!(
+                    "Unknown display mode: '{}'\nValid modes: sexpr, musicxml, png, silent",
+                    value
+                )))
+            }
+        }
+        "" => Ok(CommandResult::Output(
+            "Usage: :set <setting> <value>\n\nSettings:\n  display <mode>  Set output display mode (sexpr, musicxml, png, silent)".to_string()
+        )),
+        other => Ok(CommandResult::Output(format!(
+            "Unknown setting: '{}'\nType :set for available settings.",
+            other
+        ))),
+    }
+}
+
+/// Display current settings.
+fn cmd_settings(session: &ReplSession) -> CommandResult {
+    let render_opts = session.render_options();
+    let output = format!(
+        "Current Settings:\n  display mode:  {}\n  render width:  {} px\n  render page:   {}\n  show page info: {}",
+        session.display_mode().name(),
+        render_opts.width,
+        render_opts.page,
+        if render_opts.show_page_info { "yes" } else { "no" }
+    );
+    CommandResult::Output(output)
 }
 
 /// Display help information.
@@ -60,8 +113,14 @@ USAGE:
   /message        Send a chat message (future: Claude integration)
 
 COMMANDS:
-  :help, :h, :?   Show this help
-  :quit, :exit, :q Exit the REPL
+  :help, :h, :?         Show this help
+  :quit, :exit, :q      Exit the REPL
+  :set display <mode>   Set display mode (sexpr, musicxml, png, silent)
+  :settings             Show current settings
+
+HISTORY VARIABLES:
+  *, **, ***      Last 1-3 evaluated results
+  +, ++, +++      Last 1-3 input expressions (as data)
 
 HELP TOPICS:
   :help commands    Available REPL commands
@@ -78,14 +137,22 @@ const COMMANDS_HELP: &str = r#"REPL Commands
 
 Commands start with ':' and control the REPL itself.
 
-  :help, :h, :?     Show help
-  :help <topic>     Show help on a specific topic
-  :quit, :exit, :q  Exit the REPL
+  :help, :h, :?         Show help
+  :help <topic>         Show help on a specific topic
+  :quit, :exit, :q      Exit the REPL
+  :set display <mode>   Set output display mode
+  :settings             Show current settings
+
+DISPLAY MODES:
+  sexpr     S-expression output (default, for debugging)
+  musicxml  MusicXML output (interchange format)
+  png       Rendered notation in terminal (requires 'render' feature)
+  silent    No output (value stored for later use)
 
 Future commands (Phase 6a-M2+):
-  :session          Session management
-  :history          View command history
-  :notebook         Notebook operations
+  :render             Render last result as PNG
+  :render page N      Render specific page
+  :export <file>      Export to file
 "#;
 
 const EXPRESSIONS_HELP: &str = r#"Fermata Expressions
@@ -141,7 +208,8 @@ mod tests {
 
     #[test]
     fn test_dispatch_help() {
-        let result = dispatch("help").unwrap();
+        let mut session = ReplSession::new();
+        let result = dispatch("help", &mut session).unwrap();
         match result {
             CommandResult::Output(s) => assert!(s.contains("Fermata REPL")),
             _ => panic!("Expected Output"),
@@ -150,19 +218,22 @@ mod tests {
 
     #[test]
     fn test_dispatch_help_alias_h() {
-        let result = dispatch("h").unwrap();
+        let mut session = ReplSession::new();
+        let result = dispatch("h", &mut session).unwrap();
         assert!(matches!(result, CommandResult::Output(_)));
     }
 
     #[test]
     fn test_dispatch_help_alias_question() {
-        let result = dispatch("?").unwrap();
+        let mut session = ReplSession::new();
+        let result = dispatch("?", &mut session).unwrap();
         assert!(matches!(result, CommandResult::Output(_)));
     }
 
     #[test]
     fn test_dispatch_help_topic_commands() {
-        let result = dispatch("help commands").unwrap();
+        let mut session = ReplSession::new();
+        let result = dispatch("help commands", &mut session).unwrap();
         match result {
             CommandResult::Output(s) => assert!(s.contains("REPL Commands")),
             _ => panic!("Expected Output"),
@@ -171,7 +242,8 @@ mod tests {
 
     #[test]
     fn test_dispatch_help_topic_expressions() {
-        let result = dispatch("help expr").unwrap();
+        let mut session = ReplSession::new();
+        let result = dispatch("help expr", &mut session).unwrap();
         match result {
             CommandResult::Output(s) => assert!(s.contains("Fermata Expressions")),
             _ => panic!("Expected Output"),
@@ -180,7 +252,8 @@ mod tests {
 
     #[test]
     fn test_dispatch_help_topic_chat() {
-        let result = dispatch("help chat").unwrap();
+        let mut session = ReplSession::new();
+        let result = dispatch("help chat", &mut session).unwrap();
         match result {
             CommandResult::Output(s) => assert!(s.contains("Chat Messages")),
             _ => panic!("Expected Output"),
@@ -189,7 +262,8 @@ mod tests {
 
     #[test]
     fn test_dispatch_help_unknown_topic() {
-        let result = dispatch("help xyz").unwrap();
+        let mut session = ReplSession::new();
+        let result = dispatch("help xyz", &mut session).unwrap();
         match result {
             CommandResult::Output(s) => assert!(s.contains("Unknown help topic")),
             _ => panic!("Expected Output"),
@@ -198,37 +272,43 @@ mod tests {
 
     #[test]
     fn test_dispatch_quit() {
-        let result = dispatch("quit").unwrap();
+        let mut session = ReplSession::new();
+        let result = dispatch("quit", &mut session).unwrap();
         assert_eq!(result, CommandResult::Exit);
     }
 
     #[test]
     fn test_dispatch_exit() {
-        let result = dispatch("exit").unwrap();
+        let mut session = ReplSession::new();
+        let result = dispatch("exit", &mut session).unwrap();
         assert_eq!(result, CommandResult::Exit);
     }
 
     #[test]
     fn test_dispatch_q() {
-        let result = dispatch("q").unwrap();
+        let mut session = ReplSession::new();
+        let result = dispatch("q", &mut session).unwrap();
         assert_eq!(result, CommandResult::Exit);
     }
 
     #[test]
     fn test_dispatch_empty() {
-        let result = dispatch("").unwrap();
+        let mut session = ReplSession::new();
+        let result = dispatch("", &mut session).unwrap();
         assert_eq!(result, CommandResult::Continue);
     }
 
     #[test]
     fn test_dispatch_whitespace() {
-        let result = dispatch("   ").unwrap();
+        let mut session = ReplSession::new();
+        let result = dispatch("   ", &mut session).unwrap();
         assert_eq!(result, CommandResult::Continue);
     }
 
     #[test]
     fn test_dispatch_unknown() {
-        let result = dispatch("foobar").unwrap();
+        let mut session = ReplSession::new();
+        let result = dispatch("foobar", &mut session).unwrap();
         match result {
             CommandResult::Output(s) => {
                 assert!(s.contains("Unknown command"));
@@ -240,16 +320,18 @@ mod tests {
 
     #[test]
     fn test_dispatch_case_insensitive() {
-        let result = dispatch("HELP").unwrap();
+        let mut session = ReplSession::new();
+        let result = dispatch("HELP", &mut session).unwrap();
         assert!(matches!(result, CommandResult::Output(_)));
 
-        let result = dispatch("QUIT").unwrap();
+        let result = dispatch("QUIT", &mut session).unwrap();
         assert_eq!(result, CommandResult::Exit);
     }
 
     #[test]
     fn test_dispatch_with_leading_whitespace() {
-        let result = dispatch("  help").unwrap();
+        let mut session = ReplSession::new();
+        let result = dispatch("  help", &mut session).unwrap();
         assert!(matches!(result, CommandResult::Output(_)));
     }
 
@@ -265,5 +347,153 @@ mod tests {
         let result = CommandResult::Output("test".to_string());
         let cloned = result.clone();
         assert_eq!(result, cloned);
+    }
+
+    // === :set command tests ===
+
+    #[test]
+    fn test_dispatch_set_display_sexpr() {
+        let mut session = ReplSession::new();
+        session.set_display_mode(DisplayMode::Png); // Start with non-default
+
+        let result = dispatch("set display sexpr", &mut session).unwrap();
+        assert_eq!(result, CommandResult::DisplayModeChanged(DisplayMode::Sexpr));
+        assert_eq!(session.display_mode(), DisplayMode::Sexpr);
+    }
+
+    #[test]
+    fn test_dispatch_set_display_png() {
+        let mut session = ReplSession::new();
+        let result = dispatch("set display png", &mut session).unwrap();
+        assert_eq!(result, CommandResult::DisplayModeChanged(DisplayMode::Png));
+        assert_eq!(session.display_mode(), DisplayMode::Png);
+    }
+
+    #[test]
+    fn test_dispatch_set_display_musicxml() {
+        let mut session = ReplSession::new();
+        let result = dispatch("set display xml", &mut session).unwrap();
+        assert_eq!(result, CommandResult::DisplayModeChanged(DisplayMode::MusicXml));
+        assert_eq!(session.display_mode(), DisplayMode::MusicXml);
+    }
+
+    #[test]
+    fn test_dispatch_set_display_silent() {
+        let mut session = ReplSession::new();
+        let result = dispatch("set display silent", &mut session).unwrap();
+        assert_eq!(result, CommandResult::DisplayModeChanged(DisplayMode::Silent));
+        assert_eq!(session.display_mode(), DisplayMode::Silent);
+    }
+
+    #[test]
+    fn test_dispatch_set_display_alias_d() {
+        let mut session = ReplSession::new();
+        let result = dispatch("set d png", &mut session).unwrap();
+        assert_eq!(result, CommandResult::DisplayModeChanged(DisplayMode::Png));
+    }
+
+    #[test]
+    fn test_dispatch_set_display_no_value() {
+        let mut session = ReplSession::new();
+        let result = dispatch("set display", &mut session).unwrap();
+        match result {
+            CommandResult::Output(s) => {
+                assert!(s.contains("Current display mode"));
+                assert!(s.contains("sexpr"));
+            }
+            _ => panic!("Expected Output"),
+        }
+    }
+
+    #[test]
+    fn test_dispatch_set_display_invalid() {
+        let mut session = ReplSession::new();
+        let result = dispatch("set display invalid", &mut session).unwrap();
+        match result {
+            CommandResult::Output(s) => {
+                assert!(s.contains("Unknown display mode"));
+                assert!(s.contains("invalid"));
+            }
+            _ => panic!("Expected Output"),
+        }
+    }
+
+    #[test]
+    fn test_dispatch_set_no_args() {
+        let mut session = ReplSession::new();
+        let result = dispatch("set", &mut session).unwrap();
+        match result {
+            CommandResult::Output(s) => {
+                assert!(s.contains("Usage:"));
+                assert!(s.contains("display"));
+            }
+            _ => panic!("Expected Output"),
+        }
+    }
+
+    #[test]
+    fn test_dispatch_set_unknown_setting() {
+        let mut session = ReplSession::new();
+        let result = dispatch("set foo bar", &mut session).unwrap();
+        match result {
+            CommandResult::Output(s) => {
+                assert!(s.contains("Unknown setting"));
+                assert!(s.contains("foo"));
+            }
+            _ => panic!("Expected Output"),
+        }
+    }
+
+    // === :settings command tests ===
+
+    #[test]
+    fn test_dispatch_settings() {
+        let mut session = ReplSession::new();
+        let result = dispatch("settings", &mut session).unwrap();
+        match result {
+            CommandResult::Output(s) => {
+                assert!(s.contains("Current Settings"));
+                assert!(s.contains("display mode"));
+                assert!(s.contains("sexpr"));
+                assert!(s.contains("render width"));
+                assert!(s.contains("800"));
+            }
+            _ => panic!("Expected Output"),
+        }
+    }
+
+    #[test]
+    fn test_dispatch_settings_after_change() {
+        let mut session = ReplSession::new();
+        session.set_display_mode(DisplayMode::Png);
+        session.render_options_mut().width = 1200;
+
+        let result = dispatch("settings", &mut session).unwrap();
+        match result {
+            CommandResult::Output(s) => {
+                assert!(s.contains("png"));
+                assert!(s.contains("1200"));
+            }
+            _ => panic!("Expected Output"),
+        }
+    }
+
+    // === DisplayModeChanged variant tests ===
+
+    #[test]
+    fn test_command_result_display_mode_changed_debug() {
+        let result = CommandResult::DisplayModeChanged(DisplayMode::Png);
+        let debug_str = format!("{:?}", result);
+        assert!(debug_str.contains("DisplayModeChanged"));
+        assert!(debug_str.contains("Png"));
+    }
+
+    #[test]
+    fn test_command_result_display_mode_changed_eq() {
+        let a = CommandResult::DisplayModeChanged(DisplayMode::Png);
+        let b = CommandResult::DisplayModeChanged(DisplayMode::Png);
+        let c = CommandResult::DisplayModeChanged(DisplayMode::Sexpr);
+        assert_eq!(a, b);
+        assert_ne!(a, c);
     }
 }

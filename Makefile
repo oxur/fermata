@@ -23,7 +23,7 @@ RUST_VERSION := $(shell rustc --version 2>/dev/null || echo "unknown")
 BINARIES := fermata
 
 # Git remotes to push to
-GIT_REMOTES := macpro codeberg github
+GIT_REMOTES := macpro github codeberg
 
 # Default target
 .DEFAULT_GOAL := help

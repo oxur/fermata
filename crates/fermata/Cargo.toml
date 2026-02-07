@@ -33,7 +33,7 @@ twyg = "0.6"
 confyg = "0.3"
 
 # Rendering dependencies (optional, enabled with 'render' feature)
-verovioxide = { path = "../../../verovioxide/crates/verovioxide", optional = true }
+verovioxide = { git = "https://codeberg.org/oxur/verovioxide.git", optional = true }
 image = { version = "0.25", optional = true }
 base64 = { version = "0.22", optional = true }
 crossterm = { version = "0.29", optional = true }

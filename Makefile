@@ -22,6 +22,9 @@ RUST_VERSION := $(shell rustc --version 2>/dev/null || echo "unknown")
 # List of binaries to build and install
 BINARIES := fermata
 
+# Git remotes to push to
+GIT_REMOTES := macpro codeberg github
+
 # Default target
 .DEFAULT_GOAL := help
 
@@ -285,12 +288,11 @@ tracked-files:
 
 push:
 	@echo "$(BLUE)Pushing changes ...$(RESET)"
-	@echo "$(CYAN)• Codeberg:$(RESET)"
-	@git push codeberg main && git push codeberg --tags
-	@echo "$(GREEN)✓ Pushed$(RESET)"
-	@echo "$(CYAN)• Github:$(RESET)"
-	@git push github main && git push github --tags
-	@echo "$(GREEN)✓ Pushed$(RESET)"
+	@for remote in $(GIT_REMOTES); do \
+		echo "$(CYAN)• $$remote:$(RESET)"; \
+		git push $$remote main && git push $$remote --tags; \
+		echo "$(GREEN)✓ Pushed$(RESET)"; \
+	done
 
 # Crates in dependency order (leaf crates first, dependent crates later)
 PUBLISH_ORDER := fermata

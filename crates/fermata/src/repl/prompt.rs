@@ -5,9 +5,9 @@ use std::borrow::Cow;
 use reedline::{Prompt, PromptEditMode, PromptHistorySearch, PromptHistorySearchStatus};
 
 /// Primary prompt shown for new input.
-const PRIMARY_PROMPT: &str = " 𝄐 N ❱ ";
+const PRIMARY_PROMPT: &str = " 𝄐 [N] ❱ ";
 /// Continuation prompt for multi-line input.
-const CONTINUATION_PROMPT: &str = "  ───▷  ";
+const CONTINUATION_PROMPT: &str = "    ───▷  ";
 
 /// Custom prompt for the Fermata REPL.
 #[derive(Debug, Default)]

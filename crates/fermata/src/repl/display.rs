@@ -137,7 +137,7 @@ pub fn format_banner(banner_text: &str, use_colors: bool) -> String {
             "{}  {}{}\n  Type {} for help, {} to exit.\n",
             banner_text.bold(),
             "v".yellow(),
-            format!("{}", version).bright_yellow().bold(),
+            version.bright_yellow().bold(),
             ":help".cyan(),
             ":quit".cyan()
         )

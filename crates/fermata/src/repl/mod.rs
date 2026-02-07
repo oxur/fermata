@@ -132,12 +132,14 @@ impl Repl {
         let _ = std::io::stdout().flush();
         let _ = std::io::stderr().flush();
 
-        let prompt = FermataPrompt::new();
+        let prompt = FermataPrompt::new(self.use_colors);
 
         loop {
             match self.editor.read_line(&prompt) {
                 Ok(Signal::Success(line)) => {
-                    if self.handle_input(&line)? {
+                    let should_exit = self.handle_input(&line)?;
+                    prompt.increment();
+                    if should_exit {
                         break;
                     }
                 }
